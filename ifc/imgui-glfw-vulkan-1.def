@@ -1,0 +1,831 @@
+LIBRARY imgui-glfw-vulkan-1
+
+EXPORTS
+	ImGui_ImplGlfwVulkan_Init
+	ImGui_ImplGlfwVulkan_Shutdown
+	ImGui_ImplGlfwVulkan_NewFrame
+	ImGui_ImplGlfwVulkan_Render
+	ImGui_ImplGlfwVulkan_InvalidateFontUploadObjects
+	ImGui_ImplGlfwVulkan_InvalidateDeviceObjects
+	ImGui_ImplGlfwVulkan_CreateFontsTexture
+  	ImGui_ImplGlfwVulkan_CreateDeviceObjects
+  	ImGui_ImplGlfwVulkan_MouseButtonCallback	  
+  	ImGui_ImplGlfwVulkan_ScrollCallback
+  	ImGui_ImplGlfwVulkan_KeyCallback
+  	ImGui_ImplGlfwVulkan_CharCallback
+
+	 igGetIO
+	   igGetStyle
+	   igGetDrawData
+	   igNewFrame
+	   igRender
+	   igEndFrame
+	   igShutdown
+	   igShowDemoWindow
+	   igShowMetricsWindow
+	   igShowStyleEditor
+	   igShowStyleSelector
+	   igShowFontSelector
+	   igShowUserGuide
+	   igBegin
+	   igEnd
+	   igBeginChild
+	   igBeginChildEx
+	   igEndChild
+	   igGetContentRegionMax
+	   igGetContentRegionAvail
+	   igGetContentRegionAvailWidth
+	   igGetWindowContentRegionMin
+	   igGetWindowContentRegionMax
+	   igGetWindowContentRegionWidth
+	   igGetWindowDrawList
+	   igGetWindowPos
+	   igGetWindowSize
+	   igGetWindowWidth
+	   igGetWindowHeight
+	   igIsWindowCollapsed
+	   igIsWindowAppearing
+	   igSetWindowFontScale
+	   igSetNextWindowPos
+	   igSetNextWindowSize
+	   igSetNextWindowSizeConstraints
+	   igSetNextWindowContentSize
+	   igSetNextWindowCollapsed
+	   igSetNextWindowFocus
+	   igSetWindowPos
+	   igSetWindowSize
+	   igSetWindowCollapsed
+	   igSetWindowFocus
+	   igSetWindowPosByName
+	   igSetWindowSize2
+	   igSetWindowCollapsed2
+	   igSetWindowFocus2
+	   igGetScrollX
+	   igGetScrollY
+	   igGetScrollMaxX
+	   igGetScrollMaxY
+	   igSetScrollX
+	   igSetScrollY
+	   igSetScrollHere
+	   igSetScrollFromPosY
+	   igSetStateStorage
+	   igGetStateStorage
+	   igPushFont
+	   igPopFont
+	   igPushStyleColorU32
+	   igPushStyleColor
+	   igPopStyleColor
+	   igPushStyleVar
+	   igPushStyleVarVec
+	   igPopStyleVar
+	   igGetStyleColorVec4
+	   igGetFont
+	   igGetFontSize
+	   igGetFontTexUvWhitePixel
+	   igGetColorU32
+	   igGetColorU32Vec
+	   igGetColorU32U32
+	   igPushItemWidth
+	   igPopItemWidth
+	   igCalcItemWidth
+	   igPushTextWrapPos
+	   igPopTextWrapPos
+	   igPushAllowKeyboardFocus
+	   igPopAllowKeyboardFocus
+	   igPushButtonRepeat
+	   igPopButtonRepeat
+	   igSeparator
+	   igSameLine
+	   igNewLine
+	   igSpacing
+	   igDummy
+	   igIndent
+	   igUnindent
+	   igBeginGroup
+	   igEndGroup
+	   igGetCursorPos
+	   igGetCursorPosX
+	   igGetCursorPosY
+	   igSetCursorPos
+	   igSetCursorPosX
+	   igSetCursorPosY
+	   igGetCursorStartPos
+	   igGetCursorScreenPos
+	   igSetCursorScreenPos
+	   igAlignTextToFramePadding
+	   igGetTextLineHeight
+	   igGetTextLineHeightWithSpacing
+	   igGetFrameHeight
+	   igGetFrameHeightWithSpacing
+	   igColumns
+	   igNextColumn
+	   igGetColumnIndex
+	   igGetColumnWidth
+	   igSetColumnWidth
+	   igGetColumnOffset
+	   igSetColumnOffset
+	   igGetColumnsCount
+	   igPushIDStr
+	   igPushIDStrRange
+	   igPushIDPtr
+	   igPushIDInt
+	   igPopID
+	   igGetIDStr
+	   igGetIDStrRange
+	   igGetIDPtr
+	   igTextUnformatted
+	   igText
+	   igTextV
+	   igTextColored
+	   igTextColoredV
+	   igTextDisabled
+	   igTextDisabledV
+	   igTextWrapped
+	   igTextWrappedV
+	   igLabelText
+	   igLabelTextV
+	   igBulletText
+	   igBulletTextV
+	   igBullet
+	   igButton
+	   igSmallButton
+	   igInvisibleButton
+	   igImage
+	   igImageButton
+	   igCheckbox
+	   igCheckboxFlags
+	   igRadioButtonBool
+	   igRadioButton
+	   igPlotLines
+	   igPlotLines2
+	   igPlotHistogram
+	   igPlotHistogram2
+	   igProgressBar
+	   igBeginCombo
+	   igEndCombo
+	   igCombo
+	   igCombo2
+	   igCombo3
+	   igDragFloat
+	   igDragFloat2
+	   igDragFloat3
+	   igDragFloat4
+	   igDragFloatRange2
+	   igDragInt
+	   igDragInt2
+	   igDragInt3
+	   igDragInt4
+	   igDragIntRange2
+	   igInputText
+	   igInputTextMultiline
+	   igInputFloat
+	   igInputFloat2
+	   igInputFloat3
+	   igInputFloat4
+	   igInputInt
+	   igInputInt2
+	   igInputInt3
+	   igInputInt4
+	   igSliderFloat
+	   igSliderFloat2
+	   igSliderFloat3
+	   igSliderFloat4
+	   igSliderAngle
+	   igSliderInt
+	   igSliderInt2
+	   igSliderInt3
+	   igSliderInt4
+	   igVSliderFloat
+	   igVSliderInt
+	   igColorEdit3
+	   igColorEdit4
+	   igColorPicker3
+	   igColorPicker4
+	   igColorButton
+	   igSetColorEditOptions
+	   igTreeNode
+	   igTreeNodeStr
+	   igTreeNodePtr
+	   igTreeNodeStrV
+	   igTreeNodePtrV
+	   igTreeNodeEx
+	   igTreeNodeExStr
+	   igTreeNodeExPtr
+	   igTreeNodeExV
+	   igTreeNodeExPtr
+	   igTreePushStr
+	   igTreePushPtr
+	   igTreePop
+	   igTreeAdvanceToLabelPos
+	   igGetTreeNodeToLabelSpacing
+	   igSetNextTreeNodeOpen
+	   igCollapsingHeader
+	   igCollapsingHeaderEx
+	   igSelectable
+	   igSelectableEx
+	   igListBox
+	   igListBox2
+	   igListBoxHeader
+	   igListBoxHeader2
+	   igListBoxFooter
+	   igValueBool
+	   igValueInt
+	   igValueUInt
+	   igValueFloat
+	   igSetTooltip
+	   igSetTooltipV
+	   igBeginTooltip
+	   igEndTooltip
+	   igBeginMainMenuBar
+	   igEndMainMenuBar
+	   igBeginMenuBar
+	   igEndMenuBar
+	   igBeginMenu
+	   igEndMenu
+	   igMenuItem
+	   igMenuItemPtr
+	   igOpenPopup
+	   igOpenPopupOnItemClick
+	   igBeginPopup
+	   igBeginPopupModal
+	   igBeginPopupContextItem
+	   igBeginPopupContextWindow
+	   igBeginPopupContextVoid
+	   igEndPopup
+	   igIsPopupOpen
+	   igCloseCurrentPopup
+	   igLogToTTY
+	   igLogToFile
+	   igLogToClipboard
+	   igLogFinish
+	   igLogButtons
+	   igLogText
+	   igBeginDragDropSource
+	   igSetDragDropPayload
+	   igEndDragDropSource
+	   igBeginDragDropTarget
+	   igAcceptDragDropPayload
+	   igEndDragDropTarget
+	   igPushClipRect
+	   igPopClipRect
+	   igStyleColorsClassic
+	   igStyleColorsDark
+	   igStyleColorsLight
+	   igSetItemDefaultFocus
+	   igSetKeyboardFocusHere
+	   igIsItemHovered
+	   igIsItemActive
+	   igIsItemClicked
+	   igIsItemVisible
+	   igIsAnyItemHovered
+	   igIsAnyItemActive
+	   igGetItemRectMin
+	   igGetItemRectMax
+	   igGetItemRectSize
+	   igSetItemAllowOverlap
+	   igIsWindowFocused
+	   igIsWindowHovered
+	   igIsAnyWindowFocused
+	   igIsAnyWindowHovered
+	   igIsRectVisible
+	   igIsRectVisible2
+	   igGetTime
+	   igGetFrameCount
+	   igGetOverlayDrawList
+	   igGetDrawListSharedData
+	   igGetStyleColorName
+	   igCalcItemRectClosestPoint
+	   igCalcTextSize
+	   igCalcListClipping
+	   igBeginChildFrame
+	   igEndChildFrame
+	   igColorConvertU32ToFloat4
+	   igColorConvertFloat4ToU32
+	   igColorConvertRGBtoHSV
+	   igColorConvertHSVtoRGB
+	   igGetKeyIndex
+	   igIsKeyDown
+	   igIsKeyPressed
+	   igIsKeyReleased
+	   igGetKeyPressedAmount
+	   igIsMouseDown
+	   igIsMouseClicked
+	   igIsMouseDoubleClicked
+	   igIsMouseReleased
+	   igIsMouseDragging
+	   igIsMouseHoveringRect
+	   igIsMousePosValid
+	   igGetMousePos
+	   igGetMousePosOnOpeningCurrentPopup
+	   igGetMouseDragDelta
+	   igResetMouseDragDelta
+	   igGetMouseCursor
+	   igSetMouseCursor
+	   igCaptureKeyboardFromApp
+	   igMemAlloc
+	   igMemFree
+	   igGetClipboardText
+	   igSetClipboardText
+	   igGetVersion
+	   igCreateContext
+	   igDestroyContext
+	   igGetCurrentContext
+	   igSetCurrentContext
+	   ImFontConfig_DefaultConstructor
+	   ImGuiIO_AddInputCharacter
+	   ImGuiIO_AddInputCharactersUTF8
+	   ImGuiIO_ClearInputCharacters
+	   ImGuiTextFilter_Create
+	   ImGuiTextFilter_Destroy
+	   ImGuiTextFilter_Clear
+	   ImGuiTextFilter_Draw
+	   ImGuiTextFilter_PassFilter
+	   ImGuiTextFilter_IsActive
+	   ImGuiTextFilter_Build
+	   ImGuiTextFilter_GetInputBuf
+	   ImGuiTextBuffer_Create
+	   ImGuiTextBuffer_Destroy
+	   ImGuiTextBuffer_index
+	   ImGuiTextBuffer_begin
+	   ImGuiTextBuffer_end
+	   ImGuiTextBuffer_size
+	   ImGuiTextBuffer_empty
+	   ImGuiTextBuffer_clear
+	   ImGuiTextBuffer_c_str
+	   ImGuiTextBuffer_appendf
+	   ImGuiTextBuffer_appendfv
+	   ImGuiStorage_Create
+	   ImGuiStorage_Destroy
+	   ImGuiStorage_GetInt
+	   ImGuiStorage_SetInt
+	   ImGuiStorage_GetBool
+	   ImGuiStorage_SetBool
+	   ImGuiStorage_GetFloat
+	   ImGuiStorage_SetFloat
+	   ImGuiStorage_GetVoidPtr
+	   ImGuiStorage_SetVoidPtr
+	   ImGuiStorage_GetIntRef
+	   ImGuiStorage_GetBoolRef
+	   ImGuiStorage_GetFloatRef
+	   ImGuiStorage_GetVoidPtrRef
+	   ImGuiStorage_SetAllInt
+	   ImGuiTextEditCallbackData_DeleteChars
+	   ImGuiTextEditCallbackData_InsertChars
+	   ImGuiTextEditCallbackData_HasSelection
+	   ImGuiListClipper_Step
+	   ImGuiListClipper_Begin
+	   ImGuiListClipper_End
+	   ImGuiListClipper_GetDisplayStart
+	   ImGuiListClipper_GetDisplayEnd
+	   ImDrawList_GetVertexBufferSize
+	   ImDrawList_GetVertexPtr
+	   ImDrawList_GetIndexBufferSize
+	   ImDrawList_GetIndexPtr
+	   ImDrawList_GetCmdSize
+	   ImDrawList_GetCmdPtr
+	   ImDrawList_Clear
+	   ImDrawList_ClearFreeMemory
+	   ImDrawList_PushClipRect
+	   ImDrawList_PushClipRectFullScreen
+	   ImDrawList_PopClipRect
+	   ImDrawList_PushTextureID
+	   ImDrawList_PopTextureID
+	   ImDrawList_GetClipRectMin
+	   ImDrawList_GetClipRectMax
+	   ImDrawList_AddLine
+	   ImDrawList_AddRect
+	   ImDrawList_AddRectFilled
+	   ImDrawList_AddRectFilledMultiColor
+	   ImDrawList_AddQuad
+	   ImDrawList_AddQuadFilled
+	   ImDrawList_AddTriangle
+	   ImDrawList_AddTriangleFilled
+	   ImDrawList_AddCircle
+	   ImDrawList_AddCircleFilled
+	   ImDrawList_AddText
+	   ImDrawList_AddTextExt
+	   ImDrawList_AddImage
+	   ImDrawList_AddImageQuad
+	   ImDrawList_AddImageRounded
+	   ImDrawList_AddPolyline
+	   ImDrawList_AddConvexPolyFilled
+	   ImDrawList_AddBezierCurve
+	   ImDrawList_PathClear
+	   ImDrawList_PathLineTo
+	   ImDrawList_PathLineToMergeDuplicate
+	   ImDrawList_PathFillConvex
+	   ImDrawList_PathStroke
+	   ImDrawList_PathArcTo
+	   ImDrawList_PathArcToFast
+	   ImDrawList_PathBezierCurveTo
+	   ImDrawList_PathRect
+	   ImDrawList_ChannelsSplit
+	   ImDrawList_ChannelsMerge
+	   ImDrawList_ChannelsSetCurrent
+	   ImDrawList_AddCallback
+	   ImDrawList_AddDrawCmd
+	   ImDrawList_PrimReserve
+	   ImDrawList_PrimRect
+	   ImDrawList_PrimRectUV
+	   ImDrawList_PrimQuadUV
+	   ImDrawList_PrimWriteVtx
+	   ImDrawList_PrimWriteIdx
+	   ImDrawList_PrimVtx
+	   ImDrawList_UpdateClipRect
+	   ImDrawList_UpdateTextureID
+	   ImDrawData_DeIndexAllBuffers
+	   ImDrawData_ScaleClipRects
+	   ImFontAtlas_GetTexDataAsRGBA32
+	   ImFontAtlas_GetTexDataAsAlpha8
+	   ImFontAtlas_SetTexID
+	   ImFontAtlas_AddFont
+	   ImFontAtlas_AddFontDefault
+	   ImFontAtlas_AddFontFromFileTTF
+	   ImFontAtlas_AddFontFromMemoryTTF
+	   ImFontAtlas_AddFontFromMemoryCompressedTTF
+	   ImFontAtlas_AddFontFromMemoryCompressedBase85TTF
+	   ImFontAtlas_ClearTexData
+	   ImFontAtlas_Clear
+	   ImFontAtlas_GetGlyphRangesDefault
+	   ImFontAtlas_GetGlyphRangesKorean
+	   ImFontAtlas_GetGlyphRangesJapanese
+	   ImFontAtlas_GetGlyphRangesChinese
+	   ImFontAtlas_GetGlyphRangesCyrillic
+	   ImFontAtlas_GetGlyphRangesThai
+	   ImFontAtlas_GetTexID
+	   ImFontAtlas_GetTexPixelsAlpha8
+	   ImFontAtlas_GetTexPixelsRGBA32
+	   ImFontAtlas_GetTexWidth
+	   ImFontAtlas_GetTexHeight
+	   ImFontAtlas_GetTexDesiredWidth
+	   ImFontAtlas_SetTexDesiredWidth
+	   ImFontAtlas_GetTexGlyphPadding
+	   ImFontAtlas_SetTexGlyphPadding
+	   ImFontAtlas_GetTexUvWhitePixel
+	   ImFontAtlas_Fonts_size
+	   ImFontAtlas_Fonts_index
+	   ImFont_GetFontSize
+	   ImFont_SetFontSize
+	   ImFont_GetScale
+	   ImFont_SetScale
+	   ImFont_GetDisplayOffset
+	   ImFont_GetFallbackGlyph
+	   ImFont_SetFallbackGlyph
+	   ImFont_GetFallbackAdvanceX
+	   ImFont_GetFallbackChar
+	   ImFont_GetConfigDataCount
+	   ImFont_GetConfigData
+	   ImFont_GetContainerAtlas
+	   ImFont_GetAscent
+	   ImFont_GetDescent
+	   ImFont_GetMetricsTotalSurface
+	   ImFont_ClearOutputData
+	   ImFont_BuildLookupTable
+	   ImFont_FindGlyph
+	   ImFont_SetFallbackChar
+	   ImFont_GetCharAdvance
+	   ImFont_IsLoaded
+	   ImFont_GetDebugName
+	   ImFont_CalcTextSizeA
+	   ImFont_CalcWordWrapPositionA
+	   ImFont_RenderChar
+	   ImFont_RenderText
+	   ImFont_Glyphs_size
+	   ImFont_Glyphs_index
+	   ImFont_IndexXAdvance_size
+	   ImFont_IndexXAdvance_index
+	   ImFont_IndexLookup_size
+	   ImFont_IndexLookup_index
+	   
+	   glfwInit
+	   glfwTerminate
+	   glfwGetVersion
+	   glfwGetVersionString
+	   glfwSetErrorCallback
+	   glfwGetMonitors
+	   glfwGetPrimaryMonitor
+	   glfwGetMonitorPos
+	   glfwGetMonitorPhysicalSize
+	   glfwGetMonitorName
+	   glfwSetMonitorCallback
+	   glfwGetVideoModes
+	   glfwGetVideoMode
+	   glfwSetGamma
+	   glfwGetGammaRamp
+	   glfwSetGammaRamp
+	   glfwDefaultWindowHints
+	   glfwWindowHint
+	   glfwCreateWindow
+	   glfwDestroyWindow
+	   glfwCreateWindowSurface
+	   glfwWindowShouldClose
+	   glfwSetWindowShouldClose
+	   glfwSetWindowTitle
+	   glfwSetWindowIcon
+	   glfwGetWindowPos
+	   glfwSetWindowPos
+	   glfwGetWindowSize
+	   glfwSetWindowSizeLimits
+	   glfwSetWindowAspectRatio
+	   glfwSetWindowSize
+	   glfwGetFramebufferSize
+	   glfwGetWindowFrameSize
+	   glfwIconifyWindow
+	   glfwRestoreWindow
+	   glfwMaximizeWindow
+	   glfwShowWindow
+	   glfwHideWindow
+	   glfwFocusWindow
+	   glfwGetWindowMonitor
+	   glfwSetWindowMonitor
+	   glfwGetWindowAttrib
+	   glfwSetWindowUserPointer
+	   glfwGetWindowUserPointer
+	   glfwSetWindowPosCallback
+	   glfwSetWindowSizeCallback
+	   glfwSetWindowCloseCallback
+	   glfwSetWindowRefreshCallback
+	   glfwSetWindowFocusCallback
+	   glfwSetWindowIconifyCallback
+	   glfwSetFramebufferSizeCallback
+	   glfwPollEvents
+	   glfwWaitEvents
+	   glfwWaitEventsTimeout
+	   glfwPostEmptyEvent
+	   glfwGetInputMode
+	   glfwSetInputMode
+	   glfwGetKeyName
+	   glfwGetKey
+	   glfwGetMouseButton
+	   glfwGetCursorPos
+	   glfwSetCursorPos
+	   glfwCreateCursor
+	   glfwCreateStandardCursor
+	   glfwDestroyCursor
+	   glfwSetCursor
+	   glfwSetKeyCallback
+	   glfwSetCharCallback
+	   glfwSetCharModsCallback
+	   glfwSetMouseButtonCallback
+	   glfwSetCursorPosCallback
+	   glfwSetCursorEnterCallback
+	   glfwSetScrollCallback
+	   glfwSetDropCallback
+	   glfwJoystickPresent
+	   glfwGetJoystickAxes
+	   glfwGetJoystickButtons
+	   glfwGetJoystickName
+	   glfwSetJoystickCallback
+	   glfwSetClipboardString
+	   glfwGetClipboardString
+	   glfwGetTime
+	   glfwSetTime
+	   glfwGetTimerValue
+	   glfwGetTimerFrequency
+
+	   glfwGetCurrentContext
+	   glfwSwapBuffers
+	   glfwSwapInterval
+	   glfwExtensionSupported
+	   glfwGetProcAddress
+	   glfwVulkanSupported
+	   glfwGetRequiredInstanceExtensions
+
+    vkAcquireNextImageKHR
+
+    vkAllocateCommandBuffers
+    vkAllocateDescriptorSets
+    vkAllocateMemory
+    vkBeginCommandBuffer
+    vkBindBufferMemory
+
+    vkBindImageMemory
+
+    vkCmdBeginQuery
+    vkCmdBeginRenderPass
+    vkCmdBindDescriptorSets
+    vkCmdBindIndexBuffer
+    vkCmdBindPipeline
+    vkCmdBindVertexBuffers
+    vkCmdBlitImage
+    vkCmdClearAttachments
+    vkCmdClearColorImage
+    vkCmdClearDepthStencilImage
+    vkCmdCopyBuffer
+    vkCmdCopyBufferToImage
+    vkCmdCopyImage
+    vkCmdCopyImageToBuffer
+    vkCmdCopyQueryPoolResults
+
+
+
+    vkCmdDispatch
+
+    vkCmdDispatchIndirect
+    vkCmdDraw
+    vkCmdDrawIndexed
+    vkCmdDrawIndexedIndirect
+
+    vkCmdDrawIndirect
+
+    vkCmdEndQuery
+    vkCmdEndRenderPass
+    vkCmdExecuteCommands
+    vkCmdFillBuffer
+    vkCmdNextSubpass
+    vkCmdPipelineBarrier
+
+    vkCmdPushConstants
+
+
+
+    vkCmdResetEvent
+    vkCmdResetQueryPool
+    vkCmdResolveImage
+    vkCmdSetBlendConstants
+    vkCmdSetDepthBias
+    vkCmdSetDepthBounds
+
+
+    vkCmdSetEvent
+    vkCmdSetLineWidth
+    vkCmdSetScissor
+    vkCmdSetStencilCompareMask
+    vkCmdSetStencilReference
+    vkCmdSetStencilWriteMask
+    vkCmdSetViewport
+
+    vkCmdUpdateBuffer
+    vkCmdWaitEvents
+    vkCmdWriteTimestamp
+
+    vkCreateBuffer
+    vkCreateBufferView
+    vkCreateCommandPool
+    vkCreateComputePipelines
+
+    vkCreateDescriptorPool
+    vkCreateDescriptorSetLayout
+
+    vkCreateDevice
+    vkCreateDisplayModeKHR
+    vkCreateDisplayPlaneSurfaceKHR
+    vkCreateEvent
+    vkCreateFence
+    vkCreateFramebuffer
+    vkCreateGraphicsPipelines
+
+    vkCreateImage
+    vkCreateImageView
+
+    vkCreateInstance
+
+
+
+    vkCreatePipelineCache
+    vkCreatePipelineLayout
+    vkCreateQueryPool
+    vkCreateRenderPass
+    vkCreateSampler
+    vkCreateSemaphore
+    vkCreateShaderModule
+    vkCreateSharedSwapchainsKHR
+    vkCreateSwapchainKHR
+
+
+    vkCreateWin32SurfaceKHR
+
+
+
+
+
+    vkDestroyBuffer
+    vkDestroyBufferView
+    vkDestroyCommandPool
+
+    vkDestroyDescriptorPool
+    vkDestroyDescriptorSetLayout
+
+    vkDestroyDevice
+    vkDestroyEvent
+    vkDestroyFence
+    vkDestroyFramebuffer
+    vkDestroyImage
+    vkDestroyImageView
+
+    vkDestroyInstance
+
+    vkDestroyPipeline
+    vkDestroyPipelineCache
+    vkDestroyPipelineLayout
+    vkDestroyQueryPool
+    vkDestroyRenderPass
+    vkDestroySampler
+    vkDestroySemaphore
+    vkDestroyShaderModule
+    vkDestroySurfaceKHR
+    vkDestroySwapchainKHR
+    vkDeviceWaitIdle
+
+    vkEndCommandBuffer
+    vkEnumerateDeviceExtensionProperties
+    vkEnumerateDeviceLayerProperties
+    vkEnumerateInstanceExtensionProperties
+    vkEnumerateInstanceLayerProperties
+
+    vkEnumeratePhysicalDevices
+    vkFlushMappedMemoryRanges
+    vkFreeCommandBuffers
+    vkFreeDescriptorSets
+    vkFreeMemory
+    vkGetBufferMemoryRequirements
+
+
+
+    vkGetDeviceMemoryCommitment
+    vkGetDeviceProcAddr
+    vkGetDeviceQueue
+    vkGetDisplayModePropertiesKHR
+    vkGetDisplayPlaneCapabilitiesKHR
+    vkGetDisplayPlaneSupportedDisplaysKHR
+    vkGetEventStatus
+    vkGetFenceStatus
+    vkGetImageMemoryRequirements
+    vkGetImageSparseMemoryRequirements
+    vkGetImageSubresourceLayout
+    vkGetInstanceProcAddr
+
+
+
+
+
+
+    vkGetPhysicalDeviceDisplayPlanePropertiesKHR
+    vkGetPhysicalDeviceDisplayPropertiesKHR
+
+
+
+    vkGetPhysicalDeviceFeatures
+
+    vkGetPhysicalDeviceFormatProperties
+
+
+    vkGetPhysicalDeviceImageFormatProperties
+
+    vkGetPhysicalDeviceMemoryProperties
+
+
+
+    vkGetPhysicalDeviceProperties
+
+    vkGetPhysicalDeviceQueueFamilyProperties
+
+    vkGetPhysicalDeviceSparseImageFormatProperties
+
+
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR
+
+    vkGetPhysicalDeviceSurfaceFormatsKHR
+    vkGetPhysicalDeviceSurfacePresentModesKHR
+    vkGetPhysicalDeviceSurfaceSupportKHR
+
+    vkGetPhysicalDeviceWin32PresentationSupportKHR
+
+
+    vkGetPipelineCacheData
+    vkGetQueryPoolResults
+
+
+    vkGetRenderAreaGranularity
+
+
+
+    vkGetSwapchainImagesKHR
+
+
+
+    vkInvalidateMappedMemoryRanges
+    vkMapMemory
+    vkMergePipelineCaches
+    vkQueueBindSparse
+    vkQueuePresentKHR
+    vkQueueSubmit
+    vkQueueWaitIdle
+
+
+
+
+    vkResetCommandBuffer
+    vkResetCommandPool
+    vkResetDescriptorPool
+    vkResetEvent
+    vkResetFences
+    vkSetEvent
+
+
+    vkUnmapMemory
+
+
+    vkUpdateDescriptorSets
+    vkWaitForFences
