@@ -1,0 +1,5 @@
+#!/bin/bash
+set -x
+/cygdrive/c/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V --variable-name vertex -o vertex.c shader.vert
+
+/cygdrive/c/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V --variable-name fragment -o fragment.c shader.frag

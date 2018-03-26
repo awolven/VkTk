@@ -4,7 +4,7 @@
   (:windows "~/vkapp/ifc/libffi/libffi.dll"))
   
 (cffi:define-foreign-library vulkan-1
-  (:windows "c:/VulkanSDK/1.0.65.1/Source/lib/vulkan-1.dll"))
+  (:windows "c:/VulkanSDK/1.1.70.1/Source/lib/vulkan-1.dll"))
 
 (defun load-vulkan-layer-libs ()
   (let ((libraries (list "VkLayer_api_dump.dll"

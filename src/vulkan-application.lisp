@@ -1,98 +1,30 @@
-(in-package :vkapp)
-
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
+
+(in-package :vkapp)
 
 (defvar *debug* t)
 
-(defparameter UINT64_MAX (1- (expt 2 64)))
-(defconstant +NULL+ 0)
-(defparameter +nullptr+ (cffi-sys:null-pointer))
+(defvar *pipeline-created* nil)
 
-(defparameter VK_NULL_HANDLE +nullptr+)
-(defconstant VK_TRUE 1)
-(defconstant VK_FALSE 0)
-(defconstant IMGUI_MAX_POSSIBLE_BACK_BUFFERS 16)
-(defparameter *imgui-unlimited-frame-rate* nil)
+(defun shader-binary-from-list (list)
+  (values (foreign-alloc :uint32 :initial-contents list) (* 4 (length list))))
 
-(defvar *last-app-id* 0)
-
-(defclass vkapp ()
-  ((window) ;; GLFWwindow
-   (app-id :accessor app-id)
-   (allocator :initform VK_NULL_HANDLE)	 ;; VkAllocationCallbacks
-   (instance :initform VK_NULL_HANDLE)	 ;; VkInstance
-   (surface :initform VK_NULL_HANDLE)	 ;; VkSurfaceKHR
-   (gpu :initform VK_NULL_HANDLE)	 ;; VkPhysicalDevice
-   (device :initform VK_NULL_HANDLE)	 ;; VkDevice
-   (swapchain :initform VK_NULL_HANDLE)	 ;; VkSwapchainKHR
-   (render-pass :initform VK_NULL_HANDLE) ;; VkRenderPass
-   (queue-family :initform 0)
-   (queue :initform VK_NULL_HANDLE)	  ;; VkQueue
-   (debug-report :initform VK_NULL_HANDLE) ;; VkDebugReportCallbackEXT
-
-   (surface-format) ;; VKSurfaceFormatKHR
-   (image-range) ;; VkImageSubresourceRange
-   (present-mode) ;; VkPresentMode
-
-   (pipeline-cache :initform VK_NULL_HANDLE) ;; VkPipelineCache
-   (descriptor-pool :initform VK_NULL_HANDLE) ;; VkDescriptorPool
-  
-   (fb-width)
-   (fb-height)
-   (back-buffer-indices
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES
-			  :initial-element nil :adjustable t :fill-pointer IMGUI_VK_QUEUED_FRAMES))
-
-   (back-buffer-count :initform 0)
-   (back-buffer
-    :initform (make-array IMGUI_MAX_POSSIBLE_BACK_BUFFERS :adjustable t
-			  :initial-element nil :fill-pointer IMGUI_MAX_POSSIBLE_BACK_BUFFERS)) ;; VkImage
-   (back-buffer-view
-    :initform (make-array IMGUI_MAX_POSSIBLE_BACK_BUFFERS :adjustable t
-			  :initial-element nil :fill-pointer IMGUI_MAX_POSSIBLE_BACK_BUFFERS)) ;; VkImageView
-   (framebuffer
-    :initform (make-array IMGUI_MAX_POSSIBLE_BACK_BUFFERS :adjustable t
-			  :initial-element nil :fill-pointer IMGUI_MAX_POSSIBLE_BACK_BUFFERS)) ;; VkFramebuffer
-   
-   (frame-index :initform 0)
-   (command-pool
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES :adjustable t
-			  :initial-element nil :fill-pointer IMGUI_VK_QUEUED_FRAMES)) ;; VkCommandPool
-   (command-buffer
-    :initform
-    (make-array IMGUI_VK_QUEUED_FRAMES :adjustable t
-		:initial-element nil :fill-pointer IMGUI_VK_QUEUED_FRAMES)) ;; VkCommandBuffer
-   (fence
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES :adjustable t
-			  :initial-element nil :fill-pointer IMGUI_VK_QUEUED_FRAMES)) ;; VkFence
-   (present-complete-semaphore
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES :adjustable t
-			  :initial-element nil :fill-pointer IMGUI_VK_QUEUED_FRAMES)) ;; VkSemaphore
-   (render-complete-semaphore
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES :adjustable t
-			  :initial-element nil :fill-pointer IMGUI_VK_QUEUED_FRAMES)) ;; VkSemaphore
-
-   (clear-value :initform (make-array 4 :element-type 'single-float :initial-element 0.0f0)) ;; VkClearValue
-
-   (vertex-shader-code)
-   (vertex-shader-code-size)
-   (vert-shader-module)
-   (fragment-shader-code)
-   (fragment-shader-code-size)
-   (frag-shader-module)
-
-   (vertex-buffer)
-   (vertex-buffer-memory)
-   (vertex-data)
-   (vertex-data-size)
-
-   (pipeline-layout)
-   (graphics-pipeline)))
-
-(defvar *apps* '())
-
-(defun find-app (user-pointer)
-  (find user-pointer *apps* :key #'app-id :test #'pointer-eq))
+#+NIL
+(defun read-shader-file (filename)
+  ;; the file is probably already little-endian.
+  (with-open-file (stream filename :element-type '(unsigned-byte 8))
+    (let ((buffer (make-array 1024 :element-type '(unsigned-byte 32) :adjustable t :fill-pointer 0))
+	  (byte1) (byte2) (byte3) (byte4))
+      (loop while (setq byte1 (read-byte stream nil))
+	 do (setq byte2 (read-byte stream)
+		  byte3 (read-byte stream)
+		  byte4 (read-byte stream))
+	   (vector-push-extend (let ((word (logior (ash byte4 24) (ash byte3 16) (ash byte2 8) byte1))) (format t "~8,'0,,X " word) word) buffer))
+      (let* ((size (fill-pointer buffer))
+	     (binary (foreign-alloc (list :array :uint32 size))))
+	(loop for word across buffer for i from 0
+	   do (setf (mem-aref binary :uint32 i) word))
+	(values binary (* 4 size))))))
 
 (defun read-shader-file (filename)
   (with-open-file (stream filename :element-type '(unsigned-byte 8))
@@ -174,79 +106,91 @@
       (error "Could not find app from app-id: ~A while resizing." app-id))
     (resize-vulkan app w h)))
 
-(defmethod recreate-swapchain ((app vkapp) (w integer) (h integer))
-  ;; Create Swapchain
-  (with-slots (surface surface-format present-mode gpu
-		       device allocator swapchain fb-width fb-height back-buffer-count back-buffer) app
-    (let ((old-swapchain swapchain))
-      (with-vk-struct (p-info VkSwapchainCreateInfoKHR)
-	(with-foreign-slots ((vk::surface vk::imageFormat vk::imageColorSpace vk::imageArrayLayers
-					  vk::imageUsage vk::imageSharingMode vk::preTransform
-					  vk::compositeAlpha vk::presentMode vk::clipped vk::oldSwapchain
-					  vk::minImageCount vk::imageExtent)
-			     p-info (:struct VkSwapchainCreateInfoKHR))
-	  (setf vk::surface surface
-		vk::imageFormat (foreign-slot-value surface-format '(:struct VkSurfaceFormatKHR) 'vk::format)
-		vk::imageColorSpace (foreign-slot-value surface-format '(:struct VkSurfaceFormatKHR) 'vk::colorSpace)
-		vk::imageArrayLayers 1
-		vk::imageUsage (logior vk::imageUsage VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
-		vk::imageSharingMode VK_SHARING_MODE_EXCLUSIVE
-		vk::preTransform VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
-		vk::compositeAlpha VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
-		vk::presentMode present-mode
-		vk::clipped VK_TRUE
-		vk::oldSwapchain old-swapchain)
-	  (with-vk-struct (p-cap VkSurfaceCapabilitiesKHR)
-	    (check-vk-result (vkGetPhysicalDeviceSurfaceCapabilitiesKHR gpu surface p-cap))
+(defmethod create-swapchain ((app vkapp) &key width height (old-swapchain +nullptr+))
+  (with-slots (device
+	       allocator surface surface-format present-mode gpu window
+	       swapchain fb-width fb-height back-buffer-count back-buffer) app
 
-	    (let ((cap-min-image-count
-		   (foreign-slot-value p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::minImageCount))
-		  (cap-max-image-count
-		   (foreign-slot-value p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::maxImageCount)))
-	      (if (> (foreign-slot-value p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::maxImageCount) 0)
-		  (setf vk::minImageCount (if (< (+ cap-min-image-count 2) cap-max-image-count)
-					      (+ cap-min-image-count 2)
-					      cap-max-image-count))
-		  (setf vk::minImageCount (+ cap-min-image-count 2)))
-	      (let ((cap-current-extent-width
-		     (foreign-slot-value
-		      (foreign-slot-pointer p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::currentExtent)
-		      '(:struct VkExtent2D)
-		      'vk::width)))
-		(if (eq cap-current-extent-width #xffffffff)
-		    
-		    (setf fb-width w
-			  fb-height h)
-		    
-		    (setf fb-width cap-current-extent-width
-			  fb-height (foreign-slot-value
-				     (foreign-slot-pointer p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::currentExtent)
-				     '(:struct VkExtent2D)
-				     'vk::height)))
+    (with-vk-struct (p-info VkSwapchainCreateInfoKHR)
+      (with-foreign-slots ((vk::surface vk::imageFormat vk::imageColorSpace vk::imageArrayLayers
+					vk::imageUsage vk::imageSharingMode vk::preTransform
+					vk::compositeAlpha vk::presentMode vk::clipped vk::oldSwapchain
+					vk::minImageCount vk::imageExtent)
+			   p-info (:struct VkSwapchainCreateInfoKHR))
+	(setf vk::surface surface
+	      vk::imageFormat (foreign-slot-value surface-format '(:struct VkSurfaceFormatKHR) 'vk::format)
+	      vk::imageColorSpace (foreign-slot-value surface-format '(:struct VkSurfaceFormatKHR) 'vk::colorSpace)
+	      vk::imageArrayLayers 1
+	      vk::imageUsage (logior vk::imageUsage VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+	      vk::imageSharingMode VK_SHARING_MODE_EXCLUSIVE
+	      vk::preTransform VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+	      vk::compositeAlpha VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
+	      vk::presentMode present-mode
+	      vk::clipped VK_TRUE
+	      vk::oldSwapchain old-swapchain)
+	(with-vk-struct (p-cap VkSurfaceCapabilitiesKHR)
+	  (check-vk-result (vkGetPhysicalDeviceSurfaceCapabilitiesKHR gpu surface p-cap))
+
+	  (let ((cap-min-image-count
+		 (foreign-slot-value p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::minImageCount))
+		(cap-max-image-count
+		 (foreign-slot-value p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::maxImageCount)))
+	    (if (> (foreign-slot-value p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::maxImageCount) 0)
+		(setf vk::minImageCount (if (< (+ cap-min-image-count 2) cap-max-image-count)
+					    (+ cap-min-image-count 2)
+					    cap-max-image-count))
+		(setf vk::minImageCount (+ cap-min-image-count 2)))
+	    (let ((cap-current-extent-width
+		   (foreign-slot-value
+		    (foreign-slot-pointer p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::currentExtent)
+		    '(:struct VkExtent2D)
+		    'vk::width)))
+	      (if (eq cap-current-extent-width #xffffffff)
+
+		  (if (and width height)
+		      (setf fb-width width fb-height height)
+		      (with-foreign-objects ((p-w :int)
+					     (p-h :int))
+			(glfwGetFramebufferSize window p-w p-h)
+			(setf fb-width (mem-aref p-w :int)
+			      fb-height (mem-aref p-h :int))))
+		  
+		  (setf fb-width cap-current-extent-width
+			fb-height (foreign-slot-value
+				   (foreign-slot-pointer p-cap '(:struct VkSurfaceCapabilitiesKHR) 'vk::currentExtent)
+				   '(:struct VkExtent2D)
+				   'vk::height)))
 		
-		(setf (foreign-slot-value
-		       (foreign-slot-pointer p-info '(:struct VkSwapchainCreateInfoKHR) 'vk::imageExtent)
-		       '(:struct VkExtent2D)
-		       'vk::width) fb-width
+	      (setf (foreign-slot-value
+		     (foreign-slot-pointer p-info '(:struct VkSwapchainCreateInfoKHR) 'vk::imageExtent)
+		     '(:struct VkExtent2D)
+		     'vk::width) fb-width
 		       
-		       (foreign-slot-value
-			(foreign-slot-pointer p-info '(:struct VkSwapchainCreateInfoKHR) 'vk::imageExtent)
-			'(:struct VkExtent2D)
-			'vk::height) fb-height)
+		     (foreign-slot-value
+		      (foreign-slot-pointer p-info '(:struct VkSwapchainCreateInfoKHR) 'vk::imageExtent)
+		      '(:struct VkExtent2D)
+		      'vk::height) fb-height)
 		
-		(with-foreign-object (p-swapchain 'VkSwapchainKHR)
-		  (check-vk-result (vkCreateSwapchainKHR device p-info allocator p-swapchain))
-		  (setf swapchain (mem-aref p-swapchain 'VkSwapchainKHR)))
+	      (with-foreign-object (p-swapchain 'VkSwapchainKHR)
+		(check-vk-result (vkCreateSwapchainKHR device p-info allocator p-swapchain))
+		(setf swapchain (mem-aref p-swapchain 'VkSwapchainKHR)))
 		
-		(with-foreign-objects ((p-back-buffer-count :uint32)
-				       (p-back-buffer 'VkImage 4))
-		  (check-vk-result (vkGetSwapchainImagesKHR device swapchain p-back-buffer-count +nullptr+))
-		  (setf back-buffer-count (mem-aref p-back-buffer-count :uint32))
-		  (check-vk-result (vkGetSwapchainImagesKHR device swapchain p-back-buffer-count p-back-buffer))
-		  (loop for i from 0 below back-buffer-count
-		     do (setf (elt back-buffer i) (mem-aref p-back-buffer 'VkImage i))))
-		(unless (null-pointer-p old-swapchain)
-		  (vkDestroySwapchainKHR device old-swapchain allocator)))))))))
+	      (with-foreign-objects ((p-back-buffer-count :uint32)
+				     (p-back-buffer 'VkImage 4))
+		(check-vk-result (vkGetSwapchainImagesKHR device swapchain p-back-buffer-count +nullptr+))
+		(setf back-buffer-count (mem-aref p-back-buffer-count :uint32))
+		(check-vk-result (vkGetSwapchainImagesKHR device swapchain p-back-buffer-count p-back-buffer))
+		(loop for i from 0 below back-buffer-count
+		   do (setf (elt back-buffer i) (mem-aref p-back-buffer 'VkImage i))))))))))
+  (values))
+
+(defmethod recreate-swapchain ((app vkapp) w h)
+  ;; Create Swapchain
+  (with-slots (device allocator swapchain) app
+    (let ((old-swapchain swapchain))
+      (create-swapchain app :width w :height h :old-swapchain old-swapchain)
+      (unless (null-pointer-p old-swapchain)
+	(vkDestroySwapchainKHR device old-swapchain allocator))))
   (values))
 
 (defmethod create-render-pass ((app vkapp))
@@ -270,13 +214,18 @@
 			     p-color-attachment (:struct VkAttachmentReference))
 	  (setf vk::attachment 0
 		vk::layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL))
-		    
-	(with-vk-struct (p-subpass VkSubpassDescription)
-	  (with-foreign-slots ((vk::pipelineBindPoint vk::colorAttachmentCount vk::pColorAttachments)
-			       p-subpass (:struct VkSubpassDescription))
-	    (setf vk::pipelineBindPoint VK_PIPELINE_BIND_POINT_GRAPHICS
-		  vk::colorAttachmentCount 1
-		  vk::pColorAttachments p-color-attachment))
+
+	(with-foreign-object (p-subpasses '(:struct VkSubpassDescription) 2)
+	  
+	  (loop for i from 0 below 2
+	     do (let ((p-subpass (mem-aptr p-subpasses '(:struct VkSubpassDescription) i)))
+		  (zero-struct p-subpass '(:struct VkSubpassDescription))
+		  (with-foreign-slots ((vk::pipelineBindPoint vk::colorAttachmentCount vk::pColorAttachments)
+				       p-subpass
+				       (:struct VkSubpassDescription))
+		    (setf vk::pipelineBindPoint VK_PIPELINE_BIND_POINT_GRAPHICS
+			  vk::colorAttachmentCount 1
+			  vk::pColorAttachments p-color-attachment))))
 	  
 	  (with-vk-struct (p-info VkRenderPassCreateInfo)
 	    (with-foreign-slots ((vk::attachmentCount vk::pAttachments vk::subpassCount vk::pSubpasses)
@@ -284,7 +233,7 @@
 	      (setf vk::attachmentCount 1
 		    vk::pAttachments p-attachment
 		    vk::subpassCount 1
-		    vk::pSubpasses p-subpass))
+		    vk::pSubpasses p-subpasses))
 	    (with-foreign-object (p-render-pass 'VkRenderPass)
 	      (check-vk-result (vkCreateRenderPass device p-info allocator p-render-pass))
 	      (setf render-pass (mem-aref p-render-pass 'VkRenderPass))))))))
@@ -320,9 +269,12 @@
 		 (setf (elt back-buffer-view i) (mem-aref p-back-buffer-view 'VkImageView))))))))
   (values))
       
-(defmethod setup-framebuffers ((app vkapp))
-  (with-slots (fb-width fb-height back-buffer-count back-buffer-view device allocator framebuffer
-			render-pass) app
+(defmethod create-framebuffers ((app vkapp))
+  ;; Create Framebuffers:
+  (with-slots (device
+	       fb-width fb-height back-buffer-count back-buffer-view
+	       allocator framebuffer render-pass window) app
+    (glfwSetFramebufferSizeCallback window (get-callback 'resize-vulkan-callback))
     (with-foreign-object (p-attachment 'VkImageView 1)
       (with-vk-struct (p-info VkFramebufferCreateInfo)
 	(with-foreign-slots ((vk::renderPass vk::attachmentCount vk::pAttachments
@@ -391,6 +343,8 @@
 		 (mem-aptr p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 0))
 		(p-frag-shader-stage-create-info
 		 (mem-aptr p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 1)))
+	    (vk::zero-struct p-vert-shader-stage-create-info '(:struct VkPipelineShaderStageCreateInfo))
+	    (vk::zero-struct p-frag-shader-stage-create-info '(:struct VkPipelineShaderStageCreateInfo))
 	    ;; todo: update with-vk-struct to create arrays of structs
 	    (with-foreign-slots ((vk::sType vk::pNext vk::flags vk::stage vk::module vk::pName)
 				 p-vert-shader-stage-create-info
@@ -433,26 +387,26 @@
 			vk::primitiveRestartEnable VK_FALSE))
 
 		(with-vk-struct (p-viewport VkViewport)
-		  (with-foreign-slots ((vk::x
-					vk::y
-					vk::width
-					vk::height
-					vk::minDepth
-					vk::maxDepth)
-				       p-viewport (:struct VkViewport))
-		    (with-foreign-objects ((p-w :int)
-					   (p-h :int))
-		      (glfwGetFramebufferSize window p-w p-h)
-		      (let ((w (mem-aref p-w :int))
-			    (h (mem-aref p-h :int)))
-			(setf vk::x 0.0f0
-			      vk::y 0.0f0
-			      vk::width (coerce w 'single-float)
-			      vk::height (coerce h 'single-float)
-			      vk::minDepth 0.0f0
-			      vk::maxDepth 1.0f0)
-		      
-			(with-foreign-object (p-scissor '(:struct VkRect2D))
+		  (with-vk-struct (p-scissor VkRect2D)
+		    (with-foreign-slots ((vk::x
+					  vk::y
+					  vk::width
+					  vk::height
+					  vk::minDepth
+					  vk::maxDepth)
+					 p-viewport (:struct VkViewport))
+		      (with-foreign-objects ((p-w :int)
+					     (p-h :int))
+			(glfwGetFramebufferSize window p-w p-h)
+			(let ((w (mem-aref p-w :int))
+			      (h (mem-aref p-h :int)))
+			  (setf vk::x 0.0f0
+				vk::y 0.0f0
+				vk::width (coerce w 'single-float)
+				vk::height (coerce h 'single-float)
+				vk::minDepth 0.0f0
+				vk::maxDepth 1.0f0)
+
 			  (setf (foreign-slot-value
 				 (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset)
 				 '(:struct VkOffset2D)
@@ -471,7 +425,7 @@
 				   (foreign-slot-value
 				    (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
 				    '(:struct VkExtent2D)
-				    'vk::height) h)
+				    'vk::height) h))))
 			  
 		    (with-vk-struct (p-viewport-state VkPipelineViewportStateCreateInfo)
 		      (with-foreign-slots ((vk::viewportCount
@@ -546,8 +500,8 @@
 					 (logior VK_COLOR_COMPONENT_R_BIT VK_COLOR_COMPONENT_G_BIT
 						 VK_COLOR_COMPONENT_B_BIT VK_COLOR_COMPONENT_A_BIT)
 					 vk::blendEnable VK_FALSE
-					 vk::srcColorBlendFactor VK_BLEND_FACTOR_ONE
-					 vk::dstColorBlendFactor VK_BLEND_FACTOR_ZERO
+					 vk::srcColorBlendFactor VK_BLEND_FACTOR_SRC_ALPHA ;;VK_BLEND_FACTOR_ONE
+					 vk::dstColorBlendFactor VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ;;VK_BLEND_FACTOR_ZERO
 					 vk::colorBlendOp VK_BLEND_OP_ADD
 					 vk::srcAlphaBlendFactor VK_BLEND_FACTOR_ONE
 					 vk::dstAlphaBlendFactor VK_BLEND_FACTOR_ZERO
@@ -568,16 +522,16 @@
 				
 				  (setf vk::logicOpEnable VK_FALSE
 					vk::logicOp VK_LOGIC_OP_COPY
-					vk::attachmentCount back-buffer-count
+					vk::attachmentCount 1 ;;back-buffer-count
 					vk::pAttachments p-color-blend-attachments
 					(mem-aref p-blend-constants :float 0) 0.0f0
 					(mem-aref p-blend-constants :float 1) 0.0f0
 					(mem-aref p-blend-constants :float 2) 0.0f0
 					(mem-aref p-blend-constants :float 3) 0.0f0)))
 
-			      (with-foreign-object (p-dynamic-states :int 2)
-				(setf (mem-aref p-dynamic-states :int 0) VK_DYNAMIC_STATE_VIEWPORT
-				      (mem-aref p-dynamic-states :int 1) VK_DYNAMIC_STATE_LINE_WIDTH)
+			      (with-foreign-object (p-dynamic-states 'VkDynamicState)
+				(setf (mem-aref p-dynamic-states 'VkDynamicState 0) VK_DYNAMIC_STATE_VIEWPORT
+				      (mem-aref p-dynamic-states 'VkDynamicState 1) VK_DYNAMIC_STATE_LINE_WIDTH)
 			      
 				(with-vk-struct (p-dynamic-state VkPipelineDynamicStateCreateInfo)
 				  (with-foreign-slots ((vk::dynamicStateCount
@@ -587,9 +541,8 @@
 				  
 				    (setf vk::dynamicStateCount 2
 					  vk::pDynamicStates p-dynamic-states))
-
-				  (with-vk-struct (p-pipeline-layout-info
-						   VkPipelineLayoutCreateInfo)
+				  
+				  (with-vk-struct (p-pipeline-layout-info VkPipelineLayoutCreateInfo)
 				    (with-foreign-slots ((vk::setLayoutCount
 							  vk::pSetLayouts
 							  vk::pushConstantRangeCount
@@ -601,9 +554,8 @@
 					    vk::pSetLayouts +nullptr+
 					    vk::pushConstantRangeCount 0
 					    vk::pPushConstantRanges +nullptr+))
-
+				    
 				    (with-foreign-object (p-pipeline-layout 'VkPipelineLayout)
-				      ;;(break "1")
 				      (check-vk-result
 				       (vkCreatePipelineLayout device
 							       p-pipeline-layout-info
@@ -611,9 +563,10 @@
 							       p-pipeline-layout))
 				      (setf pipeline-layout
 					    (mem-aref p-pipeline-layout 'VkPipelineLayout)))
-						    
+				    
 				    (with-vk-struct (p-pipeline-info VkGraphicsPipelineCreateInfo)
-				      (with-foreign-slots ((vk::stageCount
+				      (with-foreign-slots ((vk::flags
+							    vk::stageCount
 							    vk::pStages
 							    vk::pVertexInputState
 							    vk::pInputAssemblyState
@@ -630,7 +583,8 @@
 							    vk::basePipelineIndex)
 							   p-pipeline-info
 							   (:struct VkGraphicsPipelineCreateInfo))
-					(setf vk::stageCount 2
+					(setf vk::flags 0;; VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT
+					      vk::stageCount 2
 					      vk::pStages p-shader-stages
 					      vk::pVertexInputState p-vertex-input-info
 					      vk::pInputAssemblyState p-input-assembly
@@ -642,21 +596,18 @@
 					      vk::pDynamicState +nullptr+ ;;p-dynamic-state
 					      vk::layout pipeline-layout
 					      vk::renderPass render-pass
-					      vk::subpass 0
+					      vk::subpass 0 ;; 1
 					      vk::basePipelineHandle +nullptr+
 					      vk::basePipelineIndex -1))
 
 				      (with-foreign-object (p-graphics-pipeline 'VkPipeline)
-					;;(break "2")
 					(check-vk-result
-					 (vkCreateGraphicsPipelines device pipeline-cache 1 p-pipeline-info +nullptr+
+					 (vkCreateGraphicsPipelines device pipeline-cache 1
+								    p-pipeline-info allocator
 								    p-graphics-pipeline))
-					(setf graphics-pipeline (mem-aref p-graphics-pipeline 'VkPipeline))
-					(break "3")
-					(vkDestroyShaderModule device vert-shader-module allocator)
-					(vkDestroyShaderModule device frag-shader-module allocator)
-					(break "4")
-					))))))))))))))))))))))
+					(setf graphics-pipeline (mem-aref p-graphics-pipeline 'VkPipeline))))))))))))))))))))
+    (vkDestroyShaderModule device vert-shader-module allocator)
+    (vkDestroyShaderModule device frag-shader-module allocator))
   (values))
 
 (defun create-shader-module (device allocator code size)
@@ -670,25 +621,26 @@
 	(mem-aref p-shader-module 'VkShaderModule)))))  
 
 (defmethod resize-vulkan ((app vkapp) w h)
+  (declare (ignore w h))
+  
   (with-slots (device) app
 
     (check-vk-result (vkDeviceWaitIdle device))
-	  
+    
     ;; destroy the old Framebuffer
-
     (destroy-framebuffers app)
     
     (destroy-image-views app)
-
+    
     (destroy-render-pass app)
-
+    
     (recreate-swapchain app w h)
-
+    
     (create-image-views app)
-
+    
     (create-render-pass app)
 
-    (setup-framebuffers app))
+    (create-framebuffers app))
   
   (values))
 
@@ -702,6 +654,7 @@
   (declare (ignore flags object location message-code p-layer-prefix p-user-data))
   (format *error-output* "[vulkan] ObjectType: ~A~%Message: ~A~%~%" object-type
 	  (foreign-string-to-lisp p-message))
+  (finish-output *error-output*)
   VK_FALSE)
 
 (defun copy-vk-surface-format-khr (src dst)
@@ -726,13 +679,15 @@
 		  vk::ppEnabledExtensionNames pp-glfw-extensions)
 	    
 	    (with-foreign-strings ((p-validation-layer-string "VK_LAYER_LUNARG_standard_validation")
+				   (p-api-dump-layer-string "VK_LAYER_LUNARG_api_dump")
 				   (p-extension-name "VK_EXT_debug_report"))
-	      (with-foreign-object (pp-layers '(:pointer :char) 1)
+	      (with-foreign-object (pp-layers '(:pointer :char) 2)
 		
 		(setf (mem-aref pp-layers '(:pointer :char) 0) p-validation-layer-string
+		      (mem-aref pp-layers '(:pointer :char) 1) p-api-dump-layer-string
 		      
-		      vk::enabledLayerCount 1
-		      vk::ppEnabledLayerNames pp-layers)
+		      vk::enabledLayerCount (if *debug* 2 0)
+		      vk::ppEnabledLayerNames (if *debug* pp-layers +nullptr+))
 		
 		(let ((extensions-count (mem-aref p-extensions-count :uint32)))
 		  (with-foreign-object (pp-extensions '(:pointer :char) (1+ extensions-count))
@@ -1044,44 +999,64 @@
 	     finally (setf present-mode VK_PRESENT_MODE_FIFO_KHR)))))) ;; always available
   (values))
 
-(defmethod create-framebuffers ((app vkapp))
-  ;; Create Framebuffers:
-  (with-slots (window) app
-    (with-foreign-objects ((p-w :int)
-			   (p-h :int))
-      (glfwGetFramebufferSize window p-w p-h)
-      (resize-vulkan app (mem-aref p-w :int) (mem-aref p-h :int))
-      (glfwSetFramebufferSizeCallback window (get-callback 'resize-vulkan-callback))))
-  (values))
 
-(defmethod setup-vulkan ((app vkapp))
-  
-    (setup-instance app)
 
-    (setup-debug-callback app)
+#+NOTYET
+(defmethod create-descriptor-set-layout ((app vkapp))
+  (with-vk-struct (p-ubo-layout-binding VkDescriptorSetLayoutBinding)
+    (with-foreign-slots ((vk::binding
+			  vk::descriptorCount
+			  vk::descriptorType
+			  vk::pImmutableSamplers
+			  vk::stageFlags))
+      (setf vk::binding 0
+	    vk::descriptorCount 1
+	    vk::descriptorType VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+	    ;;later when we have vertex data
+	    ))))
 
-    (create-surface app)
+(defmethod setup-vulkan ((app vkapp) w h)
 
-    (pick-gpu app)
+  (read-in-shaders app)
 
-    ;; todo: find queue families should be inside pick gpu:
-    (find-queue-families app)
+  (allocate-surface-format app)
 
-    (check-for-wsi-support app)
+  (allocate-image-range app)
 
-    (get-surface-format app)
+  (setup-window app w h)
 
-    (get-present-mode app)
+  (setup-instance app)
 
-    (create-logical-device app)
+  (setup-debug-callback app)
 
-    (create-framebuffers app)
+  (create-surface app)
 
-    (create-command-buffers app)
+  (pick-gpu app)
 
-    (create-descriptor-pool app)
+  ;; todo: find queue families should be inside pick gpu:
+  (find-queue-families app)
 
+  (check-for-wsi-support app)
+
+  (get-surface-format app)
+
+  (get-present-mode app)
+
+  (create-logical-device app)
+
+  (create-swapchain app)
+      
+  (create-image-views app)
     
+  (create-render-pass app)
+    
+  (create-graphics-pipeline app)
+    
+  (create-framebuffers app)
+    
+  (create-command-buffers app) ;; this also creates semaphores...todo: separate these out
+    
+  (create-descriptor-pool app)
     
   (values))
 
@@ -1329,10 +1304,12 @@
 	       vertex-shader-code-size
 	       fragment-shader-code
 	       fragment-shader-code-size) app
-    (multiple-value-bind (code size) (read-shader-file "C:/Users/awolven/vkapp/shaders/vert.spv")
+    (multiple-value-bind (code size) #+NIL(shader-binary-from-list vertex-shader-list)
+			 (read-shader-file "C:/Users/awolven/vkapp/shaders/vert.spv")
       (setf vertex-shader-code code
 	    vertex-shader-code-size size))
-    (multiple-value-bind (code size) (read-shader-file "C:/Users/awolven/vkapp/shaders/frag.spv")
+    (multiple-value-bind (code size) #+NIL(shader-binary-from-list fragment-shader-list)
+			 (read-shader-file "C:/Users/awolven/vkapp/shaders/frag.spv")
       (setf fragment-shader-code code
 	    fragment-shader-code-size size)))
   (values))
@@ -1358,40 +1335,14 @@
 (defmethod main ((app vkapp) &rest args &key (w 1280) (h 720))
   (declare (ignore args))
 
-  (with-slots (window allocator gpu device render-pass queue command-pool command-buffer
+  (with-slots (window allocator gpu device render-pass queue command-pool command-buffer graphics-pipeline
 		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format) app
 
-    (read-in-shaders app)
-
-    (allocate-surface-format app)
-
-    (allocate-image-range app)
-
-    (setup-window app w h)
     
-    (setup-vulkan app)
-
+    (setup-vulkan app w h)
+    
     (init-imgui-glfw-vulkan-impl app)
-
     
-
-    (with-slots (window) app
-      (with-foreign-objects ((p-w :int)
-			     (p-h :int))
-	(glfwGetFramebufferSize window p-w p-h)
-	
-	(recreate-swapchain app (mem-aref p-w :int) (mem-aref p-h :int)))
-      
-      (create-image-views app)
-      
-      (create-render-pass app)
-
-      ;;(create-graphics-pipeline app)
-      
-      (setup-framebuffers app)
-      
-      )
-
     (with-foreign-object (p-style '(:struct ig::ImGuiStyle))
       (igStyleColorsClassic p-style))
 			 
@@ -1503,6 +1454,8 @@
 		   (elt clear-value 3) (mem-aref  p-clear-color :float 3))
 
 	     (frame-begin app)
+	     (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS graphics-pipeline)
+	     (vkCmdDraw (elt command-buffer frame-index) 3 1 0 0)
 	     (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index))
 	     (frame-end app)
 	     (frame-present app)))
@@ -1569,13 +1522,13 @@
   (count size-t))
 
 (defmethod find-memory-type ((app vkapp) type-filter properties)
-  (with-slots (physical-device) app
+  (with-slots (gpu) app
     (with-vk-struct (p-mem-properties VkPhysicalDeviceMemoryProperties)
       (with-foreign-slots ((vk::memoryTypeCount vk::memoryTypes)
 			   p-mem-properties
 			   (:struct VkPhysicalDeviceMemoryProperties))
 			   
-	(vkGetPhysicalDeviceMemoryProperties physical-device p-mem-properties)
+	(vkGetPhysicalDeviceMemoryProperties gpu p-mem-properties)
 	(loop for i from 0 below vk::memoryTypeCount
 	     do (when (and (not (zerop (logand type-filter (ash 1 i))))
 			   (not (zerop (logand

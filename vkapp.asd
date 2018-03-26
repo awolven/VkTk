@@ -16,6 +16,7 @@
    (:file "ifc/vulkan/vk-macros")
    (:file "ifc/vulkan/vk-funcs")
    (:file "ifc/imgui-glfw-vulkan")
+   (:file "src/vkapp-class")
    (:file "src/vulkan-application")))
 
 ;; Hacks:
