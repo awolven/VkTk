@@ -12,6 +12,24 @@
 (defparameter VK_NULL_HANDLE +nullptr+)
 (defparameter *imgui-unlimited-frame-rate* nil)
 
+(defcstruct vec2
+  (a :float)
+  (b :float))
+
+(defcstruct vec3
+  (a :float)
+  (b :float)
+  (c :float))
+
+(defcstruct Vertex
+  (pos (:struct vec2))
+  (color (:struct vec3)))
+
+(defparameter *vertices-list*
+  (list  0.0f0 -0.5f0 1.0f0 0.0f0 0.0f0
+	 0.5f0  0.5f0 0.0f0 1.0f0 0.0f0
+	-0.5f0  0.5f0 0.0f0 0.0f0 1.0f0))
+
 (defvar *last-app-id* 0)
 
 (defclass vkapp ()
@@ -83,17 +101,22 @@
    (frag-shader-module)
 
    (vertex-buffer
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; VkBuffer
+    #+NIL
+    :initform 
+    #+NIL(make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; VkBuffer
    (index-buffer
     :initform (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; VkBuffer
    (vertex-buffer-memory
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; VkDeviceMemory
+    #+NIL
+    :initform #+NIL(make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; VkDeviceMemory
    (index-buffer-memory
     :initform (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; VkDeviceMemory
-   (vertex-data) ;; (:pointer :float)
+   (vertex-data
+    :initform (foreign-alloc :float :initial-contents *vertices-list*)) ;; (:pointer :float)
    (index-data) ;; (:pointer :uint32)
-   (vertex-buffer-size
-    :initform (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; size-t
+   (vertex-data-size
+    :initform (* (foreign-type-size :float) (length *vertices-list*))
+    #+NIL :initform #+NIL (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; size-t
    (index-buffer-size
     :initform (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil)) ;; size-t
 
@@ -112,3 +135,6 @@
 
 (defun find-app (user-pointer)
   (find user-pointer *apps* :key #'app-id :test #'pointer-eq))
+
+
+

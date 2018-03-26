@@ -365,247 +365,285 @@
 		    vk::stage VK_SHADER_STAGE_FRAGMENT_BIT
 		    vk::module frag-shader-module
 		    vk::pName p-name2))
-      
-	    (with-vk-struct (p-vertex-input-info VkPipelineVertexInputStateCreateInfo)
-	      (with-foreign-slots ((vk::vertexBindingDescriptionCount
-				    vk::pVertexBindingDescriptions
-				    vk::vertexAttributeDescriptionCount
-				    vk::pVertexAttributeDescriptions)
-				   p-vertex-input-info
-				   (:struct VkPipelineVertexInputStateCreateInfo))
-		(setf vk::vertexBindingDescriptionCount 0
-		      vk::pVertexBindingDescriptions +nullptr+
-		      vk::vertexAttributeDescriptionCount 0
-		      vk::pVertexAttributeDescriptions +nullptr+))
+
+	    (with-vk-struct (p-binding-description VkVertexInputBindingDescription)
+	      (with-foreign-slots ((vk::binding
+				    vk::stride
+				    vk::inputRate)
+				   p-binding-description
+				   (:struct VkVertexInputBindingDescription))
+		(setf vk::binding 0
+		      vk::stride (foreign-type-size '(:struct Vertex))
+		      vk::inputRate VK_VERTEX_INPUT_RATE_VERTEX))
+	      
+	      (with-foreign-object (p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 2)
+		(let ((p-attribute-description-0
+		       (mem-aptr p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 0))
+		      (p-attribute-description-1
+		       (mem-aptr p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 1)))
+		  (zero-struct p-attribute-description-0 '(:struct VkVertexInputAttributeDescription))
+		  (zero-struct p-attribute-description-1 '(:struct VkVertexInputAttributeDescription))
+		  (with-foreign-slots ((vk::binding
+					vk::location
+					vk::format
+					vk::offset)
+				       p-attribute-description-0
+				       (:struct VkVertexInputAttributeDescription))
+		    (setf vk::binding 0
+			  vk::location 0
+			  vk::format VK_FORMAT_R32G32_SFLOAT
+			  vk::offset (foreign-slot-offset '(:struct Vertex) 'pos)))
+		  (with-foreign-slots ((vk::binding
+					vk::location
+					vk::format
+					vk::offset)
+				       p-attribute-description-1
+				       (:struct VkVertexInputAttributeDescription))
+		    (setf vk::binding 0
+			  vk::location 1
+			  vk::format VK_FORMAT_R32G32B32_SFLOAT
+			  vk::offset (foreign-slot-offset '(:struct Vertex) 'color)))
+		  
+		  (with-vk-struct (p-vertex-input-info VkPipelineVertexInputStateCreateInfo)
+		    (with-foreign-slots ((vk::vertexBindingDescriptionCount
+					  vk::pVertexBindingDescriptions
+					  vk::vertexAttributeDescriptionCount
+					  vk::pVertexAttributeDescriptions)
+					 p-vertex-input-info
+					 (:struct VkPipelineVertexInputStateCreateInfo))
+		      (setf vk::vertexBindingDescriptionCount 1
+			    vk::pVertexBindingDescriptions p-binding-description
+			    vk::vertexAttributeDescriptionCount 2
+			    vk::pVertexAttributeDescriptions p-attribute-descriptions))
 	    
-	      (with-vk-struct (p-input-assembly VkPipelineInputAssemblyStateCreateInfo)
-		(with-foreign-slots ((vk::topology
-				      vk::primitiveRestartEnable)
-				     p-input-assembly
-				     (:struct VkPipelineInputAssemblyStateCreateInfo))
-		  (setf vk::topology VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-			vk::primitiveRestartEnable VK_FALSE))
+		    (with-vk-struct (p-input-assembly VkPipelineInputAssemblyStateCreateInfo)
+		      (with-foreign-slots ((vk::topology
+					    vk::primitiveRestartEnable)
+					   p-input-assembly
+					   (:struct VkPipelineInputAssemblyStateCreateInfo))
+			(setf vk::topology VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+			      vk::primitiveRestartEnable VK_FALSE))
 
-		(with-vk-struct (p-viewport VkViewport)
-		  (with-vk-struct (p-scissor VkRect2D)
-		    (with-foreign-slots ((vk::x
-					  vk::y
-					  vk::width
-					  vk::height
-					  vk::minDepth
-					  vk::maxDepth)
-					 p-viewport (:struct VkViewport))
-		      (with-foreign-objects ((p-w :int)
-					     (p-h :int))
-			(glfwGetFramebufferSize window p-w p-h)
-			(let ((w (mem-aref p-w :int))
-			      (h (mem-aref p-h :int)))
-			  (setf vk::x 0.0f0
-				vk::y 0.0f0
-				vk::width (coerce w 'single-float)
-				vk::height (coerce h 'single-float)
-				vk::minDepth 0.0f0
-				vk::maxDepth 1.0f0)
+		      (with-vk-struct (p-viewport VkViewport)
+			(with-vk-struct (p-scissor VkRect2D)
+			  (with-foreign-slots ((vk::x
+						vk::y
+						vk::width
+						vk::height
+						vk::minDepth
+						vk::maxDepth)
+					       p-viewport (:struct VkViewport))
+			    (with-foreign-objects ((p-w :int)
+						   (p-h :int))
+			      (glfwGetFramebufferSize window p-w p-h)
+			      (let ((w (mem-aref p-w :int))
+				    (h (mem-aref p-h :int)))
+				(setf vk::x 0.0f0
+				      vk::y 0.0f0
+				      vk::width (coerce w 'single-float)
+				      vk::height (coerce h 'single-float)
+				      vk::minDepth 0.0f0
+				      vk::maxDepth 1.0f0)
 
-			  (setf (foreign-slot-value
-				 (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset)
-				 '(:struct VkOffset2D)
-				 'vk::x) 0
+				(setf (foreign-slot-value
+				       (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset)
+				       '(:struct VkOffset2D)
+				       'vk::x) 0
 				 
-				 (foreign-slot-value
-				  (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset)
-				  '(:struct VkOffset2D)
-				  'vk::y) 0
+				       (foreign-slot-value
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset)
+					'(:struct VkOffset2D)
+					'vk::y) 0
 				  
-				  (foreign-slot-value
-				   (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
-				   '(:struct VkExtent2D)
-				   'vk::width) w
+				       (foreign-slot-value
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
+					'(:struct VkExtent2D)
+					'vk::width) w
 				   
-				   (foreign-slot-value
-				    (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
-				    '(:struct VkExtent2D)
-				    'vk::height) h))))
+				       (foreign-slot-value
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
+					'(:struct VkExtent2D)
+					'vk::height) h))))
 			  
-		    (with-vk-struct (p-viewport-state VkPipelineViewportStateCreateInfo)
-		      (with-foreign-slots ((vk::viewportCount
-					    vk::pViewports
-					    vk::scissorCount
-					    vk::pScissors)
-					   p-viewport-state
-					   (:struct VkPipelineViewportStateCreateInfo))
-			(setf vk::viewportCount 1
-			      vk::pViewports p-viewport
-			      vk::scissorCount 1
-			      vk::pScissors p-scissor))
+			  (with-vk-struct (p-viewport-state VkPipelineViewportStateCreateInfo)
+			    (with-foreign-slots ((vk::viewportCount
+						  vk::pViewports
+						  vk::scissorCount
+						  vk::pScissors)
+						 p-viewport-state
+						 (:struct VkPipelineViewportStateCreateInfo))
+			      (setf vk::viewportCount 1
+				    vk::pViewports p-viewport
+				    vk::scissorCount 1
+				    vk::pScissors p-scissor))
 
-		      (with-vk-struct (p-rasterizer VkPipelineRasterizationStateCreateInfo)
-			(with-foreign-slots ((vk::depthClampEnable
-					      vk::rasterizerDiscardEnable
-					      vk::polygonMode
-					      vk::lineWidth
-					      vk::cullMode
-					      vk::frontFace
-					      vk::depthBiasEnable
-					      vk::depthBiasConstantFactor
-					      vk::depthBiasClamp
-					      vk::depthBiasSlopeFactor)
-					     p-rasterizer
-					     (:struct VkPipelineRasterizationStateCreateInfo))
-			  (setf vk::depthClampEnable VK_FALSE
-				vk::rasterizerDiscardEnable VK_FALSE
-				vk::polygonMode VK_POLYGON_MODE_FILL
-				vk::lineWidth 1.0f0
-				vk::cullMode VK_CULL_MODE_BACK_BIT
-				vk::frontFace VK_FRONT_FACE_CLOCKWISE
-				vk::depthBiasEnable VK_FALSE
-				vk::depthBiasConstantFactor 0.0f0
-				vk::depthBiasClamp 0.0f0
-				vk::depthBiasSlopeFactor 0.0f0))
+			    (with-vk-struct (p-rasterizer VkPipelineRasterizationStateCreateInfo)
+			      (with-foreign-slots ((vk::depthClampEnable
+						    vk::rasterizerDiscardEnable
+						    vk::polygonMode
+						    vk::lineWidth
+						    vk::cullMode
+						    vk::frontFace
+						    vk::depthBiasEnable
+						    vk::depthBiasConstantFactor
+						    vk::depthBiasClamp
+						    vk::depthBiasSlopeFactor)
+						   p-rasterizer
+						   (:struct VkPipelineRasterizationStateCreateInfo))
+				(setf vk::depthClampEnable VK_FALSE
+				      vk::rasterizerDiscardEnable VK_FALSE
+				      vk::polygonMode VK_POLYGON_MODE_FILL
+				      vk::lineWidth 1.0f0
+				      vk::cullMode VK_CULL_MODE_BACK_BIT
+				      vk::frontFace VK_FRONT_FACE_CLOCKWISE
+				      vk::depthBiasEnable VK_FALSE
+				      vk::depthBiasConstantFactor 0.0f0
+				      vk::depthBiasClamp 0.0f0
+				      vk::depthBiasSlopeFactor 0.0f0))
 
-			(with-vk-struct (p-multisampling VKPipelineMultisampleStateCreateInfo)
-			  (with-foreign-slots ((vk::sampleShadingEnable
-						vk::rasterizationSamples
-						vk::minSampleShading
-						vk::pSampleMask
-						vk::alphaToCoverageEnable
-						vk::alphaToOneEnable)
-					       p-multisampling
-					       (:struct VKPipelineMultisampleStateCreateInfo))
-			    (setf vk::sampleShadingEnable VK_FALSE
-				  vk::rasterizationSamples VK_SAMPLE_COUNT_1_BIT
-				  vk::minSampleShading 1.0f0
-				  vk::pSampleMask +nullptr+
-				  vk::alphaToCoverageEnable VK_FALSE
-				  vk::alphaToOneEnable VK_FALSE))
+			      (with-vk-struct (p-multisampling VKPipelineMultisampleStateCreateInfo)
+				(with-foreign-slots ((vk::sampleShadingEnable
+						      vk::rasterizationSamples
+						      vk::minSampleShading
+						      vk::pSampleMask
+						      vk::alphaToCoverageEnable
+						      vk::alphaToOneEnable)
+						     p-multisampling
+						     (:struct VKPipelineMultisampleStateCreateInfo))
+				  (setf vk::sampleShadingEnable VK_FALSE
+					vk::rasterizationSamples VK_SAMPLE_COUNT_1_BIT
+					vk::minSampleShading 1.0f0
+					vk::pSampleMask +nullptr+
+					vk::alphaToCoverageEnable VK_FALSE
+					vk::alphaToOneEnable VK_FALSE))
 
-			  (with-foreign-object (p-color-blend-attachments
-						'(:struct VkPipelineColorBlendAttachmentState) back-buffer-count)
-			    (loop for i from 0 below back-buffer-count
-			       do (vk::zero-struct (mem-aptr p-color-blend-attachments
-							     '(:struct VkPipelineColorBlendAttachmentState) i)
-						   '(:struct VkPipelineColorBlendAttachmentState))
-				 (with-foreign-slots ((vk::colorWriteMask
-						       vk::blendEnable
-						       vk::srcColorBlendFactor
-						       vk::dstColorBlendFactor
-						       vk::colorBlendOp
-						       vk::srcAlphaBlendFactor
-						       vk::dstAlphaBlendFactor
-						       vk::alphaBlendOp)
-						      (mem-aptr p-color-blend-attachments
-								'(:struct VkPipelineColorBlendAttachmentState) i)
-						      (:struct VkPipelineColorBlendAttachmentState))
-				   (setf vk::colorWriteMask
-					 (logior VK_COLOR_COMPONENT_R_BIT VK_COLOR_COMPONENT_G_BIT
-						 VK_COLOR_COMPONENT_B_BIT VK_COLOR_COMPONENT_A_BIT)
-					 vk::blendEnable VK_FALSE
-					 vk::srcColorBlendFactor VK_BLEND_FACTOR_SRC_ALPHA ;;VK_BLEND_FACTOR_ONE
-					 vk::dstColorBlendFactor VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ;;VK_BLEND_FACTOR_ZERO
-					 vk::colorBlendOp VK_BLEND_OP_ADD
-					 vk::srcAlphaBlendFactor VK_BLEND_FACTOR_ONE
-					 vk::dstAlphaBlendFactor VK_BLEND_FACTOR_ZERO
-					 vk::alphaBlendOp VK_BLEND_OP_ADD)))
+				(with-foreign-object (p-color-blend-attachments
+						      '(:struct VkPipelineColorBlendAttachmentState) back-buffer-count)
+				  (loop for i from 0 below back-buffer-count
+				     do (vk::zero-struct (mem-aptr p-color-blend-attachments
+								   '(:struct VkPipelineColorBlendAttachmentState) i)
+							 '(:struct VkPipelineColorBlendAttachmentState))
+				       (with-foreign-slots ((vk::colorWriteMask
+							     vk::blendEnable
+							     vk::srcColorBlendFactor
+							     vk::dstColorBlendFactor
+							     vk::colorBlendOp
+							     vk::srcAlphaBlendFactor
+							     vk::dstAlphaBlendFactor
+							     vk::alphaBlendOp)
+							    (mem-aptr p-color-blend-attachments
+								      '(:struct VkPipelineColorBlendAttachmentState) i)
+							    (:struct VkPipelineColorBlendAttachmentState))
+					 (setf vk::colorWriteMask
+					       (logior VK_COLOR_COMPONENT_R_BIT VK_COLOR_COMPONENT_G_BIT
+						       VK_COLOR_COMPONENT_B_BIT VK_COLOR_COMPONENT_A_BIT)
+					       vk::blendEnable VK_FALSE
+					       vk::srcColorBlendFactor VK_BLEND_FACTOR_SRC_ALPHA ;;VK_BLEND_FACTOR_ONE
+					       vk::dstColorBlendFactor VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ;;VK_BLEND_FACTOR_ZERO
+					       vk::colorBlendOp VK_BLEND_OP_ADD
+					       vk::srcAlphaBlendFactor VK_BLEND_FACTOR_ONE
+					       vk::dstAlphaBlendFactor VK_BLEND_FACTOR_ZERO
+					       vk::alphaBlendOp VK_BLEND_OP_ADD)))
 
-			    (with-vk-struct (p-color-blending VkPipelineColorBlendStateCreateInfo)
-			      (with-foreign-slots ((vk::logicOpEnable
-						    vk::logicOp
-						    vk::attachmentCount
-						    vk::pAttachments)
-						   p-color-blending
-						   (:struct VkPipelineColorBlendStateCreateInfo))
-				(let ((p-blend-constants
-				       (foreign-slot-pointer
-					p-color-blending
-					'(:struct VkPipelineColorBlendStateCreateInfo)
-					'vk::blendConstants)))
+				  (with-vk-struct (p-color-blending VkPipelineColorBlendStateCreateInfo)
+				    (with-foreign-slots ((vk::logicOpEnable
+							  vk::logicOp
+							  vk::attachmentCount
+							  vk::pAttachments)
+							 p-color-blending
+							 (:struct VkPipelineColorBlendStateCreateInfo))
+				      (let ((p-blend-constants
+					     (foreign-slot-pointer
+					      p-color-blending
+					      '(:struct VkPipelineColorBlendStateCreateInfo)
+					      'vk::blendConstants)))
 				
-				  (setf vk::logicOpEnable VK_FALSE
-					vk::logicOp VK_LOGIC_OP_COPY
-					vk::attachmentCount 1 ;;back-buffer-count
-					vk::pAttachments p-color-blend-attachments
-					(mem-aref p-blend-constants :float 0) 0.0f0
-					(mem-aref p-blend-constants :float 1) 0.0f0
-					(mem-aref p-blend-constants :float 2) 0.0f0
-					(mem-aref p-blend-constants :float 3) 0.0f0)))
+					(setf vk::logicOpEnable VK_FALSE
+					      vk::logicOp VK_LOGIC_OP_COPY
+					      vk::attachmentCount 1 ;;back-buffer-count
+					      vk::pAttachments p-color-blend-attachments
+					      (mem-aref p-blend-constants :float 0) 0.0f0
+					      (mem-aref p-blend-constants :float 1) 0.0f0
+					      (mem-aref p-blend-constants :float 2) 0.0f0
+					      (mem-aref p-blend-constants :float 3) 0.0f0)))
 
-			      (with-foreign-object (p-dynamic-states 'VkDynamicState)
-				(setf (mem-aref p-dynamic-states 'VkDynamicState 0) VK_DYNAMIC_STATE_VIEWPORT
-				      (mem-aref p-dynamic-states 'VkDynamicState 1) VK_DYNAMIC_STATE_LINE_WIDTH)
+				    (with-foreign-object (p-dynamic-states 'VkDynamicState)
+				      (setf (mem-aref p-dynamic-states 'VkDynamicState 0) VK_DYNAMIC_STATE_VIEWPORT
+					    (mem-aref p-dynamic-states 'VkDynamicState 1) VK_DYNAMIC_STATE_LINE_WIDTH)
 			      
-				(with-vk-struct (p-dynamic-state VkPipelineDynamicStateCreateInfo)
-				  (with-foreign-slots ((vk::dynamicStateCount
-							vk::pDynamicStates)
-						       p-dynamic-state
-						       (:struct VkPipelineDynamicStateCreateInfo))
+				      (with-vk-struct (p-dynamic-state VkPipelineDynamicStateCreateInfo)
+					(with-foreign-slots ((vk::dynamicStateCount
+							      vk::pDynamicStates)
+							     p-dynamic-state
+							     (:struct VkPipelineDynamicStateCreateInfo))
 				  
-				    (setf vk::dynamicStateCount 2
-					  vk::pDynamicStates p-dynamic-states))
+					  (setf vk::dynamicStateCount 2
+						vk::pDynamicStates p-dynamic-states))
 				  
-				  (with-vk-struct (p-pipeline-layout-info VkPipelineLayoutCreateInfo)
-				    (with-foreign-slots ((vk::setLayoutCount
-							  vk::pSetLayouts
-							  vk::pushConstantRangeCount
-							  vk::pPushConstantRanges)
-							 p-pipeline-layout-info
-							 (:struct VkPipelineLayoutCreateInfo))
-				    
-				      (setf vk::setLayoutCount 0
-					    vk::pSetLayouts +nullptr+
-					    vk::pushConstantRangeCount 0
-					    vk::pPushConstantRanges +nullptr+))
-				    
-				    (with-foreign-object (p-pipeline-layout 'VkPipelineLayout)
-				      (check-vk-result
-				       (vkCreatePipelineLayout device
+					(with-vk-struct (p-pipeline-layout-info VkPipelineLayoutCreateInfo)
+					  (with-foreign-slots ((vk::setLayoutCount
+								vk::pSetLayouts
+								vk::pushConstantRangeCount
+								vk::pPushConstantRanges)
 							       p-pipeline-layout-info
-							       allocator
-							       p-pipeline-layout))
-				      (setf pipeline-layout
-					    (mem-aref p-pipeline-layout 'VkPipelineLayout)))
+							       (:struct VkPipelineLayoutCreateInfo))
 				    
-				    (with-vk-struct (p-pipeline-info VkGraphicsPipelineCreateInfo)
-				      (with-foreign-slots ((vk::flags
-							    vk::stageCount
-							    vk::pStages
-							    vk::pVertexInputState
-							    vk::pInputAssemblyState
-							    vk::pViewportState
-							    vk::pRasterizationState
-							    vk::pMultisampleState
-							    vk::pDepthStencilState
-							    vk::pColorBlendState
-							    vk::pDynamicState
-							    vk::layout
-							    vk::renderPass
-							    vk::subpass
-							    vk::basePipelineHandle
-							    vk::basePipelineIndex)
-							   p-pipeline-info
-							   (:struct VkGraphicsPipelineCreateInfo))
-					(setf vk::flags 0;; VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT
-					      vk::stageCount 2
-					      vk::pStages p-shader-stages
-					      vk::pVertexInputState p-vertex-input-info
-					      vk::pInputAssemblyState p-input-assembly
-					      vk::pViewportState p-viewport-state
-					      vk::pRasterizationState p-rasterizer
-					      vk::pMultisampleState p-multisampling
-					      vk::pDepthStencilState +nullptr+
-					      vk::pColorBlendState p-color-blending
-					      vk::pDynamicState +nullptr+ ;;p-dynamic-state
-					      vk::layout pipeline-layout
-					      vk::renderPass render-pass
-					      vk::subpass 0 ;; 1
-					      vk::basePipelineHandle +nullptr+
-					      vk::basePipelineIndex -1))
+					    (setf vk::setLayoutCount 0
+						  vk::pSetLayouts +nullptr+
+						  vk::pushConstantRangeCount 0
+						  vk::pPushConstantRanges +nullptr+))
+				    
+					  (with-foreign-object (p-pipeline-layout 'VkPipelineLayout)
+					    (check-vk-result
+					     (vkCreatePipelineLayout device
+								     p-pipeline-layout-info
+								     allocator
+								     p-pipeline-layout))
+					    (setf pipeline-layout
+						  (mem-aref p-pipeline-layout 'VkPipelineLayout)))
+				    
+					  (with-vk-struct (p-pipeline-info VkGraphicsPipelineCreateInfo)
+					    (with-foreign-slots ((vk::flags
+								  vk::stageCount
+								  vk::pStages
+								  vk::pVertexInputState
+								  vk::pInputAssemblyState
+								  vk::pViewportState
+								  vk::pRasterizationState
+								  vk::pMultisampleState
+								  vk::pDepthStencilState
+								  vk::pColorBlendState
+								  vk::pDynamicState
+								  vk::layout
+								  vk::renderPass
+								  vk::subpass
+								  vk::basePipelineHandle
+								  vk::basePipelineIndex)
+								 p-pipeline-info
+								 (:struct VkGraphicsPipelineCreateInfo))
+					      (setf vk::flags 0	;; VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT
+						    vk::stageCount 2
+						    vk::pStages p-shader-stages
+						    vk::pVertexInputState p-vertex-input-info
+						    vk::pInputAssemblyState p-input-assembly
+						    vk::pViewportState p-viewport-state
+						    vk::pRasterizationState p-rasterizer
+						    vk::pMultisampleState p-multisampling
+						    vk::pDepthStencilState +nullptr+
+						    vk::pColorBlendState p-color-blending
+						    vk::pDynamicState +nullptr+ ;;p-dynamic-state
+						    vk::layout pipeline-layout
+						    vk::renderPass render-pass
+						    vk::subpass 0 ;; 1
+						    vk::basePipelineHandle +nullptr+
+						    vk::basePipelineIndex -1))
 
-				      (with-foreign-object (p-graphics-pipeline 'VkPipeline)
-					(check-vk-result
-					 (vkCreateGraphicsPipelines device pipeline-cache 1
-								    p-pipeline-info allocator
-								    p-graphics-pipeline))
-					(setf graphics-pipeline (mem-aref p-graphics-pipeline 'VkPipeline))))))))))))))))))))
+					    (with-foreign-object (p-graphics-pipeline 'VkPipeline)
+					      (check-vk-result
+					       (vkCreateGraphicsPipelines device pipeline-cache 1
+									  p-pipeline-info allocator
+									  p-graphics-pipeline))
+					      (setf graphics-pipeline (mem-aref p-graphics-pipeline 'VkPipeline)))))))))))))))))))))))
     (vkDestroyShaderModule device vert-shader-module allocator)
     (vkDestroyShaderModule device frag-shader-module allocator))
   (values))
@@ -621,7 +659,6 @@
 	(mem-aref p-shader-module 'VkShaderModule)))))  
 
 (defmethod resize-vulkan ((app vkapp) w h)
-  (declare (ignore w h))
   
   (with-slots (device) app
 
@@ -686,7 +723,7 @@
 		(setf (mem-aref pp-layers '(:pointer :char) 0) p-validation-layer-string
 		      (mem-aref pp-layers '(:pointer :char) 1) p-api-dump-layer-string
 		      
-		      vk::enabledLayerCount (if *debug* 2 0)
+		      vk::enabledLayerCount (if *debug* 1 0)
 		      vk::ppEnabledLayerNames (if *debug* pp-layers +nullptr+))
 		
 		(let ((extensions-count (mem-aref p-extensions-count :uint32)))
@@ -1053,6 +1090,8 @@
   (create-graphics-pipeline app)
     
   (create-framebuffers app)
+
+  (create-vertex-buffer app)
     
   (create-command-buffers app) ;; this also creates semaphores...todo: separate these out
     
@@ -1335,8 +1374,8 @@
 (defmethod main ((app vkapp) &rest args &key (w 1280) (h 720))
   (declare (ignore args))
 
-  (with-slots (window allocator gpu device render-pass queue command-pool command-buffer graphics-pipeline
-		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format) app
+  (with-slots (window allocator gpu device render-pass queue command-pool command-buffer graphics-pipeline vertex-data-size
+		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format vertex-buffer) app
 
     
     (setup-vulkan app w h)
@@ -1454,9 +1493,19 @@
 		   (elt clear-value 3) (mem-aref  p-clear-color :float 3))
 
 	     (frame-begin app)
+	     
 	     (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS graphics-pipeline)
-	     (vkCmdDraw (elt command-buffer frame-index) 3 1 0 0)
+	     (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
+				    (p-offsets 'VkDeviceSize))
+	       (setf (mem-aref p-vertex-buffers 'VkBuffer) vertex-buffer
+		     (mem-aref p-offsets 'VkDeviceSize) 0)
+	       (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets))
+	     (vkCmdDraw (elt command-buffer frame-index)
+			(/ vertex-data-size (foreign-type-size '(:struct Vertex)))
+			1 0 0)
+
 	     (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index))
+
 	     (frame-end app)
 	     (frame-present app)))
 
@@ -1472,7 +1521,7 @@
   (sb-thread:make-thread #'(lambda () (main app))))
 				   
 (defmethod create-vertex-buffer ((app vkapp))
-  (with-slots (device vertex-buffer vertex-buffer-memory vertex-data vertex-data-size) app
+  (with-slots (device allocator vertex-buffer vertex-buffer-memory vertex-data vertex-data-size) app
     (with-foreign-objects ((p-vertex-buffer 'VkBuffer)
 			   (p-vertex-buffer-memory 'VkDeviceMemory))
 	
@@ -1483,7 +1532,7 @@
 		vk::usage VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 		vk::sharingMode VK_SHARING_MODE_EXCLUSIVE)
 	    
-	  (check-vk-result (vkCreateBuffer device p-info +nullptr+ p-vertex-buffer))
+	  (check-vk-result (vkCreateBuffer device p-info allocator p-vertex-buffer))
 	  (setq vertex-buffer (mem-aref p-vertex-buffer 'VkBuffer))
 	
 	  (with-vk-struct (p-mem-requirements VkMemoryRequirements)
@@ -1524,16 +1573,17 @@
 (defmethod find-memory-type ((app vkapp) type-filter properties)
   (with-slots (gpu) app
     (with-vk-struct (p-mem-properties VkPhysicalDeviceMemoryProperties)
-      (with-foreign-slots ((vk::memoryTypeCount vk::memoryTypes)
+      (with-foreign-slots ((vk::memoryTypeCount)
 			   p-mem-properties
 			   (:struct VkPhysicalDeviceMemoryProperties))
-			   
+
 	(vkGetPhysicalDeviceMemoryProperties gpu p-mem-properties)
 	(loop for i from 0 below vk::memoryTypeCount
 	     do (when (and (not (zerop (logand type-filter (ash 1 i))))
 			   (not (zerop (logand
-					(foreign-slot-value (mem-aptr vk::memoryTypes '(:struct VkMemoryType) i)
-							    '(:struct VkMemoryType) 'vk::propertyFlags)
+					(foreign-slot-value (mem-aptr (foreign-slot-pointer p-mem-properties '(:struct VkPhysicalDeviceMemoryProperties)
+												   'vk::memoryTypes) '(:struct VkMemoryType) i)
+								   '(:struct VkMemoryType) 'vk::propertyFlags)
 					properties))))
 		  (return i))
 	     finally (error "Could not find suitable memory type!"))))))
