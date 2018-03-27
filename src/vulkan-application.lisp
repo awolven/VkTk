@@ -1098,6 +1098,8 @@
   (create-command-pools app)
 
   (create-vertex-buffer app)
+
+  (create-index-buffer app)
     
   (create-command-buffers app) ;; this also creates semaphores...todo: separate these out
     
@@ -1109,7 +1111,9 @@
   (with-slots (device descriptor-pool allocator fence command-pool command-buffer debug-report
 		      present-complete-semaphore render-complete-semaphore back-buffer-count
 		      back-buffer-view framebuffer render-pass swapchain instance surface
-		      vert-shader-module frag-shader-module pipeline-layout graphics-pipeline) app
+		      vert-shader-module frag-shader-module pipeline-layout graphics-pipeline
+		      vertex-buffer vertex-buffer-memory vertex-data
+		      index-buffer index-buffer-memory index-data) app
 
     (vkDestroyDescriptorPool device descriptor-pool allocator)
 
@@ -1138,6 +1142,14 @@
     (vkDestroySwapchainKHR device swapchain allocator)
     
     (vkDestroySurfaceKHR instance surface allocator)
+
+    (vkDestroyBuffer device index-buffer allocator)
+    (vkFreeMemory device index-buffer-memory allocator)
+    (foreign-free index-data)
+
+    (vkDestroyBuffer device vertex-buffer allocator)
+    (vkFreeMemory device vertex-buffer-memory allocator)
+    (foreign-free vertex-data)
     
     (when *debug*
       (vkDestroyDebugReportCallbackEXT instance instance debug-report allocator))
@@ -1381,7 +1393,8 @@
   (declare (ignore args))
 
   (with-slots (window allocator gpu device render-pass queue command-pool command-buffer graphics-pipeline vertex-data-size
-		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format vertex-buffer) app
+		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format vertex-buffer
+		      index-buffer index-data-size) app
 
     
     (setup-vulkan app w h)
@@ -1505,10 +1518,9 @@
 				    (p-offsets 'VkDeviceSize))
 	       (setf (mem-aref p-vertex-buffers 'VkBuffer) vertex-buffer
 		     (mem-aref p-offsets 'VkDeviceSize) 0)
-	       (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets))
-	     (vkCmdDraw (elt command-buffer frame-index)
-			(/ vertex-data-size (foreign-type-size '(:struct Vertex)))
-			1 0 0)
+	       (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets)
+	       (vkCmdBindIndexBuffer (elt command-buffer frame-index) index-buffer 0 VK_INDEX_TYPE_UINT16))
+	     (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0)
 
 	     (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index))
 
@@ -1581,6 +1593,27 @@
 	(setf vertex-buffer buffer
 	      vertex-buffer-memory buffer-memory)
 	(copy-buffer app staging-buffer vertex-buffer vertex-data-size)
+	(vkDestroyBuffer device staging-buffer +nullptr+)
+	(vkFreeMemory device staging-buffer-memory +nullptr+))))
+  (values))
+
+(defmethod create-index-buffer ((app vkapp))
+  (with-slots (device allocator index-buffer index-buffer-memory index-data index-data-size) app
+    (multiple-value-bind (staging-buffer staging-buffer-memory)
+	(create-buffer app index-data-size VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+		       (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+
+      (with-foreign-object (pp-data :pointer)
+	(vkMapMemory device staging-buffer-memory 0 index-data-size 0 pp-data)
+	(memcpy (mem-aref pp-data :pointer) index-data index-data-size)
+	(vkUnmapMemory device staging-buffer-memory))
+
+      (multiple-value-bind (buffer buffer-memory)
+	  (create-buffer app index-data-size (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+			 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	(setf index-buffer buffer
+	      index-buffer-memory buffer-memory)
+	(copy-buffer app staging-buffer index-buffer index-data-size)
 	(vkDestroyBuffer device staging-buffer +nullptr+)
 	(vkFreeMemory device staging-buffer-memory +nullptr+))))
   (values))
