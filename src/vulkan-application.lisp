@@ -920,10 +920,8 @@
 
   (values))
 
-(defmethod create-command-buffers ((app vkapp))
-  ;; Create Command Buffers:
-  (with-slots (queue-family command-pool device allocator command-buffer fence
-			    present-complete-semaphore render-complete-semaphore) app
+(defmethod create-command-pools ((app vkapp))
+  (with-slots (device allocator queue-family command-pool) app
     (loop for i from 0 below IMGUI_VK_QUEUED_FRAMES
        do (with-vk-struct (p-info VkCommandPoolCreateInfo)
 	    (with-foreign-slots ((vk::flags vk::queueFamilyIndex)
@@ -932,17 +930,23 @@
 		    vk::queueFamilyIndex queue-family)
 	      (with-foreign-object (p-command-pool 'VkCommandPool)
 		(check-vk-result (vkCreateCommandPool device p-info allocator p-command-pool))
-		(setf (elt command-pool i) (mem-aref p-command-pool 'VkCommandPool)))))
+		(setf (elt command-pool i) (mem-aref p-command-pool 'VkCommandPool)))))))
+  (values))
 
-	 (with-vk-struct (p-info VkCommandBufferAllocateInfo)
-	   (with-foreign-slots ((vk::commandPool vk::level vk::commandBufferCount)
-				p-info (:struct VkCommandBufferAllocateInfo))
-	     (setf vk::commandPool (elt command-pool i)
-		   vk::level VK_COMMAND_BUFFER_LEVEL_PRIMARY
-		   vk::commandBufferCount 1)
-	     (with-foreign-object (p-command-buffer 'VkCommandBuffer)
-	       (check-vk-result (vkAllocateCommandBuffers device p-info p-command-buffer))
-	       (setf (elt command-buffer i) (mem-aref p-command-buffer 'VkCommandBuffer)))))
+(defmethod create-command-buffers ((app vkapp))
+  ;; Create Command Buffers:
+  (with-slots (device allocator command-pool command-buffer fence
+		      present-complete-semaphore render-complete-semaphore) app
+    (loop for i from 0 below IMGUI_VK_QUEUED_FRAMES
+       do (with-vk-struct (p-info VkCommandBufferAllocateInfo)
+	    (with-foreign-slots ((vk::commandPool vk::level vk::commandBufferCount)
+				 p-info (:struct VkCommandBufferAllocateInfo))
+	      (setf vk::commandPool (elt command-pool i)
+		    vk::level VK_COMMAND_BUFFER_LEVEL_PRIMARY
+		    vk::commandBufferCount 1)
+	      (with-foreign-object (p-command-buffer 'VkCommandBuffer)
+		(check-vk-result (vkAllocateCommandBuffers device p-info p-command-buffer))
+		(setf (elt command-buffer i) (mem-aref p-command-buffer 'VkCommandBuffer)))))
 
 	 (with-vk-struct (p-info VkFenceCreateInfo)
 	   (with-foreign-slots ((vk::flags) p-info (:struct VkFenceCreateInfo))
@@ -1090,6 +1094,8 @@
   (create-graphics-pipeline app)
     
   (create-framebuffers app)
+
+  (create-command-pools app)
 
   (create-vertex-buffer app)
     
@@ -1519,46 +1525,104 @@
 	     
 (defun run-app (&optional (app (make-instance 'vkapp)))
   (sb-thread:make-thread #'(lambda () (main app))))
-				   
+
+(defmethod create-buffer ((app vkapp) size usage properties)
+  (with-slots (device allocator) app
+    (let ((buffer) (buffer-memory))
+      
+      (with-foreign-objects ((p-buffer 'VkBuffer)
+			     (p-buffer-memory 'VkDeviceMemory))
+      
+	(with-vk-struct (p-info VkBufferCreateInfo)
+	  (with-foreign-slots ((vk::size vk::usage vk::sharingMode)
+			       p-info (:struct VkBufferCreateInfo))
+	    (setf vk::size size
+		  vk::usage usage
+		  vk::sharingMode VK_SHARING_MODE_EXCLUSIVE)
+	    
+	    (check-vk-result (vkCreateBuffer device p-info allocator p-buffer))
+	    (setq buffer (mem-aref p-buffer 'VkBuffer))
+	  
+	    (with-vk-struct (p-mem-requirements VkMemoryRequirements)
+	      (vkGetBufferMemoryRequirements device buffer p-mem-requirements)
+	      
+	      (with-vk-struct (p-alloc-info VkMemoryAllocateInfo)
+		(with-foreign-slots ((vk::allocationSize vk::memoryTypeIndex)
+				     p-alloc-info (:struct VkMemoryAllocateInfo))
+		  (setf vk::allocationSize (foreign-slot-value p-mem-requirements
+							       '(:struct VkMemoryRequirements)
+							       'vk::size)
+			vk::memoryTypeIndex (find-memory-type
+					     app (foreign-slot-value p-mem-requirements
+								     '(:struct VkMemoryRequirements)
+								     'vk::memoryTypeBits)
+					     properties))
+		
+		  (check-vk-result (vkAllocateMemory device p-alloc-info +nullptr+ p-buffer-memory))
+		  (setq buffer-memory (mem-aref p-buffer-memory 'VkDeviceMemory)))))
+	  
+	    (vkBindBufferMemory device buffer buffer-memory 0))))
+      (values buffer buffer-memory))))
+
 (defmethod create-vertex-buffer ((app vkapp))
   (with-slots (device allocator vertex-buffer vertex-buffer-memory vertex-data vertex-data-size) app
-    (with-foreign-objects ((p-vertex-buffer 'VkBuffer)
-			   (p-vertex-buffer-memory 'VkDeviceMemory))
-	
-      (with-vk-struct (p-info VkBufferCreateInfo)
-	(with-foreign-slots ((vk::size vk::usage vk::sharingMode)
-			     p-info (:struct VkBufferCreateInfo))
-	  (setf vk::size vertex-data-size
-		vk::usage VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-		vk::sharingMode VK_SHARING_MODE_EXCLUSIVE)
-	    
-	  (check-vk-result (vkCreateBuffer device p-info allocator p-vertex-buffer))
-	  (setq vertex-buffer (mem-aref p-vertex-buffer 'VkBuffer))
-	
-	  (with-vk-struct (p-mem-requirements VkMemoryRequirements)
-	    (vkGetBufferMemoryRequirements device vertex-buffer p-mem-requirements)
+    (multiple-value-bind (staging-buffer staging-buffer-memory)
+	(create-buffer app vertex-data-size VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+		       (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
 
-	    (with-vk-struct (p-alloc-info VkMemoryAllocateInfo)
-	      (with-foreign-slots ((vk::allocationSize vk::memoryTypeIndex)
-				   p-alloc-info (:struct VkMemoryAllocateInfo))
-		(setf vk::allocationSize (foreign-slot-value p-mem-requirements '(:struct VkMemoryRequirements)
-							      'vk::size)
-		      vk::memoryTypeIndex
-		      (find-memory-type app
-					(foreign-slot-value p-mem-requirements '(:struct VkMemoryRequirements)
-							    'vk::memoryTypeBits)
-					(logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-						VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)))
-		
-		(check-vk-result (vkAllocateMemory device p-alloc-info +nullptr+ p-vertex-buffer-memory))
-		(setq vertex-buffer-memory (mem-aref p-vertex-buffer-memory 'VkDeviceMemory)))))
+      (with-foreign-object (pp-data :pointer)
+	(vkMapMemory device staging-buffer-memory 0 vertex-data-size 0 pp-data)
+	(memcpy (mem-aref pp-data :pointer) vertex-data vertex-data-size)
+	(vkUnmapMemory device staging-buffer-memory))
 
-	  (vkBindBufferMemory device vertex-buffer vertex-buffer-memory 0)
-	  
-	  (with-foreign-object (pp-data :pointer)
-	    (vkMapMemory device vertex-buffer-memory 0 vertex-data-size 0 pp-data)
-	    (memcpy (mem-aref pp-data :pointer) vertex-data vk::size)
-	    (vkUnmapMemory device vertex-buffer-memory))))))
+      (multiple-value-bind (buffer buffer-memory)
+	  (create-buffer app vertex-data-size (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+			 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	(setf vertex-buffer buffer
+	      vertex-buffer-memory buffer-memory)
+	(copy-buffer app staging-buffer vertex-buffer vertex-data-size)
+	(vkDestroyBuffer device staging-buffer +nullptr+)
+	(vkFreeMemory device staging-buffer-memory +nullptr+))))
+  (values))
+
+(defmethod copy-buffer (app src-buffer dst-buffer size)
+  (with-slots (device command-pool queue) app
+    (with-vk-struct (p-alloc-info VkCommandBufferAllocateInfo)
+      (with-foreign-slots ((vk::level
+			    vk::commandPool
+			    vk::commandBufferCount)
+			   p-alloc-info (:struct VkCommandBufferAllocateInfo))
+	(setf vk::level VK_COMMAND_BUFFER_LEVEL_PRIMARY
+	      vk::commandPool (elt command-pool 0)
+	      vk::commandBufferCount 1)
+
+	(with-foreign-object (p-command-buffer 'VkCommandBuffer)
+	  (vkAllocateCommandBuffers device p-alloc-info p-command-buffer)
+	  (let ((command-buffer (mem-aref p-command-buffer 'VkCommandBuffer)))
+	    (with-vk-struct (p-begin-info VkCommandBufferBeginInfo)
+	      (with-foreign-slots ((vk::flags)
+				   p-begin-info (:struct VkCommandBufferBeginInfo))
+		(setf vk::flags VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
+		(vkBeginCommandBuffer command-buffer p-begin-info)
+		(with-vk-struct (p-copy-region VkBufferCopy)
+		  (with-foreign-slots ((vk::srcOffset
+					vk::dstOffset
+					vk::size)
+				       p-copy-region (:struct VkBufferCopy))
+		    (setf vk::srcOffset 0
+			  vk::dstOffset 0
+			  vk::size size)
+		    (vkCmdCopyBuffer command-buffer src-buffer dst-buffer 1 p-copy-region)
+		    (vkEndCommandBuffer command-buffer)
+		    (with-vk-struct (p-submit-info VkSubmitInfo)
+		      (with-foreign-slots ((vk::commandBufferCount
+					    vk::pCommandBuffers)
+					   p-submit-info (:struct VkSubmitInfo))
+			(setf vk::commandBufferCount 1
+			      vk::pCommandBuffers p-command-buffer)
+			(vkQueueSubmit queue 1 p-submit-info +nullptr+)
+			(vkQueueWaitIdle queue)
+			(vkFreeCommandBuffers device (elt command-pool 0) 1 p-command-buffer))))))))))))
   (values))
 
 (defmethod destroy-vertex-buffer ((app vkapp) p-vertex-buffer)
