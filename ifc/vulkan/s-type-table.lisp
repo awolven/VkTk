@@ -87,7 +87,7 @@
 	      'VkDescriptorSetAllocateInfo
 	      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO
 
-	      ''VkDescriptorSetLayoutCreateInfo
+	      'VkDescriptorSetLayoutCreateInfo
 	      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
 
 	      'VkDescriptorUpdateTemplateCreateInfoKHR
