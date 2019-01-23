@@ -2,6 +2,26 @@
 
 (in-package :vkapp)
 
+
+(defclass camera ()
+  ((zoom :initform 1.0f0 :accessor zoom)
+   (x-loc :initform 1.0f0 :accessor camera-x)
+   (y-loc :initform 1.0f0 :accessor camera-y)
+   (z-loc :initform 1.0f0 :accessor camera-z)
+   (eye-x :initform 0.0f0 :accessor eye-x)
+   (eye-y :initform 0.0f0 :accessor eye-y)
+   (eye-z :initform 0.0f0 :accessor eye-z)))
+
+
+(defvar *camera* (make-instance 'camera))
+
+   
+(defvar *zoom* 1.0f0)
+;;(eval-when (:compile-toplevel :load-toplevel :execute)
+(defvar *camera-x* 1.0f0)
+(defvar *camera-y* 1.0f0)
+(defvar *camera-z* 1.0f0)
+;;)
 (defvar *debug* t)
 
 (defvar *pipeline-created* nil)
@@ -89,7 +109,7 @@
       (error "Could not find app from app-id: ~A while resizing." app-id))
     (resize-vulkan app w h)))
 
-(defmethod create-swapchain ((app vkapp) &key width height (old-swapchain +nullptr+))
+(defmethod create-swapchain ((app vkapp) &key (old-swapchain +nullptr+))
   (with-slots (device
 	       allocator surface surface-format present-mode gpu window
 	       swapchain fb-width fb-height back-buffer-count back-buffer) app
@@ -130,13 +150,11 @@
 		    'vk::width)))
 	      (if (eq cap-current-extent-width #xffffffff)
 
-		  (if (and width height)
-		      (setf fb-width width fb-height height)
-		      (with-foreign-objects ((p-w :int)
-					     (p-h :int))
-			(glfwGetFramebufferSize window p-w p-h)
-			(setf fb-width (mem-aref p-w :int)
-			      fb-height (mem-aref p-h :int))))
+		  (with-foreign-objects ((p-w :int)
+					 (p-h :int))
+		    (glfwGetFrameBufferSize window p-w p-h)
+		    (setf fb-width (mem-aref p-w :int)
+			  fb-height (mem-aref p-h :int)))
 		  
 		  (setf fb-width cap-current-extent-width
 			fb-height (foreign-slot-value
@@ -313,7 +331,18 @@
       (vkDestroyDebugReportCallbackEXT instance instance debug-report allocator)))
   (values))
 
-(defmethod recreate-swapchain ((app vkapp) w h)
+(defmethod recreate-swapchain ((app vkapp))
+  (let (w h)
+    (with-foreign-objects ((p-w :int)
+			   (p-h :int))
+      (setf (mem-aref p-w :int) 0
+	    (mem-aref p-h :int) 0)
+      (loop with w with h while (or (eq (mem-aref p-w :int) 0) (eq (mem-aref p-h :int) 0))
+	 do (glfwGetFramebufferSize (slot-value app 'window) p-w p-h)
+	   (setq w (mem-aref p-w :int)
+		 h (mem-aref p-h :int))
+	   (glfwWaitEvents)))
+
   (unless (or (eq w 0) (eq h 0))
     (with-slots (device swapchain) app
       
@@ -333,15 +362,16 @@
 
       (let ((old-swapchain swapchain))
 	(setf swapchain nil)
-	(create-swapchain app :width w :height h :old-swapchain old-swapchain))
+	(create-swapchain app :old-swapchain old-swapchain))
   
       (create-image-views app)
       (create-render-pass app)
       (create-graphics-pipeline app)
+      (create-annotation-pipeline app)
       (create-depth-resources app)
       (create-framebuffers app)
       (create-command-buffers app)))
-  (values))
+  (values)))
 
 (defmethod cleanup-vulkan ((app vkapp))
   (destroy-framebuffers app)
@@ -526,6 +556,42 @@
 
 
 
+(defmethod create-shader (filename type)
+  (multiple-value-bind (binary size)
+      (read-shader-file filename)
+    (make-instance type
+		   :code binary
+		   :size size)))
+
+#+NOTYET
+(defmethod create-shader-module ((shader shader) device allocator)
+  (with-vk-struct (p-create-info VkShaderModuleCreateInfo)
+    (with-foreign-slots ((vk::codeSize vk::pCode)
+			 p-create-info (:struct VkShaderModuleCreateInfo))
+      (setf vk::codeSize (shader-size shader)
+	    vk::pCode (shader-code shader))
+      (with-foreign-object (p-shader-module 'VkShaderModule)
+	(check-vk-result (vkCreateShaderModule device p-create-info allocator p-shader-module))
+	(setf (shader-module shader)
+	      (mem-aref p-shader-module 'VkShaderModule)))))
+  (values))
+
+  
+#+NOTYET
+(defmacro with-shader-modules (app &body body)
+  `(with-slots (device
+		allocator
+		vertex-shader-code vertex-shader-code-size
+		frag-shader-code frag-shader-code-size)
+       ,app
+     (let ((vertex-shader-module
+	    (create-shader-module device allocator vertex-shader-code vertex-shader-code-size))
+	   (frag-shader-module
+	    (create-shader-module device allocator frag-shader-code frag-shader-code-size)))
+       (with-foreign-string (p-name "main")
+	 (with-foreign-object (p-shader-stage))))))
+
+
 (defmethod create-graphics-pipeline ((app vkapp))
   (with-slots (device
 	       allocator
@@ -647,7 +713,7 @@
 					       p-viewport (:struct VkViewport))
 			    (with-foreign-objects ((p-w :int)
 						   (p-h :int))
-			      (glfwGetFramebufferSize window p-w p-h)
+			      (glfwGetWindowSize window p-w p-h)
 			      (let ((w (mem-aref p-w :int))
 				    (h (mem-aref p-h :int)))
 				(setf vk::x 0.0f0
@@ -706,7 +772,7 @@
 				      vk::rasterizerDiscardEnable VK_FALSE
 				      vk::polygonMode VK_POLYGON_MODE_FILL
 				      vk::lineWidth 1.0f0
-				      vk::cullMode VK_CULL_MODE_NONE
+				      vk::cullMode VK_CULL_MODE_BACK_BIT
 				      vk::frontFace VK_FRONT_FACE_COUNTER_CLOCKWISE
 				      vk::depthBiasEnable VK_FALSE
 				      vk::depthBiasConstantFactor 0.0f0
@@ -876,6 +942,374 @@
     (vkDestroyShaderModule device frag-shader-module allocator))
   (values))
 
+(defmethod create-annotation-pipeline ((app vkapp))
+  (with-slots (device allocator pipeline-cache render-pass back-buffer-count descriptor-set-layout window
+		      annotation-pipeline) app
+    (with-foreign-objects ((p-w :int)
+			   (p-h :int))
+      (glfwGetFramebufferSize window p-w p-h)
+      (let ((w (mem-aref p-w :int))
+	    (h (mem-aref p-h :int)))
+	(setf annotation-pipeline
+	      (create-pipeline-1 device allocator pipeline-cache render-pass back-buffer-count (list descriptor-set-layout) w h
+				 :line-width 3.0f0 :topology VK_PRIMITIVE_TOPOLOGY_LINE_LIST))))))
+
+#+NIL
+(defmethod create-annotation-pipeline ((app vkapp))
+  (with-slots (device
+	       allocator
+	       pipeline-layout
+	       render-pass
+	       annotation-pipeline
+	       fb-width fb-height
+	       vertex-shader-code
+	       vertex-shader-code-size
+	       vert-shader-module
+	       fragment-shader-code
+	       fragment-shader-code-size
+	       frag-shader-module
+	       back-buffer-count
+	       descriptor-set-layout
+	       pipeline-cache
+	       window) app
+    ;;------------------------------------------------------------------
+    (setf vert-shader-module (create-shader-module
+			      device allocator vertex-shader-code vertex-shader-code-size)
+	  frag-shader-module (create-shader-module
+			      device allocator fragment-shader-code fragment-shader-code-size))
+    ;;------------------------------------------------------------------
+    (with-foreign-string (p-name "main")
+      (with-foreign-string (p-name2 "main")
+	(with-foreign-object (p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 2)
+	  (let ((p-vert-shader-stage-create-info
+		 (mem-aptr p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 0))
+		(p-frag-shader-stage-create-info
+		 (mem-aptr p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 1)))
+	    ;;------------------------------------------------------------------
+	    (vk::zero-struct p-vert-shader-stage-create-info '(:struct VkPipelineShaderStageCreateInfo))
+	    (vk::zero-struct p-frag-shader-stage-create-info '(:struct VkPipelineShaderStageCreateInfo))
+	    ;;------------------------------------------------------------------
+	    ;; todo: update with-vk-struct to create arrays of structs
+	    ;;------------------------------------------------------------------
+	    (with-foreign-slots ((vk::sType vk::pNext vk::flags vk::stage vk::module vk::pName)
+				 p-vert-shader-stage-create-info
+				 (:struct VkPipelineShaderStageCreateInfo))
+	      (setf vk::sType VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
+		    vk::pNext +nullptr+
+		    vk::flags 0
+		    vk::stage VK_SHADER_STAGE_VERTEX_BIT
+		    vk::module vert-shader-module
+		    vk::pName p-name))
+	    ;;------------------------------------------------------------------
+	    (with-foreign-slots ((vk::sType vk::pNext vk::flags vk::stage vk::module vk::pName)
+				 p-frag-shader-stage-create-info
+				 (:struct VkPipelineShaderStageCreateInfo))
+	      (setf vk::sType VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
+		    vk::pNext +nullptr+
+		    vk::flags 0
+		    vk::stage VK_SHADER_STAGE_FRAGMENT_BIT
+		    vk::module frag-shader-module
+		    vk::pName p-name2))
+	    ;;------------------------------------------------------------------
+	    (with-vk-struct (p-binding-description VkVertexInputBindingDescription)
+	      (with-foreign-slots ((vk::binding
+				    vk::stride
+				    vk::inputRate)
+				   p-binding-description
+				   (:struct VkVertexInputBindingDescription))
+		(setf vk::binding 0
+		      vk::stride (foreign-type-size '(:struct Vertex))
+		      vk::inputRate VK_VERTEX_INPUT_RATE_VERTEX))
+	      ;;------------------------------------------------------------------
+	      (with-foreign-object (p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 2)
+		(let ((p-attribute-description-0
+		       (mem-aptr p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 0))
+		      (p-attribute-description-1
+		       (mem-aptr p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 1)))
+		  (zero-struct p-attribute-description-0 '(:struct VkVertexInputAttributeDescription))
+		  (zero-struct p-attribute-description-1 '(:struct VkVertexInputAttributeDescription))
+		  (with-foreign-slots ((vk::binding
+					vk::location
+					vk::format
+					vk::offset)
+				       p-attribute-description-0
+				       (:struct VkVertexInputAttributeDescription))
+		    (setf vk::binding 0
+			  vk::location 0
+			  vk::format VK_FORMAT_R32G32B32_SFLOAT
+			  vk::offset (foreign-slot-offset '(:struct Vertex) 'pos)))
+		  (with-foreign-slots ((vk::binding
+					vk::location
+					vk::format
+					vk::offset)
+				       p-attribute-description-1
+				       (:struct VkVertexInputAttributeDescription))
+		    (setf vk::binding 0
+			  vk::location 1
+			  vk::format VK_FORMAT_R32G32B32_SFLOAT
+			  vk::offset (foreign-slot-offset '(:struct Vertex) 'color)))
+		  ;;------------------------------------------------------------------		  
+		  (with-vk-struct (p-vertex-input-info VkPipelineVertexInputStateCreateInfo)
+		    (with-foreign-slots ((vk::vertexBindingDescriptionCount
+					  vk::pVertexBindingDescriptions
+					  vk::vertexAttributeDescriptionCount
+					  vk::pVertexAttributeDescriptions)
+					 p-vertex-input-info
+					 (:struct VkPipelineVertexInputStateCreateInfo))
+		      (setf vk::vertexBindingDescriptionCount 1
+			    vk::pVertexBindingDescriptions p-binding-description
+			    vk::vertexAttributeDescriptionCount 2
+			    vk::pVertexAttributeDescriptions p-attribute-descriptions))
+		    ;;------------------------------------------------------------------
+		    (with-vk-struct (p-input-assembly VkPipelineInputAssemblyStateCreateInfo)
+		      (with-foreign-slots ((vk::topology
+					    vk::primitiveRestartEnable)
+					   p-input-assembly
+					   (:struct VkPipelineInputAssemblyStateCreateInfo))
+			(setf vk::topology VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+			      vk::primitiveRestartEnable VK_FALSE))
+		      ;;------------------------------------------------------------------
+		      (with-vk-struct (p-viewport VkViewport)
+			(with-vk-struct (p-scissor VkRect2D)
+			  (with-foreign-slots ((vk::x
+						vk::y
+						vk::width
+						vk::height
+						vk::minDepth
+						vk::maxDepth)
+					       p-viewport (:struct VkViewport))
+			    (with-foreign-objects ((p-w :int)
+						   (p-h :int))
+			      (glfwGetFramebufferSize window p-w p-h)
+			      (let ((w (mem-aref p-w :int))
+				    (h (mem-aref p-h :int)))
+				(setf vk::x 0.0f0
+				      vk::y 0.0f0
+				      vk::width (coerce w 'single-float)
+				      vk::height (coerce h 'single-float)
+				      vk::minDepth 0.0f0
+				      vk::maxDepth 1.0f0)
+				;;------------------------------------------------------------------
+				(setf (foreign-slot-value
+				       (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset)
+				       '(:struct VkOffset2D)
+				       'vk::x) 0
+				 
+				       (foreign-slot-value
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset)
+					'(:struct VkOffset2D)
+					'vk::y) 0
+				  
+				       (foreign-slot-value
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
+					'(:struct VkExtent2D)
+					'vk::width) w
+				   
+				       (foreign-slot-value
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
+					'(:struct VkExtent2D)
+					'vk::height) h))))
+			  ;;------------------------------------------------------------------
+			  
+			  (with-vk-struct (p-viewport-state VkPipelineViewportStateCreateInfo)
+			    (with-foreign-slots ((vk::viewportCount
+						  vk::pViewports
+						  vk::scissorCount
+						  vk::pScissors)
+						 p-viewport-state
+						 (:struct VkPipelineViewportStateCreateInfo))
+			      (setf vk::viewportCount 1
+				    vk::pViewports p-viewport
+				    vk::scissorCount 1
+				    vk::pScissors p-scissor))
+			    ;;------------------------------------------------------------------
+			    (with-vk-struct (p-rasterizer VkPipelineRasterizationStateCreateInfo)
+			      (with-foreign-slots ((vk::depthClampEnable
+						    vk::rasterizerDiscardEnable
+						    vk::polygonMode
+						    vk::lineWidth
+						    vk::cullMode
+						    vk::frontFace
+						    vk::depthBiasEnable
+						    vk::depthBiasConstantFactor
+						    vk::depthBiasClamp
+						    vk::depthBiasSlopeFactor)
+						   p-rasterizer
+						   (:struct VkPipelineRasterizationStateCreateInfo))
+				(setf vk::depthClampEnable VK_FALSE
+				      vk::rasterizerDiscardEnable VK_FALSE
+				      vk::polygonMode VK_POLYGON_MODE_FILL
+				      vk::lineWidth 3.0f0
+				      vk::cullMode VK_CULL_MODE_NONE
+				      vk::frontFace VK_FRONT_FACE_COUNTER_CLOCKWISE
+				      vk::depthBiasEnable VK_FALSE
+				      vk::depthBiasConstantFactor 0.0f0
+				      vk::depthBiasClamp 0.0f0
+				      vk::depthBiasSlopeFactor 0.0f0))
+			      ;;------------------------------------------------------------------
+			      (with-vk-struct (p-multisampling VKPipelineMultisampleStateCreateInfo)
+				(with-foreign-slots ((vk::sampleShadingEnable
+						      vk::rasterizationSamples
+						      vk::minSampleShading
+						      vk::pSampleMask
+						      vk::alphaToCoverageEnable
+						      vk::alphaToOneEnable)
+						     p-multisampling
+						     (:struct VKPipelineMultisampleStateCreateInfo))
+				  (setf vk::sampleShadingEnable VK_FALSE
+					vk::rasterizationSamples VK_SAMPLE_COUNT_1_BIT
+					vk::minSampleShading 1.0f0
+					vk::pSampleMask +nullptr+
+					vk::alphaToCoverageEnable VK_FALSE
+					vk::alphaToOneEnable VK_FALSE))
+				;;------------------------------------------------------------------
+				(with-foreign-object (p-color-blend-attachments
+						      '(:struct VkPipelineColorBlendAttachmentState) back-buffer-count)
+				  (loop for i from 0 below back-buffer-count
+				     do (vk::zero-struct (mem-aptr p-color-blend-attachments
+								   '(:struct VkPipelineColorBlendAttachmentState) i)
+							 '(:struct VkPipelineColorBlendAttachmentState))
+				       (with-foreign-slots ((vk::colorWriteMask
+							     vk::blendEnable
+							     vk::srcColorBlendFactor
+							     vk::dstColorBlendFactor
+							     vk::colorBlendOp
+							     vk::srcAlphaBlendFactor
+							     vk::dstAlphaBlendFactor
+							     vk::alphaBlendOp)
+							    (mem-aptr p-color-blend-attachments
+								      '(:struct VkPipelineColorBlendAttachmentState) i)
+							    (:struct VkPipelineColorBlendAttachmentState))
+					 (setf vk::colorWriteMask
+					       (logior VK_COLOR_COMPONENT_R_BIT VK_COLOR_COMPONENT_G_BIT
+						       VK_COLOR_COMPONENT_B_BIT VK_COLOR_COMPONENT_A_BIT)
+					       vk::blendEnable VK_FALSE
+					       vk::srcColorBlendFactor VK_BLEND_FACTOR_SRC_ALPHA ;;VK_BLEND_FACTOR_ONE
+					       vk::dstColorBlendFactor VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ;;VK_BLEND_FACTOR_ZERO
+					       vk::colorBlendOp VK_BLEND_OP_ADD
+					       vk::srcAlphaBlendFactor VK_BLEND_FACTOR_ONE
+					       vk::dstAlphaBlendFactor VK_BLEND_FACTOR_ZERO
+					       vk::alphaBlendOp VK_BLEND_OP_ADD)))
+				  ;;------------------------------------------------------------------
+				  (with-vk-struct (p-color-blending VkPipelineColorBlendStateCreateInfo)
+				    (with-foreign-slots ((vk::logicOpEnable
+							  vk::logicOp
+							  vk::attachmentCount
+							  vk::pAttachments)
+							 p-color-blending
+							 (:struct VkPipelineColorBlendStateCreateInfo))
+				      (let ((p-blend-constants
+					     (foreign-slot-pointer
+					      p-color-blending
+					      '(:struct VkPipelineColorBlendStateCreateInfo)
+					      'vk::blendConstants)))
+					;;------------------------------------------------------------------
+					(setf vk::logicOpEnable VK_FALSE
+					      vk::logicOp VK_LOGIC_OP_COPY
+					      vk::attachmentCount 1 ;;back-buffer-count
+					      vk::pAttachments p-color-blend-attachments
+					      (mem-aref p-blend-constants :float 0) 0.0f0
+					      (mem-aref p-blend-constants :float 1) 0.0f0
+					      (mem-aref p-blend-constants :float 2) 0.0f0
+					      (mem-aref p-blend-constants :float 3) 0.0f0)))
+				    ;;------------------------------------------------------------------
+				    (with-foreign-object (p-dynamic-states 'VkDynamicState 2)
+				      (setf (mem-aref p-dynamic-states 'VkDynamicState 0) VK_DYNAMIC_STATE_VIEWPORT
+					    (mem-aref p-dynamic-states 'VkDynamicState 1) VK_DYNAMIC_STATE_SCISSOR)
+				      ;;(mem-aref p-dynamic-states 'VkDynamicState 1) VK_DYNAMIC_STATE_LINE_WIDTH)
+				      ;;------------------------------------------------------------------			      
+				      (with-vk-struct (p-dynamic-state VkPipelineDynamicStateCreateInfo)
+					(with-foreign-slots ((vk::dynamicStateCount
+							      vk::pDynamicStates)
+							     p-dynamic-state
+							     (:struct VkPipelineDynamicStateCreateInfo))
+					  ;;------------------------------------------------------------------
+					  (setf vk::dynamicStateCount 1
+						vk::pDynamicStates p-dynamic-states))
+					;;------------------------------------------------------------------
+					(with-foreign-object (p-descriptor-set-layouts 'VkDescriptorSetLayout)
+					  (setf (mem-aref p-descriptor-set-layouts 'VkDescriptorSetLayout) descriptor-set-layout)
+					  (with-vk-struct (p-pipeline-layout-info VkPipelineLayoutCreateInfo)
+					    (with-foreign-slots ((vk::setLayoutCount
+								  vk::pSetLayouts
+								  vk::pushConstantRangeCount
+								  vk::pPushConstantRanges)
+								 p-pipeline-layout-info
+								 (:struct VkPipelineLayoutCreateInfo))
+					      ;;------------------------------------------------------------------
+					      (setf vk::setLayoutCount 1
+						    vk::pSetLayouts p-descriptor-set-layouts
+						    vk::pushConstantRangeCount 0
+						    vk::pPushConstantRanges +nullptr+))
+					    ;;------------------------------------------------------------------
+					  (with-foreign-object (p-pipeline-layout 'VkPipelineLayout)
+					    (check-vk-result
+					     (vkCreatePipelineLayout device
+								     p-pipeline-layout-info
+								     allocator
+								     p-pipeline-layout))
+					    (setf pipeline-layout
+						  (mem-aref p-pipeline-layout 'VkPipelineLayout))))
+					  ;;------------------------------------------------------------------
+					  (with-vk-struct (p-depth-stencil VkPipelineDepthStencilStateCreateInfo)
+					    (with-foreign-slots ((vk::depthTestEnable
+								  vk::depthWriteEnable
+								  vk::depthCompareOp
+								  vk::depthBoundsTestEnable
+								  vk::stencilTestEnable)
+								 p-depth-stencil (:struct VkPipelineDepthStencilStateCreateInfo))
+					      (setf vk::depthTestEnable VK_TRUE
+						    vk::depthWriteEnable VK_TRUE
+						    vk::depthCompareOp VK_COMPARE_OP_LESS
+						    vk::depthBoundsTestEnable VK_FALSE
+						    vk::stencilTestEnable VK_FALSE))
+					    ;;------------------------------------------------------------------
+					  (with-vk-struct (p-pipeline-info VkGraphicsPipelineCreateInfo)
+					    (with-foreign-slots ((vk::flags
+								  vk::stageCount
+								  vk::pStages
+								  vk::pVertexInputState
+								  vk::pInputAssemblyState
+								  vk::pViewportState
+								  vk::pRasterizationState
+								  vk::pMultisampleState
+								  vk::pDepthStencilState
+								  vk::pColorBlendState
+								  vk::pDynamicState
+								  vk::layout
+								  vk::renderPass
+								  vk::subpass
+								  vk::basePipelineHandle
+								  vk::basePipelineIndex)
+								 p-pipeline-info
+								 (:struct VkGraphicsPipelineCreateInfo))
+					      (setf vk::flags 0	;; VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT
+						    vk::stageCount 2
+						    vk::pStages p-shader-stages
+						    vk::pVertexInputState p-vertex-input-info
+						    vk::pInputAssemblyState p-input-assembly
+						    vk::pViewportState p-viewport-state
+						    vk::pRasterizationState p-rasterizer
+						    vk::pMultisampleState p-multisampling
+						    vk::pDepthStencilState p-depth-stencil
+						    vk::pColorBlendState p-color-blending
+						    vk::pDynamicState p-dynamic-state
+						    vk::layout pipeline-layout
+						    vk::renderPass render-pass
+						    vk::subpass 0 ;; 1
+						    vk::basePipelineHandle +nullptr+
+						    vk::basePipelineIndex -1))
+					    ;;------------------------------------------------------------------
+					    (with-foreign-object (p-graphics-pipeline 'VkPipeline)
+					      (check-vk-result
+					       (vkCreateGraphicsPipelines device pipeline-cache 1
+									  p-pipeline-info allocator
+									  p-graphics-pipeline))
+					      (setf annotation-pipeline (mem-aref p-graphics-pipeline 'VkPipeline))))))))))))))))))))))))
+    (vkDestroyShaderModule device vert-shader-module allocator)
+    (vkDestroyShaderModule device frag-shader-module allocator))
+  (values))
+
 (defun create-shader-module (device allocator code size)
   (with-vk-struct (p-create-info VkShaderModuleCreateInfo)
     (with-foreign-slots ((vk::codeSize vk::pCode)
@@ -887,7 +1321,8 @@
 	(mem-aref p-shader-module 'VkShaderModule)))))  
 
 (defmethod resize-vulkan ((app vkapp) w h)
-  
+  (declare (ignore w h))
+    
   (with-slots (device) app
 
     (check-vk-result (vkDeviceWaitIdle device))
@@ -899,7 +1334,7 @@
     
     (destroy-render-pass app)
     
-    (recreate-swapchain app w h)
+    (recreate-swapchain app)
     
     ;;(create-image-views app)
     
@@ -1361,6 +1796,60 @@
 
 	      (vkUpdateDescriptorSets device 1 p-descriptor-write 0 +nullptr+)))))))
   (values))
+
+(defmethod create-annotation-descriptor-set ((app vkapp))
+  (with-slots (device
+	       allocator
+	       annotation-descriptor-set
+	       descriptor-pool
+	       annotation-uniform-buffer
+	       descriptor-set-layout) app
+    (with-foreign-object (p-descriptor-set-layout 'VkDescriptorSetLayout)
+      (setf (mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout) descriptor-set-layout)
+      (with-vk-struct (p-alloc-info VkDescriptorSetAllocateInfo)
+	(with-foreign-slots ((vk::descriptorPool
+			      vk::descriptorSetCount
+			      vk::pSetLayouts)
+			     p-alloc-info (:struct VkDescriptorSetAllocateInfo))
+	  (setf vk::descriptorPool descriptor-pool
+		vk::descriptorSetCount 1
+		vk::pSetLayouts p-descriptor-set-layout)
+
+	  (with-foreign-object (p-descriptor-set 'VkDescriptorSet)
+	    (check-vk-result (vkAllocateDescriptorSets device p-alloc-info p-descriptor-set))
+	    (setf annotation-descriptor-set (mem-aref p-descriptor-set 'VkDescriptorSet)))
+
+	  (with-vk-struct (p-buffer-info VkDescriptorBufferInfo)
+	    (with-foreign-slots ((vk::buffer
+				  vk::uniform-buffer
+				  vk::offset
+				  vk::range)
+				 p-buffer-info (:struct VkDescriptorBufferInfo))
+	      (setf vk::buffer annotation-uniform-buffer
+		    vk::offset 0
+		    vk::range (foreign-type-size '(:struct UniformBufferObject))))
+
+	    (with-vk-struct (p-descriptor-write VkWriteDescriptorSet)
+	      (with-foreign-slots ((vk::dstSet
+				    vk::dstBinding
+				    vk::dstArrayElement
+				    vk::descriptorType
+				    vk::descriptorCount
+				    vk::pBufferInfo
+				    vk::pImageInfo
+				    vk::pTexelBufferView)
+				   p-descriptor-write (:struct VkWriteDescriptorSet))
+		(setf vk::dstSet annotation-descriptor-set
+		      vk::dstBinding 0
+		      vk::dstArrayElement 0
+		      vk::descriptorType VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		      vk::descriptorCount 1
+		      vk::pBufferInfo p-buffer-info
+		      vk::pImageInfo +nullptr+
+		      vk::pTexelBufferView +nullptr+))
+
+	      (vkUpdateDescriptorSets device 1 p-descriptor-write 0 +nullptr+)))))))
+  (values))
 	    
 (defmethod setup-vulkan ((app vkapp) w h)
 
@@ -1400,6 +1889,7 @@
   (create-descriptor-set-layout app)
     
   (create-graphics-pipeline app)
+  (create-annotation-pipeline app)
     
   (create-command-pools app)
 
@@ -1408,14 +1898,18 @@
   (create-framebuffers app)
 
   (create-vertex-buffer app)
-  
   (create-index-buffer app)
+
+  (create-axes-vertex-buffer app)
+  (create-axes-index-buffer app)
   
   (create-uniform-buffer app)
+  (create-annotation-uniform-buffer app)
 
   (create-descriptor-pool app)
     
   (create-descriptor-set app)
+  (create-annotation-descriptor-set app)
     
   (create-command-buffers app) ;; this also creates semaphores...todo: separate these out
     
@@ -1993,6 +2487,14 @@
     (setf image-range nil))
   (values))
 
+#+NOTYET
+(defmethod read-in-shaders ((app vkapp))
+  (with-slots (vertex-shader
+	       fragment-shader)
+      (setf vertex-shader (create-shader "C:/Users/awolven/vkapp/shaders/vert.spv" 'vertex-shader)
+	    frgament-shader (create-shader "C:/Users/awolven/vkapp/shaders/frag.spv" 'fragment-shader))
+    (values)))
+
 (defmethod read-in-shaders ((app vkapp))
   (with-slots (vertex-shader-code
 	       vertex-shader-code-size
@@ -2030,8 +2532,8 @@
   (declare (ignore args))
 
   (with-slots (window allocator gpu device render-pass queue command-pool command-buffer graphics-pipeline vertex-data-size
-		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format vertex-buffer
-		      index-buffer index-data-size descriptor-set pipeline-layout start-time) app
+		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format vertex-buffer fb-height fb-width
+		      index-buffer index-data-size descriptor-set annotation-descriptor-set pipeline-layout start-time annotation-pipeline) app
     (setf start-time (get-internal-real-time))
     
     (setup-vulkan app w h)
@@ -2040,19 +2542,19 @@
     
     (with-foreign-object (p-style '(:struct ig::ImGuiStyle))
       (igStyleColorsClassic p-style))
-			 
+    
     ;; upload fonts:
     (check-vk-result (vkResetCommandPool device (elt command-pool frame-index) 0))
-
+    
     (with-vk-struct (p-begin-info VkCommandBufferBeginInfo)
       (with-foreign-slots ((vk::flags)
 			   p-begin-info (:struct VkCommandBufferBeginInfo))
 	(setf vk::flags (logior vk::flags VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT))
-
+	
 	(check-vk-result (vkBeginCommandBuffer (elt command-buffer frame-index) p-begin-info))))
-
+    
     (ImGui_ImplGlfwVulkan_CreateFontsTexture (elt command-buffer frame-index))
-
+    
     (with-foreign-objects ((p-command-buffer 'VkCommandBuffer))
       (setf (mem-aref p-command-buffer 'VkCommandBuffer) (elt command-buffer frame-index))
       (with-vk-struct (p-end-info VkSubmitInfo)
@@ -2062,120 +2564,156 @@
 		vk::pCommandBuffers p-command-buffer)
 	  (check-vk-result (vkEndCommandBuffer (elt command-buffer frame-index)))
 	  (check-vk-result (vkQueueSubmit queue 1 p-end-info VK_NULL_HANDLE)))))
-
+    
     (check-vk-result (vkDeviceWaitIdle device))
     (ImGui_ImplGlfwVulkan_InvalidateFontUploadObjects)
+      
+    (when *imgui-unlimited-frame-rate*
+      (ImGui_ImplGlfwVulkan_NewFrame)
+      (frame-begin app)
+      (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index))
+      (frame-end app)
+      (setf frame-index (mod (1+ frame-index) IMGUI_VK_QUEUED_FRAMES)))
 
-    (let ((show-demo-window 1)
+
+    (let ((last-time (get-internal-real-time))
+	  (frame-counter 0)
+	  (show-demo-window 1)
 	  (show-another-window 0))
-      (with-foreign-object (p-clear-color :float 4)
-	(setf (mem-aref p-clear-color :float 0) 0.45f0
-	      (mem-aref p-clear-color :float 1) 0.55f0
-	      (mem-aref p-clear-color :float 2) 0.60f0
-	      (mem-aref p-clear-color :float 3) 1.00f0)
-
-	(when *imgui-unlimited-frame-rate*
-	  (ImGui_ImplGlfwVulkan_NewFrame)
-	  (frame-begin app)
-	  (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index))
-	  (frame-end app)
-	  (setf frame-index (mod (1+ frame-index) IMGUI_VK_QUEUED_FRAMES)))
-
-
-	(let ((last-time (get-internal-real-time))
-	      (frame-counter 0))
-	
-	(loop while (zerop (glfwWindowShouldClose window))
-	     
-	   do (glfwPollEvents) 
-	     (ImGUI_ImplGlfwVulkan_NewFrame)
-
-	     (let ((f 0.1f0))
-	       (let ((temp)
-		     (dt))
-
-		 (incf frame-counter)
-	       (igText "Hello, wworld!")
-
-	       (with-foreign-object (p-f :float)
-		 (setf (mem-aref p-f :float) f)
-
-		 (igSliderFloat "float" p-f 0.0f0 1.0f0 "" 1.0f0)
-
-		 (igColorEdit3 "clear color" p-clear-color 0)
-
-		 (when (not (null-pointer-p (igButton "Demo Window" (list 'ig::x 100f0 'ig::y 20.0f0))))
-		   (setq show-demo-window (logxor show-demo-window 1)))
-		 (when (not (null-pointer-p (igButton "Another Window" (list 'ig::x 120f0 'ig::y 20.0f0))))
-		   (setq show-another-window (logxor show-another-window 1)))
-		 (setq temp (get-internal-real-time)
-		       dt (- temp last-time))
-		 (igText "%s ms/frame (%s FPS)"
-			 :string (format nil "~A" dt)
-			 :string (format nil "~A" (if (zerop dt)
-						      0
-						      (round (/ frame-counter (/ dt 1000.0f0)))))
-			 #+NIL
-			 (/ 1000.0f0 (foreign-slot-value (igGetIO) '(:struct ig::ImGuiIO) 'ig::Framerate))
-			 #+NIL
-			 (foreign-slot-value (igGetIO) '(:struct ig::ImGuiIO) 'ig::Framerate)
-			 )
-		 (setq frame-counter 0
-		       last-time temp))))
-
-	     (with-foreign-objects ((p-show-demo-window :int)
-				    (p-show-another-window :int))
-	       (setf (mem-aref p-show-demo-window :int) show-demo-window
-		     (mem-aref p-show-another-window :int) show-another-window)
-
-	       (when (not (zerop show-another-window))
-
-		 (igBegin "Another Window" p-show-another-window 0)
-
-		 (igText "Hello from another window!")
-
-		 (igEnd))
+      
+      (loop while (zerop (glfwWindowShouldClose window))
+	 with temp with dt
+	   
+	 do (glfwPollEvents) 
+	   (ImGUI_ImplGlfwVulkan_NewFrame)
+	   
+	   (incf frame-counter)
+	   (igText "Hello, wworld!")
 	       
-	       (when (not (zerop show-demo-window))
+	   (with-foreign-object (p-f :float)
+	     (setf (mem-aref p-f :float) (zoom *camera*))
+	     
+	     (igSliderFloat "zoom" p-f 0.1f0 10.0f0 "%f" 1.0f0)
+	     
+	     (setf (zoom *camera*) (mem-aref p-f :float)))
 
-		 (igSetNextWindowPos (list 'ig::x 650.0f0 'ig::y 20.0f0)
-				     ImGuiCond_FirstUseEver (list 'ig::x 0.0f0 'ig::y 0.0f0))
-
-		 (igShowDemoWindow p-show-demo-window)))
+	   (with-foreign-object (p-clear-color :float 4)
+	     (setf (mem-aref p-clear-color :float 0) 0.45f0
+		   (mem-aref p-clear-color :float 1) 0.55f0
+		   (mem-aref p-clear-color :float 2) 0.60f0
+		   (mem-aref p-clear-color :float 3) 1.00f0)
 		 
+	     (igColorEdit3 "clear color" p-clear-color 0)
+
 	     (setf (elt clear-value 0) (mem-aref  p-clear-color :float 0)
 		   (elt clear-value 1) (mem-aref  p-clear-color :float 1)
 		   (elt clear-value 2) (mem-aref  p-clear-color :float 2)
-		   (elt clear-value 3) (mem-aref  p-clear-color :float 3))
+		   (elt clear-value 3) (mem-aref  p-clear-color :float 3)))
+		 
+	   (with-foreign-object (p-camera-pos :float 3)
+	     (setf (mem-aref p-camera-pos :float 0) (camera-x *camera*)
+		   (mem-aref p-camera-pos :float 1) (camera-y *camera*)
+		   (mem-aref p-camera-pos :float 2) (camera-z *camera*))
+		   
+	     (igInputFloat3 "camera position" p-camera-pos 2 0)
+		 
+	     (setf (camera-x *camera*) (mem-aref p-camera-pos :float 0)
+		   (camera-y *camera*) (mem-aref p-camera-pos :float 1)
+		   (camera-z *camera*) (mem-aref p-camera-pos :float 2)))
 
-	     (frame-begin app)
+	   (when (not (null-pointer-p (igButton "Demo Window" (list 'ig::x 100f0 'ig::y 20f0))))
+	     (setq show-demo-window (logxor show-demo-window 1)))
+
+	   (when (not (null-pointer-p (igButton "Another Window" (list 'ig::x 120f0 'ig::y 20.0f0))))
+	     (setq show-another-window (logxor show-another-window 1)))
+	   
+	     (setq temp (get-internal-real-time)
+		   dt (- temp last-time))
+	     (igText "%s ms/frame (%s FPS)"
+		     :string (format nil "~A" dt)
+		     :string (format nil "~A" (if (zerop dt)
+						  0
+						  (round (/ frame-counter (/ dt 1000.0f0)))))
+		     #+NIL
+		     (/ 1000.0f0 (foreign-slot-value (igGetIO) '(:struct ig::ImGuiIO) 'ig::Framerate))
+		     #+NIL
+		     (foreign-slot-value (igGetIO) '(:struct ig::ImGuiIO) 'ig::Framerate)
+		     )
+	     (setq frame-counter 0
+		   last-time temp)
+	
+	   (with-foreign-objects ((p-show-demo-window :int)
+				  (p-show-another-window :int))
+	     (setf (mem-aref p-show-demo-window :int) show-demo-window
+		   (mem-aref p-show-another-window :int) show-another-window)
 	     
-	     (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS graphics-pipeline)
-	     (update-uniform-buffer app)
-	     (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
-				    (p-offsets 'VkDeviceSize)
-				    (p-descriptor-sets 'VkDescriptorSet))
-	       (setf (mem-aref p-vertex-buffers 'VkBuffer) vertex-buffer
-		     (mem-aref p-offsets 'VkDeviceSize) 0
-		     (mem-aref p-descriptor-sets 'VkDescriptorSet) descriptor-set)
-	       (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets)
-	       (vkCmdBindIndexBuffer (elt command-buffer frame-index) index-buffer 0 VK_INDEX_TYPE_UINT16)
-	       (vkCmdBindDescriptorSets (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS pipeline-layout
-					0 1 p-descriptor-sets 0 +nullptr+))
-	     (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0)
+	     (when (not (zerop show-another-window))
+	       
+	       (igBegin "Another Window" p-show-another-window 0)
+	       (setq show-another-window (mem-aref p-show-another-window :int))
+	       (igText "Hello from another window!")
+	       
+	       (igEnd))
+	     
+	     (when (not (zerop show-demo-window))
+		 
+	       (igSetNextWindowPos (list 'ig::x 650.0f0 'ig::y 20.0f0)
+				   ImGuiCond_FirstUseEver (list 'ig::x 0.0f0 'ig::y 0.0f0))
+	       
+	       (igShowDemoWindow p-show-demo-window)
+	       (setq show-demo-window (mem-aref p-show-demo-window :int)))
+	
+	
+	     (frame-begin app)
 
-	     (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index))
+	     (let ((projection-matrix (3d-matrices:mortho (* -2 (zoom *camera*) (/ fb-width fb-height))
+							  (*  2 (zoom *camera*) (/ fb-width fb-height))
+							  (* -2 (zoom *camera*))
+							  (*  2 (zoom *camera*))
+							  -10000 10000))
+		   (annotation-projection-matrix (3d-matrices:mortho (* -2 (/ fb-width fb-height))
+								     (*  2 (/ fb-width fb-height))
+								     -2 2 -10000 10000)))
+	       ;;-------------------------------------------------
+	       (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS annotation-pipeline)
+	       (update-annotation-uniform-buffer app annotation-projection-matrix)
+	       (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
+				      (p-offsets 'VkDeviceSize)
+				      (p-descriptor-sets 'VkDescriptorSet))
+		 (setf (mem-aref p-vertex-buffers 'VkBuffer) (slot-value app 'axes-vertex-buffer)
+		       (mem-aref p-offsets 'VkDeviceSize) 0
+		       (mem-aref p-descriptor-sets 'VkDescriptorSet) annotation-descriptor-set)
+		 (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets)
+		 (vkCmdBindIndexBuffer (elt command-buffer frame-index) (slot-value app 'axes-index-buffer) 0 VK_INDEX_TYPE_UINT16)
+		 (vkCmdBindDescriptorSets (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS pipeline-layout
+					  0 1 p-descriptor-sets 0 +nullptr+))
+	       (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0)
+	       ;;-------------------------------------------------
+	       (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS graphics-pipeline)
+	       (update-uniform-buffer app projection-matrix)
+	       (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
+				      (p-offsets 'VkDeviceSize)
+				      (p-descriptor-sets 'VkDescriptorSet))
+		 (setf (mem-aref p-vertex-buffers 'VkBuffer) vertex-buffer
+		       (mem-aref p-offsets 'VkDeviceSize) 0
+		       (mem-aref p-descriptor-sets 'VkDescriptorSet) descriptor-set)
+		 (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets)
+		 (vkCmdBindIndexBuffer (elt command-buffer frame-index) index-buffer 0 VK_INDEX_TYPE_UINT16)
+		 (vkCmdBindDescriptorSets (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS pipeline-layout
+					  0 1 p-descriptor-sets 0 +nullptr+))
+	       (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0)
 
+	       (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index)))
+	
 	     (frame-end app)
-	     (frame-present app)))
-
-
-	(check-vk-result (vkDeviceWaitIdle device))
-	(ImGui_ImplGlfwVulkan_Shutdown)
-	(cleanup-vulkan app)
-	(glfwTerminate)
-
-	t))))
+	     (frame-present app))))
+	
+    (check-vk-result (vkDeviceWaitIdle device))
+    (ImGui_ImplGlfwVulkan_Shutdown)
+    (cleanup-vulkan app)
+    (glfwTerminate)
+    
+    t))
 
 
 (defun run-app (&optional (app (make-instance 'vkapp)))
@@ -2183,7 +2721,8 @@
   (multiple-value-bind (vertex-data vertex-data-size index-data index-data-size)
       (oc::make-sphere)
     (let ((app (make-instance 'vkapp :vertex-data vertex-data :vertex-data-size vertex-data-size
-			      :index-data index-data :index-data-size index-data-size)))
+	    :index-data index-data :index-data-size index-data-size)
+	  ))
       (sb-thread:make-thread #'(lambda () (main app))))))
 
 #+NIL
@@ -2249,6 +2788,40 @@
 	(vkFreeMemory device staging-buffer-memory +nullptr+))))
   (values))
 
+(defmethod create-axes-vertex-buffer ((app vkapp))
+  (with-slots (axes-vertex-data
+	       axes-vertex-data-size
+	       axes-vertex-buffer
+	       axes-vertex-buffer-memory) app
+				
+    (multiple-value-bind (vertex-buffer vertex-buffer-memory)
+	(create-vertex-buffer2 app axes-vertex-data axes-vertex-data-size)
+
+      (setf axes-vertex-buffer vertex-buffer
+	    axes-vertex-buffer-memory vertex-buffer-memory)
+      (values))))
+
+(defmethod create-vertex-buffer2 ((app vkapp) vertex-data vertex-data-size)
+  (with-slots (device allocator) app
+    (multiple-value-bind (staging-buffer staging-buffer-memory)
+	(create-buffer
+	 app vertex-data-size VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+	 (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+
+      (with-foreign-object (pp-data :pointer)
+	(vkMapMemory device staging-buffer-memory 0 vertex-data-size 0 pp-data)
+	(memcpy (mem-aref pp-data :pointer) vertex-data vertex-data-size)
+	(vkUnmapMemory device staging-buffer-memory))
+
+      (multiple-value-bind (buffer buffer-memory)
+	  (create-buffer
+	   app vertex-data-size (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+	   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	(copy-buffer app staging-buffer buffer vertex-data-size)
+	(vkDestroyBuffer device staging-buffer +nullptr+)
+	(vkFreeMemory device staging-buffer-memory +nullptr+)
+	(values buffer buffer-memory)))))
+
 (defmethod create-index-buffer ((app vkapp))
   (with-slots (device allocator index-buffer index-buffer-memory index-data index-data-size) app
     (multiple-value-bind (staging-buffer staging-buffer-memory)
@@ -2270,6 +2843,27 @@
 	(vkFreeMemory device staging-buffer-memory +nullptr+))))
   (values))
 
+(defmethod create-axes-index-buffer ((app vkapp))
+  (with-slots (device allocator axes-index-buffer axes-index-buffer-memory axes-index-data axes-index-data-size) app
+    (multiple-value-bind (staging-buffer staging-buffer-memory)
+	(create-buffer app axes-index-data-size VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+		       (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+
+      (with-foreign-object (pp-data :pointer)
+	(vkMapMemory device staging-buffer-memory 0 axes-index-data-size 0 pp-data)
+	(memcpy (mem-aref pp-data :pointer) axes-index-data axes-index-data-size)
+	(vkUnmapMemory device staging-buffer-memory))
+
+      (multiple-value-bind (buffer buffer-memory)
+	  (create-buffer app axes-index-data-size (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+			 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	(setf axes-index-buffer buffer
+	      axes-index-buffer-memory buffer-memory)
+	(copy-buffer app staging-buffer axes-index-buffer axes-index-data-size)
+	(vkDestroyBuffer device staging-buffer +nullptr+)
+	(vkFreeMemory device staging-buffer-memory +nullptr+))))
+  (values))
+
 (defmethod create-uniform-buffer ((app vkapp))
   (with-slots (device allocator uniform-buffer uniform-buffer-memory ) app
     (let ((buffer-size (foreign-type-size '(:struct UniformBufferObject))))
@@ -2280,27 +2874,42 @@
 	      uniform-buffer-memory buffer-memory))))
   (values))
 
-(defmethod update-uniform-buffer ((app vkapp))
+(defmethod create-annotation-uniform-buffer ((app vkapp))
+  (with-slots (device allocator annotation-uniform-buffer annotation-uniform-buffer-memory ) app
+    (let ((buffer-size (foreign-type-size '(:struct UniformBufferObject))))
+      (multiple-value-bind (buffer buffer-memory)
+	  (create-buffer app buffer-size VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
+			 (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+	(setf annotation-uniform-buffer buffer
+	      annotation-uniform-buffer-memory buffer-memory))))
+  (values))
+
+(defun convert-projection-matrix-to-vulkan (src)
+  (let ((dest (3d-matrices:mcopy4 src)))
+    (setf (3d-matrices:mcref dest 1 1) (- (3d-matrices:mcref dest 1 1))
+	  (3d-matrices:mcref dest 2 0) (/ (+ (3d-matrices:mcref dest 2 0) (3d-matrices:mcref dest 3 0)) 2)
+	  (3d-matrices:mcref dest 2 1) (/ (+ (3d-matrices:mcref dest 2 1) (3d-matrices:mcref dest 3 1)) 2)
+	  (3d-matrices:mcref dest 2 2) (/ (+ (3d-matrices:mcref dest 2 2) (3d-matrices:mcref dest 3 2)) 2)
+	  (3d-matrices:mcref dest 2 3) (/ (+ (3d-matrices:mcref dest 2 3) (3d-matrices:mcref dest 3 3)) 2))
+    dest))
+
+(defmethod update-uniform-buffer ((app vkapp) projection-matrix)
   (with-slots (fb-width fb-height device uniform-buffer-memory start-time current-item) app
     (let* ((current-time (get-internal-real-time))
 	   (elapsed-time (- current-time start-time))
 	   (model-matrix
-	    (rotation-matrix2
-	     #.(make-vector-3d 0.0d0 0.0d0 1.0d0) (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0))))
+	    (3d-matrices:m*
+	     (3d-matrices:mrotation (3d-vectors:vec 0.0 0.0 1.0) (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
+	     (3d-matrices:mtranslation (3d-vectors:vec3 1 0 0))))
 	   (view-matrix
-	    (look-at2 #.(make-vector-3d 0.5 0.5 0.3) #.(make-vector-3d 0.0 0.0 0.0) #.(make-vector-3d 0 0 1)))
-	   (projection-matrix
-	    (orthographic-projection-matrix3 -1.7d0 1.7d0 (* -1.7 (/ fb-height fb-width)) (* 1.7 (/ fb-height fb-width)) -1.7d0 1.7d0)
-	     #+NIL
-	    (perspective-projection-matrix (/ pi 2) (coerce (/ fb-height fb-width) 'double-float) 15.1d0 -1.7d0)
-	    #+NIL
-	    (transpose-4x4-matrix 
-	    (perspective-projection-matrix-3 -1.2d0 1.2d0 (* -1.2 (/ fb-height fb-width)) (* 1.2 (/ fb-height fb-width)) -1.2d0 1.2d0))))
-      ;;(setq model-matrix (allocate-4x4-identity-matrix))
-      ;;(setq view-matrix (allocate-4x4-identity-matrix))
-      ;;(setq projection-matrix (allocate-4x4-identity-matrix))
+	    (look-at2 (make-vector-3d (camera-x *camera*)
+				      (camera-y *camera*)
+				      (camera-z *camera*))
+		      (make-vector-3d 0.0 0.0 0.0)
+		      (make-vector-3d 0 0 1))))
+      (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix))
 
-      ;;(print elapsed-time)
+      #+NIL
       (with-foreign-object (p-current-item :int)
 	 (setf (mem-aref p-current-item :int) current-item)
 	 (with-foreign-strings ((p-one "one") (p-two "two") (p-three "three") (p-four "four"))
@@ -2311,19 +2920,18 @@
 		   (mem-aref p-strings :pointer 3) p-four)
 	     (igListBox "listbox foo" p-current-item p-strings 4 3)))
 	 (setf current-item (mem-aref p-current-item :int)))
-
+      #+NIL
       (igLabelText "Label" "")
       
       (with-foreign-object (p-ubo '(:struct UniformBufferObject))
-	#+NIL(loop for i from 0 below (/ (foreign-type-size '(:struct UniformBufferObject)) 4)
-	   do (setf (mem-aref p-ubo :float i) 0.0f0))
+
 	(let ((p-model (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'model))
 	      (p-view (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'view))
 	      (p-proj (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'proj)))
 		  
 	  (loop for i from 0 to 3
 	     do (loop for j from 0 to 3
-		   do (setf (mem-aref p-model :float (+ j (* i 4))) (coerce (aref model-matrix i j) 'single-float))))
+		   do (setf (mem-aref p-model :float (+ (* j 4) i)) (coerce (3d-matrices:mcref model-matrix i j) 'single-float))))
 
 	  (loop for i from 0 to 3
 	     do (loop for j from 0 to 3
@@ -2331,15 +2939,46 @@
 
 	  (loop for i from 0 to 3
 	     do (loop for j from 0 to 3
-		   do (setf (mem-aref p-proj :float (+ (* j 4) i)) (coerce (aref projection-matrix j i) 'single-float)))))
-
-	#+NIL(loop for i from 0 below (/ (foreign-type-size '(:struct UniformBufferObject)) 4)
-	     do (print (mem-aref p-ubo :float i)))
+		   do (setf (mem-aref p-proj :float (+ (* j 4) i)) (coerce (3d-matrices:mcref projection-matrix i j) 'single-float)))))
 	    
 	(with-foreign-object (pp-data :pointer)
 	  (vkMapMemory device uniform-buffer-memory 0 (foreign-type-size '(:struct UniformBufferObject)) 0 pp-data)
 	  (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct UniformBufferObject)))
 	  (vkUnmapMemory device uniform-buffer-memory)))))
+  (values))
+
+(defmethod update-annotation-uniform-buffer ((app vkapp) projection-matrix)
+  (with-slots (fb-width fb-height device annotation-uniform-buffer-memory) app
+    (let* ((model-matrix (3d-matrices::meye 4))
+	   (view-matrix
+	    (look-at2 (make-vector-3d (camera-x *camera*)
+				      (camera-y *camera*)
+				      (camera-z *camera*))
+		      (make-vector-3d 0.0 0.0 0.0)
+		      (make-vector-3d 0 0 1))))
+      (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix))
+	     
+      (with-foreign-object (p-ubo '(:struct UniformBufferObject))
+	(let ((p-model (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'model))
+	      (p-view (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'view))
+	      (p-proj (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'proj)))
+		  
+	  (loop for i from 0 to 3
+	     do (loop for j from 0 to 3
+		   do (setf (mem-aref p-model :float (+ (* j 4) i)) (coerce (3d-matrices:mcref model-matrix i j) 'single-float))))
+	  
+	  (loop for i from 0 to 3
+	     do (loop for j from 0 to 3
+		   do (setf (mem-aref p-view :float (+ (* j 4) i)) (coerce (aref view-matrix i j) 'single-float))))
+	  
+	  (loop for i from 0 to 3
+	     do (loop for j from 0 to 3
+		   do (setf (mem-aref p-proj :float (+ (* j 4) i)) (coerce (3d-matrices:mcref projection-matrix i j) 'single-float)))))
+
+	(with-foreign-object (pp-data :pointer)
+	  (vkMapMemory device annotation-uniform-buffer-memory 0 (foreign-type-size '(:struct UniformBufferObject)) 0 pp-data)
+	  (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct UniformBufferObject)))
+	  (vkUnmapMemory device annotation-uniform-buffer-memory)))))
   (values))
 
 (defmethod copy-buffer (app src-buffer dst-buffer size)
