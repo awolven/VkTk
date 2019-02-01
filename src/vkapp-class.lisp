@@ -72,14 +72,29 @@
   (z3 :float)
   (w3 :float))
 
+(defcstruct vec4
+  (x :float)
+  (y :float)
+  (z :float)
+  (w :float))
+
 (defun make-mat4 (initial-contents)
   (assert (eq (length initial-contents) 16))
   (foreign-alloc :float :initial-contents initial-contents))
 
-(defcstruct UniformBufferObject
+#+ORIG
+(defcstruct UniformBufferObjectVertexShader
   (model (:struct mat4))
   (view (:struct mat4))
   (proj (:struct mat4)))
+
+(defcstruct UniformBufferObjectVertexShader
+  (mxProj (:struct mat4)))
+
+(defcstruct UniformBufferObjectGeometryShader
+  (mxProj (:struct mat4))
+  (RayOrigin (:struct vec4))
+  (RayDir (:struct vec4)))
 
 (defvar *last-app-id* 0)
 
@@ -110,6 +125,7 @@
    (descriptor-set)
    (annotation-descriptor-set)
    (descriptor-set-layout)
+   (selection-descriptor-set-layout)
   
    (fb-width)
    (fb-height)
@@ -202,11 +218,18 @@
    (axes-index-data-size
     :initform (* (foreign-type-size :unsigned-short) (length *axes-indices*)))
 
-   (uniform-buffer)
-   (uniform-buffer-memory)
+   (uniform-buffer-vs)
+   (uniform-buffer-vs-memory)
 
-   (annotation-uniform-buffer)
-   (annotation-uniform-buffer-memory)
+   (uniform-buffer-gs)
+   (uniform-buffer-gs-memory)
+
+   (ssbo-buffer-gs)
+   (ssbo-buffer-gs-memory)
+   
+
+   (annotation-uniform-buffer-vs)
+   (annotation-uniform-buffer-vs-memory)
 
    (upload-buffer-memory) ;; VkDeviceMemory
    (upload-buffer) ;; VkBuffer
@@ -216,9 +239,11 @@
    (font-image) ;; VkImage
    (font-view) ;; VkImageView
 
-   (pipeline-layout)
+   (annotation-pipeline-layout)
    (graphics-pipeline)
    (annotation-pipeline)
+   (selection-pipeline)
+   (selection-pipeline-layout)
 
    (start-time)
    (current-item :initform 0)))
@@ -436,7 +461,7 @@
 
 (defun fill-pipeline-rasterization-state-create-info (p-ci
 						      &key
-							(depth-clamp-enable VK_FALSE)
+							(depth-clamp-enable VK_TRUE)
 							(rasterizer-discard-enable VK_FALSE)
 							(polygon-mode VK_POLYGON_MODE_FILL)
 							(line-width 1.0f0)
@@ -710,6 +735,166 @@
 	  vk::alphaBlendOp alpha-blend-op))
   (values))
 
+(defun create-selection-pipeline-1 (device allocator pipeline-cache render-pass back-buffer-count width height
+				    &key
+				      (descriptor-set-layouts +nullptr+)
+				      (descriptor-set-layout-count 0)
+				      (geom-shader-file "C:/Users/awolven/vkapp/shaders/selection.geom.spv")
+				      &allow-other-keys)
+  (create-pipeline-1 device allocator pipeline-cache render-pass back-buffer-count width height
+		     :descriptor-set-layouts descriptor-set-layouts
+		     :descriptor-set-layout-count descriptor-set-layout-count
+		     :geom-shader-file geom-shader-file))
+
+
+
+
+(defun create-pipeline-1 (device allocator pipeline-cache render-pass back-buffer-count width height
+			  &rest args &key
+				       (descriptor-set-layouts +nullptr+)
+				       (descriptor-set-layout-count 0)
+				       (vert-shader-file "C:/Users/awolven/vkapp/shaders/vert.spv")
+				       (geom-shader-file nil)
+				       (frag-shader-file "C:/Users/awolven/vkapp/shaders/frag.spv")
+				       &allow-other-keys)
+  (let ((vert-shader-code)
+	(vert-shader-code-size)
+	(geom-shader-code)
+	(geom-shader-code-size)
+	(frag-shader-code)
+	(frag-shader-code-size))
+			 
+    (multiple-value-setq (vert-shader-code vert-shader-code-size)
+      (read-shader-file vert-shader-file))
+    
+    (when geom-shader-file
+      (multiple-value-setq (geom-shader-code geom-shader-code-size)
+	(read-shader-file geom-shader-file)))
+    
+    (multiple-value-setq (frag-shader-code frag-shader-code-size)
+      (read-shader-file frag-shader-file))
+    
+    (let ((vert-shader-module (create-shader-module device allocator vert-shader-code vert-shader-code-size))
+	  (geom-shader-module (when geom-shader-file
+				(create-shader-module device allocator geom-shader-code geom-shader-code-size)))
+	  (frag-shader-module (create-shader-module device allocator frag-shader-code frag-shader-code-size)))
+      
+      (with-foreign-object (p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) (if geom-shader-file 3 2))
+	(fill-pipeline-shader-stage-create-info (mem-aptr p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 0)
+						:stage VK_SHADER_STAGE_VERTEX_BIT
+						:module vert-shader-module)
+	(fill-pipeline-shader-stage-create-info (mem-aptr p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 1)
+						:stage VK_SHADER_STAGE_FRAGMENT_BIT
+						:module frag-shader-module)
+	(when geom-shader-file
+	  (fill-pipeline-shader-stage-create-info (mem-aptr p-shader-stages '(:struct VkPipelineShaderStageCreateInfo) 2)
+						  :stage VK_SHADER_STAGE_GEOMETRY_BIT
+						  :module geom-shader-module))
+	
+	(with-vertex-input-binding-description (p-vibd)
+	  (apply #'fill-vertex-input-binding-description p-vibd (append args (list :stride (foreign-type-size '(:struct Vertex)))))
+	  
+	  (with-foreign-object (p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 2)
+	    (fill-vertex-input-attribute-description (mem-aptr p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 0)
+						     :location 0
+						     :offset (foreign-slot-offset '(:struct Vertex) 'pos))
+	    (fill-vertex-input-attribute-description (mem-aptr p-attribute-descriptions '(:struct VkVertexInputAttributeDescription) 1)
+						     :location 1
+						     :offset (foreign-slot-offset '(:struct Vertex) 'color))
+	    
+	    (with-pipeline-vertex-input-state-create-info (p-pvisci)
+	      (apply #'fill-pipeline-vertex-input-state-create-info p-pvisci
+		     :vertex-binding-description-count 1
+		     :p-vertex-binding-descriptions p-vibd
+		     :vertex-attribute-description-count 2
+		     :p-vertex-attribute-descriptions p-attribute-descriptions
+		     args)
+	      
+	      (with-pipeline-input-assembly-state-create-info (p-piasci)
+		(apply #'fill-pipeline-input-assembly-state-create-info p-piasci args)
+		
+		(with-viewport-structure (p-viewport)
+		  (apply #'fill-viewport-structure p-viewport (append args (list :viewport-width (coerce width 'single-float)
+										 :viewport-height (coerce height 'single-float))))
+		  
+		  (with-scissor-structure (p-scissor)
+		    (apply #'fill-scissor-structure p-scissor (append args (list :scissor-width width :scissor-height height)))
+		    
+		    (with-pipeline-viewport-state-create-info (p-viewport-state)
+		      (apply #'fill-pipeline-viewport-state-create-info p-viewport-state
+			     :viewport-count 1
+			     :p-viewports p-viewport
+			     :scissor-count 1
+			     :p-scissors p-scissor
+			     args)
+		      
+		      (with-pipeline-rasterization-state-create-info (p-rasterizer)
+			(apply #'fill-pipeline-rasterization-state-create-info
+			       p-rasterizer args)
+			
+			(with-pipeline-multisample-state-create-info (p-multisampling)
+			  (apply #'fill-pipeline-multisample-state-create-info p-multisampling args)
+			  
+			  (with-foreign-object (p-color-blend-attachments '(:struct VkPipelineColorBlendAttachmentState) back-buffer-count)
+			    (loop for i below back-buffer-count
+			       do (fill-pipeline-color-blend-attachment-state
+				   (mem-aptr p-color-blend-attachments '(:struct VkPipelineColorBlendAttachmentState) i)))
+			    
+			    (with-pipeline-color-blend-state-create-info  (p-color-blending)
+			      (apply #'fill-pipeline-color-blend-state-create-info p-color-blending
+				     :p-attachments p-color-blend-attachments
+				     :attachment-count 1 ;;back-buffer-count
+				     args)
+			      
+			      (with-dynamic-states (p-dynamic-states 3)
+				(setf (mem-aref p-dynamic-states 'VkDynamicState 0) VK_DYNAMIC_STATE_VIEWPORT
+				      (mem-aref p-dynamic-states 'VkDynamicState 1) VK_DYNAMIC_STATE_SCISSOR
+				      (mem-aref p-dynamic-states 'VKDynamicState 2) VK_DYNAMIC_STATE_LINE_WIDTH)
+				
+				(with-pipeline-dynamic-state-create-info (p-pipeline-dynamic-state-ci)
+				  (apply #'fill-pipeline-dynamic-state-create-info p-pipeline-dynamic-state-ci
+					 :dynamic-state-count 3 :p-dynamic-states p-dynamic-states args)
+				  
+				  ;; Each VkDescriptorSetLayout corresponds to a "set" in the GLSL code.
+				  ;; descriptor-set-layouts is an array of VkDescriptorSetLayout
+				  (with-pipeline-layout-create-info (p-pipeline-layout-ci)
+				    (apply #'fill-pipeline-layout-create-info p-pipeline-layout-ci
+					   :set-layout-count descriptor-set-layout-count :p-set-layouts descriptor-set-layouts
+					   args)
+				      
+				    (with-foreign-object (p-pipeline-layout 'VKPipelineLayout)
+				      (check-vk-result
+				       (vkCreatePipelineLayout device p-pipeline-layout-ci allocator p-pipeline-layout))
+					
+				      (let ((pipeline-layout (mem-aref p-pipeline-layout 'VkPipelineLayout)))
+					(with-pipeline-depth-stencil-state-create-info (p-depth-stencil)
+					  (apply #'fill-pipeline-depth-stencil-state-create-info p-depth-stencil args)
+					  (with-graphics-pipeline-create-info (p-pipeline-ci)
+					    (apply #'fill-graphics-pipeline-create-info p-pipeline-ci
+						   :stage-count (if geom-shader-module 3 2)
+						   :p-stages p-shader-stages
+						   :p-vertex-input-state p-pvisci
+						   :p-input-assembly-state p-piasci
+						   :p-viewport-state p-viewport-state
+						   :p-rasterization-state p-rasterizer
+						   :p-multisample-state p-multisampling
+						   :p-depth-stencil-state p-depth-stencil
+						   :p-color-blend-state p-color-blending
+						   :p-dynamic-state +nullptr+ ;;p-pipeline-dynamic-state-ci
+						   :layout pipeline-layout
+						   :render-pass render-pass
+						   args)
+					      
+					    (with-foreign-object (p-graphics-pipeline 'VkPipeline)
+					      (check-vk-result
+					       (vkCreateGraphicsPipelines device pipeline-cache 1 p-pipeline-ci allocator p-graphics-pipeline))
+					      (vkDestroyShaderModule device vert-shader-module allocator)
+					      (when geom-shader-module
+						(vkDestroyShaderModule device geom-shader-module allocator))
+					      (vkDestroyShaderModule device frag-shader-module allocator)
+					      (values (mem-aref p-graphics-pipeline 'VkPipeline) pipeline-layout))))))))))))))))))))))))
+
+#+ORIG
 (defun create-pipeline-1 (device allocator pipeline-cache render-pass back-buffer-count descriptor-set-layouts width height
 			  &rest args &key &allow-other-keys)
   (multiple-value-bind (vert-shader-code vert-shader-code-size)

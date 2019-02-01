@@ -4,7 +4,7 @@
   (:windows "~/vkapp/ifc/libffi/libffi.dll"))
   
 (cffi:define-foreign-library vulkan-1
-  (:windows "c:/VulkanSDK/1.1.70.1/Source/lib/vulkan-1.dll"))
+  (:windows "c:/VulkanSDK/1.1.97.0/Source/lib/vulkan-1.dll"))
 
 (defun load-vulkan-layer-libs ()
   (let ((libraries (list "VkLayer_api_dump.dll"
@@ -18,7 +18,7 @@
 			 "VkLayer_object_tracker.dll"      
 			 "VkLayer_parameter_validation.dll")))
     (loop for lib in libraries
-       do (cffi:load-foreign-library (concatenate 'string "c:/VulkanSDK/1.0.65.1/Source/lib/" lib)))))
+       do (cffi:load-foreign-library (concatenate 'string "c:/VulkanSDK/1.1.97.0/Source/lib/" lib)))))
 
 (cffi:define-foreign-library cimgui
   (:windows "~/cimgui/cimgui/x64/debug/cimgui.dll"))
@@ -31,7 +31,7 @@
 
 (cffi:use-foreign-library libffi)
 (cffi:use-foreign-library vulkan-1)
-(load-vulkan-layer-libs)
+#+NIL(load-vulkan-layer-libs)
 (cffi:use-foreign-library cimgui)
 (cffi:use-foreign-library glfw3)
 (cffi:use-foreign-library cimgui-impl-glfw-vulkan)

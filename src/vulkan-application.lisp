@@ -12,16 +12,48 @@
    (eye-y :initform 0.0f0 :accessor eye-y)
    (eye-z :initform 0.0f0 :accessor eye-z)))
 
+(defun compute-picking-ray (app camera projection-matrix view-matrix)
+  (with-slots (window) app
+    (let ((viewport-width)
+	  (viewport-height))
+      (with-foreign-objects ((p-width :int)
+			     (p-height :int))
+	(glfwGetFramebufferSize window p-width p-height)
+	(setq viewport-width (coerce (mem-aref p-width :int) 'single-float)
+	      viewport-height (coerce (mem-aref p-height :int) 'single-float)))
+    (let ((unprojmat (invert-4x4-matrix projection-matrix)))
+      (multiple-value-bind (mouse-x mouse-y) (get-cursor-pos app)
+	(let* ((ray-nds (vec3 (- (/ (* 2.0f0 mouse-x) viewport-width) 1.0f0) (- (/ (* 2.0f0 mouse-y) viewport-height) 1.0f0) 1.0f0))
+	       (ray-clip1 (vec4 (vx ray-nds) (vy ray-nds) 0.0f0 1.0f0))
+	       (ray-clip2 (vec4 (vx ray-nds) (vy ray-nds) 1.0f0 1.0f0)))
+	  (let ((ray-eye1 (m* unprojmat ray-clip1))
+		(ray-eye2 (m* unprojmat ray-clip2))
+		(ray-world))
+	    ;;(setq ray-eye (vec4 (vx ray-eye) (vy ray-eye) -1.0f0 0.0f0))
+	    (setq ray-eye1 (m* (invert-4x4-matrix view-matrix) ray-eye1))
+	    (setq ray-eye2 (m* (invert-4x4-matrix view-matrix) ray-eye2))
+	    (igText "ray-eye1") (igText (format nil "~S" ray-eye1))
+	    (igText "ray-eye2") (igText (format nil "~S" ray-eye2))
+	    (setq ray-eye1 (vec3 (/ (vx ray-eye1) (vw ray-eye1)) (/ (vy ray-eye1) (vw ray-eye1)) (/ (vz ray-eye1) (vw ray-eye1))))
+	    (setq ray-eye2 (vec3 (/ (vx ray-eye2) (vw ray-eye2)) (/ (vy ray-eye2) (vw ray-eye2)) (/ (vz ray-eye2) (vw ray-eye2))))
+	    (setq ray-world (vunit (v- ray-eye1 ray-eye2)))
+
+	    (if (not *ortho*)
+		(values (vec3 (camera-x camera) (camera-y camera) (camera-z camera)) ray-world)
+		(values ray-eye1 (v- (vec3 (camera-x camera) (camera-y camera) (camera-z camera))))))))))))
+	    
+
 
 (defvar *camera* (make-instance 'camera))
 
-   
+(defvar *ortho* t)   
 (defvar *zoom* 1.0f0)
 ;;(eval-when (:compile-toplevel :load-toplevel :execute)
-(defvar *camera-x* 1.0f0)
-(defvar *camera-y* 1.0f0)
-(defvar *camera-z* 1.0f0)
+(defvar *camera-x* 5.0f0)
+(defvar *camera-y* 5.0f0)
+(defvar *camera-z* 5.0f0)
 ;;)
+
 (defvar *debug* t)
 
 (defvar *pipeline-created* nil)
@@ -108,6 +140,14 @@
     (unless app
       (error "Could not find app from app-id: ~A while resizing." app-id))
     (resize-vulkan app w h)))
+
+(defmethod get-cursor-pos ((app vkapp))
+  (with-slots (window) app
+    (with-foreign-objects ((p-x :double)
+			   (p-y :double))
+      (glfw:glfwgetcursorpos window p-x p-y)
+      (values (mem-aref p-x :double)
+	      (mem-aref p-y :double)))))
 
 (defmethod create-swapchain ((app vkapp) &key (old-swapchain +nullptr+))
   (with-slots (device
@@ -210,16 +250,28 @@
 	 (setf (elt command-pool i) nil)))
   (values))  
 
-(defmethod destroy-pipeline ((app vkapp))
-  (with-slots (device graphics-pipeline allocator) app
-    (vkDestroyPipeline device graphics-pipeline allocator)
-    (setf graphics-pipeline nil))
+(defmethod destroy-annotation-pipeline ((app vkapp))
+  (with-slots (device annotation-pipeline allocator) app
+    (vkDestroyPipeline device annotation-pipeline allocator)
+    (setf annotation-pipeline nil))
   (values))
 
-(defmethod destroy-pipeline-layout ((app vkapp))
-  (with-slots (device pipeline-layout allocator) app
-    (vkDestroyPipelineLayout device pipeline-layout allocator)
-    (setf pipeline-layout nil))
+(defmethod destroy-selection-pipeline ((app vkapp))
+  (with-slots (device selection-pipeline allocator) app
+    (vkDestroyPipeline device selection-pipeline allocator)
+    (setf selection-pipeline nil))
+  (values))
+
+(defmethod destroy-annotation-pipeline-layout ((app vkapp))
+  (with-slots (device annotation-pipeline-layout allocator) app
+    (vkDestroyPipelineLayout device annotation-pipeline-layout allocator)
+    (setf annotation-pipeline-layout nil))
+  (values))
+
+(defmethod destroy-selection-pipeline-layout ((app vkapp))
+  (with-slots (device selection-pipeline-layout allocator) app
+    (vkDestroyPipelineLayout device selection-pipeline-layout allocator)
+    (setf selection-pipeline-layout nil))
   (values))
 
 (defmethod destroy-render-pass ((app vkapp))
@@ -248,17 +300,22 @@
     (vkDestroyDescriptorSetLayout device descriptor-set-layout allocator))
   (values))
 
+(defmethod destroy-selection-descriptor-set-layout ((app vkapp))
+  (with-slots (device selection-descriptor-set-layout allocator) app
+    (vkDestroyDescriptorSetLayout device selection-descriptor-set-layout allocator))
+  (values))
+
 (defmethod destroy-descriptor-pool ((app vkapp))
   (with-slots (device descriptor-pool allocator) app
     (vkDestroyDescriptorPool device descriptor-pool allocator))
   (values))
 
-(defmethod destroy-uniform-buffer ((app vkapp))
-  (with-slots (device uniform-buffer uniform-buffer-memory allocator) app
-    (vkDestroyBuffer device uniform-buffer allocator)
-    (setf uniform-buffer nil)
-    (vkFreeMemory device uniform-buffer-memory allocator)
-    (setf uniform-buffer-memory nil))
+(defmethod destroy-uniform-buffer-vs ((app vkapp))
+  (with-slots (device uniform-buffer-vs uniform-buffer-vs-memory allocator) app
+    (vkDestroyBuffer device uniform-buffer-vs allocator)
+    (setf uniform-buffer-vs nil)
+    (vkFreeMemory device uniform-buffer-vs-memory allocator)
+    (setf uniform-buffer-vs-memory nil))
   (values))
 
 (defmethod destroy-index-buffer ((app vkapp))
@@ -355,8 +412,10 @@
       
       (destroy-framebuffers app)
       (free-command-buffers app)
-      (destroy-pipeline app)
-      (destroy-pipeline-layout app)
+      (destroy-selection-pipeline app)
+      (destroy-selection-pipeline-layout app)
+      (destroy-annotation-pipeline app)
+      (destroy-annotation-pipeline-layout app)
       (destroy-render-pass app)
       (destroy-image-views app)
 
@@ -366,8 +425,13 @@
   
       (create-image-views app)
       (create-render-pass app)
-      (create-graphics-pipeline app)
+      ;;(create-selection-descriptor-set app)
+      ;;(create-annotation-descriptor-set app)
+      ;;(create-graphics-pipeline app)
       (create-annotation-pipeline app)
+      (with-slots (selection-descriptor-set-layout) app
+	(create-selection-pipeline app selection-descriptor-set-layout))
+      ;;(create-selection-pipeline app)
       (create-depth-resources app)
       (create-framebuffers app)
       (create-command-buffers app)))
@@ -377,8 +441,8 @@
   (destroy-framebuffers app)
   (free-command-buffers app)
   (destroy-command-pools app)
-  (destroy-pipeline app)
-  (destroy-pipeline-layout app)
+  (destroy-selection-pipeline app)
+  (destroy-selection-pipeline-layout app)
   (destroy-render-pass app)
   (destroy-image-views app)
 
@@ -387,8 +451,9 @@
     (setf swapchain nil))
 
   (destroy-descriptor-set-layout app)
+  (destroy-selection-descriptor-set-layout app)
   (destroy-descriptor-pool app)
-  (destroy-uniform-buffer app)
+  (destroy-uniform-buffer-vs app)
   (destroy-index-buffer app)
   (destroy-vertex-buffer app)
   (destroy-fences app)
@@ -474,9 +539,11 @@
 				     p-dependency (:struct VkSubpassDependency))
 		  (setf vk::srcSubpass VK_SUBPASS_EXTERNAL
 			vk::dstSubpass 0
-			vk::srcStageMask VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			vk::srcStageMask (logior VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+						 VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT)
 			vk::srcAccessMask 0
-			vk::dstStageMask VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			vk::dstStageMask (logior VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+						 VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT)
 			vk::dstAccessMask (logior VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
 						  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)))
 	      
@@ -944,15 +1011,44 @@
 
 (defmethod create-annotation-pipeline ((app vkapp))
   (with-slots (device allocator pipeline-cache render-pass back-buffer-count descriptor-set-layout window
-		      annotation-pipeline) app
+		      annotation-pipeline annotation-pipeline-layout) app
     (with-foreign-objects ((p-w :int)
 			   (p-h :int))
       (glfwGetFramebufferSize window p-w p-h)
       (let ((w (mem-aref p-w :int))
 	    (h (mem-aref p-h :int)))
-	(setf annotation-pipeline
-	      (create-pipeline-1 device allocator pipeline-cache render-pass back-buffer-count (list descriptor-set-layout) w h
-				 :line-width 3.0f0 :topology VK_PRIMITIVE_TOPOLOGY_LINE_LIST))))))
+	(with-foreign-object (p-descriptor-set-layouts 'VkDescriptorSetLayout)
+	  (setf (mem-aref p-descriptor-set-layouts 'VkDescriptorSetLayout) descriptor-set-layout)
+	  (multiple-value-bind (ap apl)
+	      (create-pipeline-1 device allocator pipeline-cache render-pass back-buffer-count w h
+				 :line-width 3.0f0 :topology VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+				 :descriptor-set-layouts p-descriptor-set-layouts :descriptor-set-layout-count 1)
+	    (setf annotation-pipeline ap
+		  annotation-pipeline-layout apl)
+	    ap))))))
+
+(defmethod create-selection-pipeline ((app vkapp) &rest descriptor-set-layouts)
+  (with-slots (device allocator pipeline-cache render-pass back-buffer-count
+		      window selection-pipeline selection-pipeline-layout) app
+    (with-foreign-objects ((p-w :int)
+			  (p-h :int))
+      (glfwGetFramebufferSize window p-w p-h)
+      (let ((w (mem-aref p-w :int))
+	    (h (mem-aref p-h :int))
+	    (n (length descriptor-set-layouts)))
+	(with-foreign-object (p-descriptor-set-layouts 'VkDescriptorSetLayout n)
+	  (loop for i from 0 for dsl in descriptor-set-layouts
+	     ;; remember: each layout corresponds to a (set = i) in shader
+	     ;; todo: do this in create-pipeline-1, like it used to be.
+	     do (setf (mem-aref p-descriptor-set-layouts 'VkDescriptorSetLayout i) dsl))
+	  (multiple-value-bind (sp spl)
+	      (create-selection-pipeline-1 device allocator pipeline-cache render-pass back-buffer-count w h
+					   :descriptor-set-layouts p-descriptor-set-layouts
+					   :descriptor-set-layout-count n)
+	    (setf selection-pipeline sp selection-pipeline-layout spl)
+	    sp))))))
+
+	      
 
 #+NIL
 (defmethod create-annotation-pipeline ((app vkapp))
@@ -1459,39 +1555,50 @@
 	       (return))))))
   (values))
 
-(defmethod create-logical-device ((app vkapp))
+(defmethod create-logical-device ((app vkapp) &key (device-extensions (list "VK_KHR_swapchain"))
+						(enable-geometry-shaders t))
   ;; Create Logical Device:
   (with-slots (gpu queue-family queue device allocator) app
-    (let ((device-extension-count 1))
-      (with-foreign-string (p-device-extensions "VK_KHR_swapchain")
-	(with-foreign-object (pp-device-extensions :pointer)
-	  (setf (mem-aref pp-device-extensions :pointer) p-device-extensions) 
-	  (let ((queue-index 0)
-		(queue-count 1))
-	    (with-foreign-object (p-queue-priority :float)
-	      (setf (mem-aref p-queue-priority :float) 1.0f0)
-	      (with-vk-struct (p-queue-info VkDeviceQueueCreateInfo)
-		(with-foreign-slots ((vk::queueFamilyIndex vk::queueCount vk::pQueuePriorities)
-				     p-queue-info (:struct VkDeviceQueueCreateInfo))
-		  (setf vk::queueFamilyIndex queue-family
-			vk::queueCount queue-count
-			vk::pQueuePriorities p-queue-priority))
-		(with-vk-struct (p-create-info VkDeviceCreateInfo)
-		  (with-foreign-slots ((vk::queueCreateInfoCount vk::pQueueCreateInfos
-								 vk::enabledExtensionCount
-								 vk::ppEnabledExtensionNames)
-				       p-create-info (:struct VkDeviceCreateInfo))
-		    (setf vk::queueCreateInfoCount 1
-			  vk::pQueueCreateInfos p-queue-info
-			  vk::enabledExtensionCount device-extension-count
-			  vk::ppEnabledExtensionNames pp-device-extensions)
+    (let ((device-extension-count (length device-extensions)))
+      (with-foreign-object (p-device-extensions :pointer device-extension-count)
+	(loop for i from 0 for extension in device-extensions
+	   do (setf (mem-aref p-device-extensions :pointer i) (foreign-string-alloc extension)))
+	(let ((queue-index 0)
 
-		    (with-foreign-object (p-device 'VkDevice)
-		      (check-vk-result (vkCreateDevice gpu p-create-info allocator p-device))
-		      (setf device (mem-aref p-device 'VkDevice))
-		      (with-foreign-object (p-queue 'VkQueue)
-			(vkGetDeviceQueue device queue-family queue-index p-queue)
-			(setf queue (mem-aref p-queue 'VkQueue)))))))))))))
+
+	      
+	      (queue-count 1))
+	  (with-foreign-object (p-queue-priority :float)
+	    (setf (mem-aref p-queue-priority :float) 1.0f0)
+	    (with-vk-struct (p-queue-info VkDeviceQueueCreateInfo)
+	      (with-foreign-slots ((vk::queueFamilyIndex vk::queueCount vk::pQueuePriorities)
+				   p-queue-info (:struct VkDeviceQueueCreateInfo))
+		(setf vk::queueFamilyIndex queue-family
+		      vk::queueCount queue-count
+		      vk::pQueuePriorities p-queue-priority))
+	      (with-vk-struct (p-create-info VkDeviceCreateInfo)
+		(with-foreign-slots ((vk::queueCreateInfoCount vk::pQueueCreateInfos
+							       vk::enabledExtensionCount
+							       vk::ppEnabledExtensionNames
+							       vk::pEnabledFeatures)
+				     p-create-info (:struct VkDeviceCreateInfo))
+		  (with-vk-struct (p-enabled-features VkPhysicalDeviceFeatures)
+		    (setf (foreign-slot-value p-enabled-features '(:struct VkPhysicalDeviceFeatures) 'vk::geometryShader)
+			  (if enable-geometry-shaders VK_TRUE VK_FALSE))
+		  (setf vk::queueCreateInfoCount 1
+			vk::pQueueCreateInfos p-queue-info
+			vk::enabledExtensionCount device-extension-count
+			vk::ppEnabledExtensionNames p-device-extensions
+			vk::pEnabledFeatures p-enabled-features))
+		  
+		  (with-foreign-object (p-device 'VkDevice)
+		    (check-vk-result (vkCreateDevice gpu p-create-info allocator p-device))
+		    (setf device (mem-aref p-device 'VkDevice))
+		    (with-foreign-object (p-queue 'VkQueue)
+		      (vkGetDeviceQueue device queue-family queue-index p-queue)
+		      (setf queue (mem-aref p-queue 'VkQueue)))))))))
+	(loop for i from 0 below device-extension-count
+	   do (foreign-string-free (mem-aref p-device-extensions :pointer i))))))
   (values))
 
 (defmethod create-surface ((app vkapp))
@@ -1505,7 +1612,7 @@
 (defmethod create-descriptor-pool ((app vkapp))
   ;; create descriptor pool:
   (with-slots (device allocator descriptor-pool) app
-    (with-foreign-object (p-pool-sizes '(:struct VkDescriptorPoolSize) 12)
+    (with-foreign-object (p-pool-sizes '(:struct VkDescriptorPoolSize) 11)
       (setf (foreign-slot-value (mem-aptr p-pool-sizes '(:struct VkDescriptorPoolSize) 0)
 				'(:struct VkDescriptorPoolSize) 'vk::type)
 	    VK_DESCRIPTOR_TYPE_SAMPLER
@@ -1572,20 +1679,20 @@
 	    (foreign-slot-value (mem-aptr p-pool-sizes '(:struct VkDescriptorPoolSize) 10)
 				'(:struct VkDescriptorPoolSize) 'vk::descriptorCount)
 	    1000
-	    (foreign-slot-value (mem-aptr p-pool-sizes '(:struct VkDescriptorPoolSize) 11)
-				'(:struct VkDescriptorPoolSize) 'vk::type)
-	    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-	    (foreign-slot-value (mem-aptr p-pool-sizes '(:struct VkDescriptorPoolSize) 11)
-				'(:struct VkDescriptorPoolSize) 'vk::descriptorCount)
-	    1
+	    ;;(foreign-slot-value (mem-aptr p-pool-sizes '(:struct VkDescriptorPoolSize) 11)
+	;;			'(:struct VkDescriptorPoolSize) 'vk::type)
+	  ;;  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+	    ;;(foreign-slot-value (mem-aptr p-pool-sizes '(:struct VkDescriptorPoolSize) 11)
+	;;			'(:struct VkDescriptorPoolSize) 'vk::descriptorCount)
+	  ;;  1
 	    )
 
       (with-vk-struct (p-pool-info VkDescriptorPoolCreateInfo)
 	(with-foreign-slots ((vk::flags vk::maxSets vk::poolSizeCount vk::pPoolSizes)
 			     p-pool-info (:struct VkDescriptorPoolCreateInfo))
 	  (setf vk::flags 0;;VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT
-		vk::maxSets (+ 1 (* 11 1000))
-		vk::poolSizeCount 12
+		vk::maxSets (* 11 1000)
+		vk::poolSizeCount 11
 		vk::pPoolSizes p-pool-sizes)
 	  (with-foreign-object (p-descriptor-pool 'VkDescriptorPool)
 	    (check-vk-result (vkCreateDescriptorPool device p-pool-info allocator p-descriptor-pool))
@@ -1713,6 +1820,8 @@
 	     finally (setf present-mode VK_PRESENT_MODE_FIFO_KHR)))))) ;; always available
   (values))
 
+
+
 (defmethod create-descriptor-set-layout ((app vkapp))
   (with-slots (device
 	       allocator
@@ -1743,15 +1852,175 @@
 		(setf descriptor-set-layout (mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout))))))))
   (values))
 
+(defmethod create-selection-descriptor-set-layouts ((app vkapp))
+  (with-slots (device allocator selection-descriptor-set-layout) app
+    (with-foreign-object (p-bindings '(:struct VkDescriptorSetLayoutBinding) 2)
+      (let ((p-ubo-vs-layout-binding (mem-aptr p-bindings '(:struct VkDescriptorSetLayoutBinding) 0))
+	    (p-ubo-gs-layout-binding (mem-aptr p-bindings '(:struct VkDescriptorSetLayoutBinding) 1))
+	    #+NIL(p-ssbo-gs-layout-binding (mem-aptr p-bindings '(:struct VkDescriptorSetLayoutBinding) 2)))
+	(zero-struct p-ubo-vs-layout-binding '(:struct VkDescriptorSetLayoutBinding))
+	(zero-struct p-ubo-gs-layout-binding '(:struct VkDescriptorSetLayoutBinding))
+	#+NIL(zero-struct p-ssbo-gs-layout-binding '(:struct VkDescriptorSetLayoutBinding))
+	(with-foreign-slots ((vk::binding
+			      vk::descriptorType
+			      vk::descriptorCount
+			      vk::stageFlags
+			      vk::pImmutableSamplers)
+			     p-ubo-vs-layout-binding
+			     (:struct VkDescriptorSetLayoutBinding))
+	  (setf vk::binding 0
+		vk::descriptorType VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		vk::descriptorCount 1
+		vk::stageFlags VK_SHADER_STAGE_VERTEX_BIT
+		vk::pImmutableSamplers +nullptr+))
+	
+	(with-foreign-slots ((vk::binding
+			      vk::descriptorType
+			      vk::descriptorCount
+			      vk::stageFlags
+			      vk::pImmutableSamplers)
+			     p-ubo-gs-layout-binding
+			     (:struct VkDescriptorSetLayoutBinding))
+	  (setf vk::binding 1
+		vk::descriptorType VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		vk::descriptorCount 1
+		vk::stageFlags VK_SHADER_STAGE_GEOMETRY_BIT
+		vk::pImmutableSamplers +nullptr+))
+	#+NIL
+	(with-foreign-slots ((vk::binding
+			      vk::descriptorType
+			      vk::descriptorCount
+			      vk::stageFlags
+			      vk::pImmutableSamplers)
+			     p-ssbo-gs-layout-binding
+			     (:struct VkDescriptorSetLayoutBinding))
+	  (setf vk::binding 2
+		vk::descriptorType VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+		vk::descriptorCount 0
+		vk::stageFlags VK_SHADER_STAGE_GEOMETRY_BIT
+		vk::pImmutableSamplers +nullptr+))
+	(with-vk-struct (p-layout-info VkDescriptorSetLayoutCreateInfo)
+	  (with-foreign-slots ((vk::bindingCount
+				vk::pBindings)
+			       p-layout-info (:struct VkDescriptorSetLayoutCreateInfo))
+	    (setf vk::bindingCount 2
+		  vk::pBindings p-bindings))
+	  
+	  (with-foreign-object (p-descriptor-set-layout 'VkDescriptorSetLayout)
+	    (check-vk-result (vkCreateDescriptorSetLayout device p-layout-info allocator p-descriptor-set-layout))
+	    (setf selection-descriptor-set-layout (mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout)))))))
+  (values))
+
+(defmethod create-selection-descriptor-set ((app vkapp))
+  (with-slots (device
+	       allocator
+	       descriptor-set
+	       descriptor-pool
+	       uniform-buffer-vs
+	       uniform-buffer-gs
+	       descriptor-set-layout
+	       selection-descriptor-set-layout) app
+    (with-foreign-object (p-descriptor-set-layout 'VkDescriptorSetLayout 1)
+      (setf ;;(mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout 0) descriptor-set-layout
+	    (mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout 0) selection-descriptor-set-layout)
+      (with-vk-struct (p-alloc-info VkDescriptorSetAllocateInfo)
+	(with-foreign-slots ((vk::descriptorPool
+			      vk::descriptorSetCount
+			      vk::pSetLayouts)
+			     p-alloc-info (:struct VkDescriptorSetAllocateInfo))
+	  (setf vk::descriptorPool descriptor-pool
+		vk::descriptorSetCount 1
+		vk::pSetLayouts p-descriptor-set-layout)
+
+	  (with-foreign-object (p-descriptor-set 'VkDescriptorSet)
+	    (check-vk-result (vkAllocateDescriptorSets device p-alloc-info p-descriptor-set))
+	    (setf descriptor-set (mem-aref p-descriptor-set 'VkDescriptorSet)))
+
+	  (with-foreign-object (p-buffer-info '(:struct VkDescriptorBufferInfo) 2)
+	    (let ((p-uniform-vs-buffer-info (mem-aptr p-buffer-info '(:struct VkDescriptorBufferInfo) 0))
+		  (p-uniform-gs-buffer-info (mem-aptr p-buffer-info '(:struct VkDescriptorBufferInfo) 1)))
+	      (zero-struct p-uniform-vs-buffer-info '(:struct VkDescriptorBufferInfo))
+	      (zero-struct p-uniform-gs-buffer-info '(:struct VkDescriptorBufferInfo))
+	      (with-foreign-slots ((vk::buffer
+				    vk::uniform-buffer
+				    vk::offset
+				    vk::range)
+				   p-uniform-vs-buffer-info (:struct VkDescriptorBufferInfo))
+		(setf vk::buffer uniform-buffer-vs
+		      vk::offset 0
+		      vk::range (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
+
+	      (with-foreign-slots ((vk::buffer
+				    vk::uniform-buffer
+				    vk::offset
+				    vk::range)
+				   p-uniform-gs-buffer-info (:struct VkDescriptorBufferInfo))
+		(setf vk::buffer uniform-buffer-gs
+		      vk::offset 0
+		      vk::range (foreign-type-size '(:struct UniformBufferObjectGeometryShader))))
+	    
+	    (with-foreign-object (p-descriptor-write '(:struct VkWriteDescriptorSet) 2)
+	      (zero-struct (mem-aptr p-descriptor-write '(:struct VkWriteDescriptorSet) 0) '(:struct VkWriteDescriptorSet))
+	      (zero-struct (mem-aptr p-descriptor-write '(:struct VkWriteDescriptorSet) 1) '(:struct VkWriteDescriptorSet))
+	      (with-foreign-slots ((vk::sType
+				    vk::dstSet
+				    vk::dstBinding
+				    vk::dstArrayElement
+				    vk::descriptorType
+				    vk::descriptorCount
+				    vk::pBufferInfo
+				    vk::pImageInfo
+				    vk::pTexelBufferView)
+				   (mem-aptr p-descriptor-write '(:struct VkWriteDescriptorSet) 0)
+				   (:struct VkWriteDescriptorSet))
+		(setf vk::sType VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+		      vk::dstSet descriptor-set
+		      vk::dstBinding 0
+		      vk::dstArrayElement 0
+		      vk::descriptorType VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		      vk::descriptorCount 1
+		      vk::pBufferInfo p-uniform-vs-buffer-info
+		      vk::pImageInfo +nullptr+
+		      vk::pTexelBufferView +nullptr+))
+
+	      (vkUpdateDescriptorSets device 1 p-descriptor-write 0 +nullptr+)
+	      
+	      (with-foreign-slots ((vk::sType
+				    vk::dstSet
+				    vk::dstBinding
+				    vk::dstArrayElement
+				    vk::descriptorType
+				    vk::descriptorCount
+				    vk::pBufferInfo
+				    vk::pImageInfo
+				    vk::pTexelBufferView)
+				   (mem-aptr p-descriptor-write '(:struct VkWriteDescriptorSet) 1)
+				   (:struct VkWriteDescriptorSet))
+		(setf vk::sType VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+		      vk::dstSet descriptor-set
+		      vk::dstBinding 1
+		      vk::dstArrayElement 0
+		      vk::descriptorType VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		      vk::descriptorCount 1
+		      vk::pBufferInfo p-uniform-gs-buffer-info
+		      vk::pImageInfo +nullptr+
+		      vk::pTexelBufferView +nullptr+))
+
+	      (vkUpdateDescriptorSets device 1 (mem-aptr p-descriptor-write '(:struct VkWriteDescriptorSet) 1) 0 +nullptr+))
+	    ))))))
+  (values))
+
 (defmethod create-descriptor-set ((app vkapp))
   (with-slots (device
 	       allocator
 	       descriptor-set
 	       descriptor-pool
-	       uniform-buffer
-	       descriptor-set-layout) app
-    (with-foreign-object (p-descriptor-set-layout 'VkDescriptorSetLayout)
-      (setf (mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout) descriptor-set-layout)
+	       uniform-buffer-vs
+	       descriptor-set-layout
+	       selection-descriptor-set-layout) app
+    (with-foreign-object (p-descriptor-set-layout 'VkDescriptorSetLayout 1)
+      (setf ;;(mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout 0) descriptor-set-layout
+	    (mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout 0) selection-descriptor-set-layout)
       (with-vk-struct (p-alloc-info VkDescriptorSetAllocateInfo)
 	(with-foreign-slots ((vk::descriptorPool
 			      vk::descriptorSetCount
@@ -1771,9 +2040,9 @@
 				  vk::offset
 				  vk::range)
 				 p-buffer-info (:struct VkDescriptorBufferInfo))
-	      (setf vk::buffer uniform-buffer
+	      (setf vk::buffer uniform-buffer-vs
 		    vk::offset 0
-		    vk::range (foreign-type-size '(:struct UniformBufferObject))))
+		    vk::range (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
 
 	    (with-vk-struct (p-descriptor-write VkWriteDescriptorSet)
 	      (with-foreign-slots ((vk::dstSet
@@ -1802,7 +2071,7 @@
 	       allocator
 	       annotation-descriptor-set
 	       descriptor-pool
-	       annotation-uniform-buffer
+	       annotation-uniform-buffer-vs
 	       descriptor-set-layout) app
     (with-foreign-object (p-descriptor-set-layout 'VkDescriptorSetLayout)
       (setf (mem-aref p-descriptor-set-layout 'VkDescriptorSetLayout) descriptor-set-layout)
@@ -1825,9 +2094,9 @@
 				  vk::offset
 				  vk::range)
 				 p-buffer-info (:struct VkDescriptorBufferInfo))
-	      (setf vk::buffer annotation-uniform-buffer
+	      (setf vk::buffer annotation-uniform-buffer-vs
 		    vk::offset 0
-		    vk::range (foreign-type-size '(:struct UniformBufferObject))))
+		    vk::range (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
 
 	    (with-vk-struct (p-descriptor-write VkWriteDescriptorSet)
 	      (with-foreign-slots ((vk::dstSet
@@ -1887,9 +2156,13 @@
   (create-render-pass app)
 
   (create-descriptor-set-layout app)
+  (create-selection-descriptor-set-layouts app)
     
-  (create-graphics-pipeline app)
+  ;;(create-graphics-pipeline app)
+  (with-slots (selection-descriptor-set-layout) app
+    (create-selection-pipeline app selection-descriptor-set-layout))
   (create-annotation-pipeline app)
+  
     
   (create-command-pools app)
 
@@ -1903,12 +2176,13 @@
   (create-axes-vertex-buffer app)
   (create-axes-index-buffer app)
   
-  (create-uniform-buffer app)
-  (create-annotation-uniform-buffer app)
+  (create-uniform-buffer-vs app)
+  (create-annotation-uniform-buffer-vs app)
+  (create-selection-uniform-buffer-gs app)
 
   (create-descriptor-pool app)
     
-  (create-descriptor-set app)
+  (create-selection-descriptor-set app)
   (create-annotation-descriptor-set app)
     
   (create-command-buffers app) ;; this also creates semaphores...todo: separate these out
@@ -2176,69 +2450,6 @@
 			 
 
 
-#+NIL
-(defmethod cleanup-vulkan ((app vkapp))
-  (with-slots (device descriptor-pool allocator fence command-pool command-buffer debug-report
-		      present-complete-semaphore render-complete-semaphore back-buffer-count
-		      back-buffer-view framebuffer render-pass swapchain instance surface
-		      vert-shader-module frag-shader-module pipeline-layout graphics-pipeline
-		      descriptor-set-layout vertex-buffer vertex-buffer-memory vertex-data
-		      uniform-buffer uniform-buffer-memory
-		      index-buffer index-buffer-memory index-data) app
-
-    (vkDestroyDescriptorPool device descriptor-pool allocator)
-
-    (loop for i from 0 below IMGUI_VK_QUEUED_FRAMES
-       do 
-	 (vkDestroyFence device (elt fence i) allocator)
-	 
-	 (with-foreign-object (p-command-buffers-i 'VkCommandBuffer)
-	   (setf (mem-aref p-command-buffers-i 'VkCommandBuffer) (elt command-buffer i))
-	   (vkFreeCommandBuffers device (elt command-pool i) 1 p-command-buffers-i))
-	 
-	 (vkDestroyCommandPool device (elt command-pool i) allocator)
-	 
-	 (vkDestroySemaphore device (elt present-complete-semaphore i) allocator)
-	 
-	 (vkDestroySemaphore device (elt render-complete-semaphore i) allocator))
-
-    (destroy-image-views app)
-    (destroy-framebuffers app)
-
-    (vkDestroyPipelineLayout device pipeline-layout allocator)
-    (vkDestroyPipeline device graphics-pipeline allocator)
-
-    (destroy-render-pass app)
-    
-    (vkDestroySwapchainKHR device swapchain allocator)
-
-    (vkDestroyDescriptorSetLayout device descriptor-set-layout allocator)
-    
-    (vkDestroySurfaceKHR instance surface allocator)
-    
-    (vkDestroyBuffer device uniform-buffer allocator)
-    (vkFreeMemory device uniform-buffer-memory allocator)
-    
-    (vkDestroyBuffer device index-buffer allocator)
-    (vkFreeMemory device index-buffer-memory allocator)
-    (foreign-free index-data)
-
-    (vkDestroyBuffer device vertex-buffer allocator)
-    (vkFreeMemory device vertex-buffer-memory allocator)
-    (foreign-free vertex-data)
-    
-    (when *debug*
-      (vkDestroyDebugReportCallbackEXT instance instance debug-report allocator))
-    
-    (vkDestroyDevice device allocator)
-    
-    (vkDestroyInstance instance allocator)
-
-    (deallocate-image-range app)
-
-    (deallocate-surface-format app)
-    
-    (values)))
 
 (defmethod frame-begin ((app vkapp))
   (with-slots (device fence frame-index swapchain present-complete-semaphore back-buffer-indices
@@ -2533,7 +2744,8 @@
 
   (with-slots (window allocator gpu device render-pass queue command-pool command-buffer graphics-pipeline vertex-data-size
 		      image-range pipeline-cache descriptor-pool clear-value frame-index surface-format vertex-buffer fb-height fb-width
-		      index-buffer index-data-size descriptor-set annotation-descriptor-set pipeline-layout start-time annotation-pipeline) app
+		      index-buffer index-data-size axes-index-data-size descriptor-set annotation-descriptor-set annotation-pipeline-layout selection-pipeline-layout
+		      start-time annotation-pipeline selection-pipeline) app
     (setf start-time (get-internal-real-time))
     
     (setup-vulkan app w h)
@@ -2666,17 +2878,26 @@
 	
 	     (frame-begin app)
 
-	     (let ((projection-matrix (3d-matrices:mortho (* -2 (zoom *camera*) (/ fb-width fb-height))
-							  (*  2 (zoom *camera*) (/ fb-width fb-height))
-							  (* -2 (zoom *camera*))
-							  (*  2 (zoom *camera*))
-							  -10000 10000))
-		   (annotation-projection-matrix (3d-matrices:mortho (* -2 (/ fb-width fb-height))
-								     (*  2 (/ fb-width fb-height))
-								     -2 2 -10000 10000)))
+	     (let ((projection-matrix
+		    (if (not *ortho*)
+			(perspective-2 fb-width fb-height)
+			(3d-matrices:mortho (* -2 (zoom *camera*) (/ fb-width fb-height))
+					    (*  2 (zoom *camera*) (/ fb-width fb-height))
+					    (* -2 (zoom *camera*))
+					    (*  2 (zoom *camera*))
+					    -10 10)))
+		   (annotation-projection-matrix
+		    (if (not *ortho*)
+			(perspective-2 fb-width fb-height)
+			(3d-matrices:mortho (* -2 (/ fb-width fb-height))
+					    (*  2 (/ fb-width fb-height))
+					    -2 2 -10 10))))
+	       (when *ortho*
+		 (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix))
+		 (setq annotation-projection-matrix (convert-projection-matrix-to-vulkan annotation-projection-matrix)))
 	       ;;-------------------------------------------------
 	       (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS annotation-pipeline)
-	       (update-annotation-uniform-buffer app annotation-projection-matrix)
+	       (update-annotation-uniform-buffer-vs app annotation-projection-matrix)
 	       (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
 				      (p-offsets 'VkDeviceSize)
 				      (p-descriptor-sets 'VkDescriptorSet))
@@ -2685,12 +2906,13 @@
 		       (mem-aref p-descriptor-sets 'VkDescriptorSet) annotation-descriptor-set)
 		 (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets)
 		 (vkCmdBindIndexBuffer (elt command-buffer frame-index) (slot-value app 'axes-index-buffer) 0 VK_INDEX_TYPE_UINT16)
-		 (vkCmdBindDescriptorSets (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS pipeline-layout
+		 (vkCmdBindDescriptorSets (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS annotation-pipeline-layout
 					  0 1 p-descriptor-sets 0 +nullptr+))
-	       (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0)
+	       (vkCmdDrawIndexed (elt command-buffer frame-index) axes-index-data-size 1 0 0 0)
 	       ;;-------------------------------------------------
+	       #|
 	       (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS graphics-pipeline)
-	       (update-uniform-buffer app projection-matrix)
+	       (update-uniform-buffer-vs app projection-matrix)
 	       (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
 				      (p-offsets 'VkDeviceSize)
 				      (p-descriptor-sets 'VkDescriptorSet))
@@ -2701,7 +2923,22 @@
 		 (vkCmdBindIndexBuffer (elt command-buffer frame-index) index-buffer 0 VK_INDEX_TYPE_UINT16)
 		 (vkCmdBindDescriptorSets (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS pipeline-layout
 					  0 1 p-descriptor-sets 0 +nullptr+))
-	       (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0)
+	       (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0) |#
+		 ;;-------------------------------------------------
+		   (vkCmdBindPipeline (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS selection-pipeline)
+		   (let ((view-matrix (update-uniform-buffer-vs app projection-matrix)))
+		     (update-uniform-buffer-gs app projection-matrix view-matrix))
+		 (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
+					(p-offsets 'VkDeviceSize)
+					(p-descriptor-sets 'VkDescriptorSet))
+		   (setf (mem-aref p-vertex-buffers 'VkBuffer) vertex-buffer
+			 (mem-aref p-offsets 'VkDeviceSize) 0
+			 (mem-aref p-descriptor-sets 'VkDescriptorSet) descriptor-set)
+		   (vkCmdBindVertexBuffers (elt command-buffer frame-index) 0 1 p-vertex-buffers p-offsets)
+		   (vkCmdBindIndexBuffer (elt command-buffer frame-index) index-buffer 0 VK_INDEX_TYPE_UINT16)
+		   (vkCmdBindDescriptorSets (elt command-buffer frame-index) VK_PIPELINE_BIND_POINT_GRAPHICS selection-pipeline-layout
+					    0 1 p-descriptor-sets 0 +nullptr+))
+		 (vkCmdDrawIndexed (elt command-buffer frame-index) index-data-size 1 0 0 0)
 
 	       (ImGui_ImplGlfwVulkan_Render (elt command-buffer frame-index)))
 	
@@ -2715,14 +2952,16 @@
     
     t))
 
+(defvar *app*)
 
 (defun run-app (&optional (app (make-instance 'vkapp)))
   (declare (ignore app))
   (multiple-value-bind (vertex-data vertex-data-size index-data index-data-size)
       (oc::make-sphere)
     (let ((app (make-instance 'vkapp :vertex-data vertex-data :vertex-data-size vertex-data-size
-	    :index-data index-data :index-data-size index-data-size)
-	  ))
+	    :index-data index-data :index-data-size  index-data-size
+	    )))
+      (setq *app* app)
       (sb-thread:make-thread #'(lambda () (main app))))))
 
 #+NIL
@@ -2834,7 +3073,8 @@
 	(vkUnmapMemory device staging-buffer-memory))
 
       (multiple-value-bind (buffer buffer-memory)
-	  (create-buffer app index-data-size (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+	  (create-buffer app (* (foreign-type-size :unsigned-short)
+				index-data-size) (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
 			 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	(setf index-buffer buffer
 	      index-buffer-memory buffer-memory)
@@ -2855,7 +3095,8 @@
 	(vkUnmapMemory device staging-buffer-memory))
 
       (multiple-value-bind (buffer buffer-memory)
-	  (create-buffer app axes-index-data-size (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+	  (create-buffer app (* (foreign-type-size :unsigned-short)
+				axes-index-data-size) (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
 			 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	(setf axes-index-buffer buffer
 	      axes-index-buffer-memory buffer-memory)
@@ -2864,24 +3105,34 @@
 	(vkFreeMemory device staging-buffer-memory +nullptr+))))
   (values))
 
-(defmethod create-uniform-buffer ((app vkapp))
-  (with-slots (device allocator uniform-buffer uniform-buffer-memory ) app
-    (let ((buffer-size (foreign-type-size '(:struct UniformBufferObject))))
+(defmethod create-uniform-buffer-vs ((app vkapp))
+  (with-slots (device allocator uniform-buffer-vs uniform-buffer-vs-memory) app
+    (let ((buffer-size (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
       (multiple-value-bind (buffer buffer-memory)
 	  (create-buffer app buffer-size VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
 			 (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
-	(setf uniform-buffer buffer
-	      uniform-buffer-memory buffer-memory))))
+	(setf uniform-buffer-vs buffer
+	      uniform-buffer-vs-memory buffer-memory))))
   (values))
 
-(defmethod create-annotation-uniform-buffer ((app vkapp))
-  (with-slots (device allocator annotation-uniform-buffer annotation-uniform-buffer-memory ) app
-    (let ((buffer-size (foreign-type-size '(:struct UniformBufferObject))))
+(defmethod create-annotation-uniform-buffer-vs ((app vkapp))
+  (with-slots (device allocator annotation-uniform-buffer-vs annotation-uniform-buffer-vs-memory) app
+    (let ((buffer-size (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
       (multiple-value-bind (buffer buffer-memory)
 	  (create-buffer app buffer-size VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
 			 (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
-	(setf annotation-uniform-buffer buffer
-	      annotation-uniform-buffer-memory buffer-memory))))
+	(setf annotation-uniform-buffer-vs buffer
+	      annotation-uniform-buffer-vs-memory buffer-memory))))
+  (values))
+
+(defmethod create-selection-uniform-buffer-gs ((app vkapp))
+  (with-slots (device allocator uniform-buffer-gs uniform-buffer-gs-memory) app
+    (let ((buffer-size (foreign-type-size '(:struct UniformBufferObjectGeometryShader))))
+      (multiple-value-bind (buffer buffer-memory)
+	  (create-buffer app buffer-size VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
+			 (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+	(setf uniform-buffer-gs buffer
+	      uniform-buffer-gs-memory buffer-memory))))
   (values))
 
 (defun convert-projection-matrix-to-vulkan (src)
@@ -2893,8 +3144,105 @@
 	  (3d-matrices:mcref dest 2 3) (/ (+ (3d-matrices:mcref dest 2 3) (3d-matrices:mcref dest 3 3)) 2))
     dest))
 
-(defmethod update-uniform-buffer ((app vkapp) projection-matrix)
-  (with-slots (fb-width fb-height device uniform-buffer-memory start-time current-item) app
+(defun convert-projection-matrix-to-vulkan2 (src)
+  (let ((pre (mat4)))
+    (setf (mcref pre 0 0) 1.0f0
+	  (mcref pre 1 1) -1.0f0
+	  (mcref pre 2 2) 0.5f0
+	  (mcref pre 2 3) 0.5f0
+	  (mcref pre 3 3) 1.0f0)
+    (m* pre src)))
+
+(defmethod update-uniform-buffer-gs ((app vkapp) projection-matrix view-matrix)
+  (let ((pv-matrix (m* projection-matrix view-matrix)))
+    (with-slots (device uniform-buffer-gs-memory) app
+      (with-foreign-object (p-ubo '(:struct UniformBufferObjectGeometryShader))
+	(let ((p-mxProj (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectGeometryShader) 'mxProj)))
+	  
+	  (loop for i from 0 to 3
+	     do (loop for j from 0 to 3
+		   do (setf (mem-aref p-mxProj :float (+ i (* j 4))) (coerce (3d-matrices:mcref pv-matrix #+NIL mvp-matrix i j) 'single-float)))))
+	(multiple-value-bind (picking-ray-origin picking-ray-dir) (compute-picking-ray app *camera* projection-matrix view-matrix)
+	  (let ((p-RayOrigin (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectGeometryShader) 'RayOrigin)))
+	    (igText (format nil "RayOrigin: ~S" picking-ray-origin))
+	    (setf (mem-aref p-RayOrigin :float 0) (coerce (vx picking-ray-origin) 'single-float))
+	    (setf (mem-aref p-RayOrigin :float 1) (coerce (vy picking-ray-origin) 'single-float))
+	    (setf (mem-aref p-RayOrigin :float 2) (coerce (vz picking-ray-origin) 'single-float))
+	    (setf (mem-aref p-RayOrigin :float 3) 1.0f0))
+	  (igText (format nil "RayDir: ~S" picking-ray-dir))
+	  (let ((p-RayDir (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectGeometryShader) 'RayDir)))
+	    (setf (mem-aref p-RayDir :float 0) (coerce (vx picking-ray-dir) 'single-float))
+	    (setf (mem-aref p-RayDir :float 1) (coerce (vy picking-ray-dir) 'single-float))
+	    (setf (mem-aref p-RayDir :float 2) (coerce (vz picking-ray-dir) 'single-float))
+	    (setf (mem-aref p-RayDir :float 3) 0.0f0))
+	  )
+
+	(with-foreign-object (pp-data :pointer)
+	  (vkMapMemory device uniform-buffer-gs-memory 0 (foreign-type-size '(:struct UniformBufferObjectGeometryShader)) 0 pp-data)
+	  (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct UniformBufferObjectGeometryShader)))
+	  (vkUnmapMemory device uniform-buffer-gs-memory)))))
+  (values))
+
+
+(defun 3d-vectors-subtract-3d-vectors (v1 v2)
+  (3d-vectors:vec3 (- (3d-vectors:vx3 v1) (3d-vectors:vx3 v2)) (- (3d-vectors:vy3 v1) (3d-vectors:vy3 v2)) (- (3d-vectors:vz3 v1) (3d-vectors:vz3 v2))))
+
+(defun look-at2 (eye target up-dir)
+  (declare (type 3d-vectors:vec3 eye)
+	   (type 3d-vectors:vec3 target)
+	   (type 3d-vectors:vec3 up-dir))
+	   
+  (let* ((forward (3d-vectors:vunit (v- eye target)))
+	 (left (3d-vectors:vunit (3d-vectors:vc up-dir forward)))
+	 (up (3d-vectors:vunit (3d-vectors:vc forward left)))
+	 (view-matrix (3d-matrices:mat4)))
+
+    (setf (3d-matrices:mcref view-matrix 0 0) (3d-vectors:vx3 left)
+	  (3d-matrices:mcref view-matrix 0 1) (3d-vectors:vy3 left)
+	  (3d-matrices:mcref view-matrix 0 2) (3d-vectors:vz3 left)
+	  (3d-matrices:mcref view-matrix 0 3) (- (3d-vectors:v. left eye))
+	  (3d-matrices:mcref view-matrix 1 0) (3d-vectors:vx3 up)
+	  (3d-matrices:mcref view-matrix 1 1) (3d-vectors:vy3 up)
+	  (3d-matrices:mcref view-matrix 1 2) (3d-vectors:vz3 up)
+	  (3d-matrices:mcref view-matrix 1 3) (- (3d-vectors:v. up eye))
+	  (3d-matrices:mcref view-matrix 2 0) (3d-vectors:vx3 forward)
+	  (3d-matrices:mcref view-matrix 2 1) (3d-vectors:vy3 forward)
+	  (3d-matrices:mcref view-matrix 2 2) (3d-vectors:vz3 forward)
+	  (3d-matrices:mcref view-matrix 2 3) (- (3d-vectors:v. forward eye))
+	  (3d-matrices:mcref view-matrix 3 0) 0.0d0
+	  (3d-matrices:mcref view-matrix 3 1) 0.0d0
+	  (3d-matrices:mcref view-matrix 3 2) 0.0d0
+	  (3d-matrices:mcref view-matrix 3 3) 1.0d0)
+    view-matrix))
+
+(defun perspective-2 (width height)
+  (let* ((m (mat4))
+	 (a (marr m))
+	 (f (/ 1.0f0 (tan (/ pi 8)))))
+    (setf (aref a 0) (/ f (/ width height))
+	  (aref a 1) 0.0d0
+	  (aref a 2) 0.0d0
+	  (aref a 3) 0.0d0
+
+	  (aref a 4) 0.0d0
+	  (aref a 5) (- f)
+	  (aref a 6) 0.0d0
+	  (aref a 7) 0.0d0
+
+	  (aref a 8) 0.0d0
+	  (aref a 9) 0.0d0
+	  (aref a 10) (/ -5 (- 5 -5.0d0))
+	  (aref a 11) -1.0d0
+
+	  (aref a 12) 0.0d0
+	  (aref a 13) 0.0d0
+	  (aref a 14) (/ (* 5 -5.0d0) (- 5 -5.0d0))
+	  (aref a 15) 0.0d0)
+    m))
+    
+
+(defmethod update-uniform-buffer-vs ((app vkapp) projection-matrix)
+  (with-slots (fb-width fb-height device uniform-buffer-vs-memory start-time current-item) app
     (let* ((current-time (get-internal-real-time))
 	   (elapsed-time (- current-time start-time))
 	   (model-matrix
@@ -2902,12 +3250,24 @@
 	     (3d-matrices:mrotation (3d-vectors:vec 0.0 0.0 1.0) (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
 	     (3d-matrices:mtranslation (3d-vectors:vec3 1 0 0))))
 	   (view-matrix
+	    (look-at2 (3d-vectors:vec3 (camera-x *camera*)
+				       (camera-y *camera*)
+				       (camera-z *camera*))
+		      (3d-vectors:vec3 0.0d0 0.0d0 0.0d0)
+		      (3d-vectors:vec3 0.0d0 0.0d0 1.0d0))
+
+	    #+NIL
 	    (look-at2 (make-vector-3d (camera-x *camera*)
 				      (camera-y *camera*)
 				      (camera-z *camera*))
 		      (make-vector-3d 0.0 0.0 0.0)
 		      (make-vector-3d 0 0 1))))
-      (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix))
+      ;;(setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix))
+      
+      (let ((modelview model-matrix
+	      #+NIL(3d-matrices:m* #+NIL projection-matrix view-matrix model-matrix)))
+
+	    
 
       #+NIL
       (with-foreign-object (p-current-item :int)
@@ -2923,11 +3283,19 @@
       #+NIL
       (igLabelText "Label" "")
       
-      (with-foreign-object (p-ubo '(:struct UniformBufferObject))
+      (with-foreign-object (p-ubo '(:struct UniformBufferObjectVertexShader))
 
-	(let ((p-model (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'model))
-	      (p-view (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'view))
-	      (p-proj (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'proj)))
+	(let ((p-mxProj (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectVertexShader) 'mxProj)))
+		  
+	  (loop for i from 0 to 3
+	     do (loop for j from 0 to 3
+		   do (setf (mem-aref p-mxProj :float (+ i (* j 4))) (coerce (3d-matrices:mcref modelview i j) 'single-float)))))
+
+
+	#+ORIG
+	(let ((p-model (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectVertexShader) 'model))
+	      (p-view (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectVertexShader) 'view))
+	      (p-proj (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectVertexShader) 'proj)))
 		  
 	  (loop for i from 0 to 3
 	     do (loop for j from 0 to 3
@@ -2935,51 +3303,51 @@
 
 	  (loop for i from 0 to 3
 	     do (loop for j from 0 to 3
-		   do (setf (mem-aref p-view :float (+ (* j 4) i)) (coerce (aref view-matrix i j) 'single-float))))
+		   do (setf (mem-aref p-view :float (+ (* j 4) i)) (coerce (3d-matrices:mcref view-matrix i j) 'single-float))))
 
 	  (loop for i from 0 to 3
 	     do (loop for j from 0 to 3
 		   do (setf (mem-aref p-proj :float (+ (* j 4) i)) (coerce (3d-matrices:mcref projection-matrix i j) 'single-float)))))
 	    
 	(with-foreign-object (pp-data :pointer)
-	  (vkMapMemory device uniform-buffer-memory 0 (foreign-type-size '(:struct UniformBufferObject)) 0 pp-data)
-	  (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct UniformBufferObject)))
-	  (vkUnmapMemory device uniform-buffer-memory)))))
-  (values))
+	  (vkMapMemory device uniform-buffer-vs-memory 0 (foreign-type-size '(:struct UniformBufferObjectVertexShader)) 0 pp-data)
+	  (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct UniformBufferObjectVertexShader)))
+	  (vkUnmapMemory device uniform-buffer-vs-memory))))
+      (values view-matrix model-matrix))))
 
-(defmethod update-annotation-uniform-buffer ((app vkapp) projection-matrix)
-  (with-slots (fb-width fb-height device annotation-uniform-buffer-memory) app
+(defmethod update-annotation-uniform-buffer-vs ((app vkapp) projection-matrix)
+  (with-slots (fb-width fb-height device annotation-uniform-buffer-vs-memory) app
     (let* ((model-matrix (3d-matrices::meye 4))
 	   (view-matrix
+	    (look-at2 (3d-vectors:vec3 (camera-x *camera*)
+				       (camera-y *camera*)
+				       (camera-z *camera*))
+		      (3d-vectors:vec3 0.0d0 0.0d0 0.0d0)
+		      (3d-vectors:vec3 0.0d0 0.0d0 1.0d0))
+	    #+NIL
 	    (look-at2 (make-vector-3d (camera-x *camera*)
 				      (camera-y *camera*)
 				      (camera-z *camera*))
 		      (make-vector-3d 0.0 0.0 0.0)
 		      (make-vector-3d 0 0 1))))
-      (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix))
-	     
-      (with-foreign-object (p-ubo '(:struct UniformBufferObject))
-	(let ((p-model (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'model))
-	      (p-view (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'view))
-	      (p-proj (foreign-slot-pointer p-ubo '(:struct UniformBufferObject) 'proj)))
-		  
-	  (loop for i from 0 to 3
-	     do (loop for j from 0 to 3
-		   do (setf (mem-aref p-model :float (+ (* j 4) i)) (coerce (3d-matrices:mcref model-matrix i j) 'single-float))))
-	  
-	  (loop for i from 0 to 3
-	     do (loop for j from 0 to 3
-		   do (setf (mem-aref p-view :float (+ (* j 4) i)) (coerce (aref view-matrix i j) 'single-float))))
-	  
-	  (loop for i from 0 to 3
-	     do (loop for j from 0 to 3
-		   do (setf (mem-aref p-proj :float (+ (* j 4) i)) (coerce (3d-matrices:mcref projection-matrix i j) 'single-float)))))
+      ;;(setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix))
 
-	(with-foreign-object (pp-data :pointer)
-	  (vkMapMemory device annotation-uniform-buffer-memory 0 (foreign-type-size '(:struct UniformBufferObject)) 0 pp-data)
-	  (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct UniformBufferObject)))
-	  (vkUnmapMemory device annotation-uniform-buffer-memory)))))
-  (values))
+      (let ((modelviewproj
+	     (3d-matrices:m* projection-matrix view-matrix model-matrix)))
+	
+	(with-foreign-object (p-ubo '(:struct UniformBufferObjectVertexShader))
+	  
+	  (let ((p-mxProj (foreign-slot-pointer p-ubo '(:struct UniformBufferObjectVertexShader) 'mxProj)))
+	    
+	    (loop for i from 0 to 3
+	       do (loop for j from 0 to 3
+		     do (setf (mem-aref p-mxProj :float (+ (* j 4) i)) (coerce (3d-matrices:mcref modelviewproj i j) 'single-float)))))
+	  
+	  
+	  (with-foreign-object (pp-data :pointer)
+	    (vkMapMemory device annotation-uniform-buffer-vs-memory 0 (foreign-type-size '(:struct UniformBufferObjectVertexShader)) 0 pp-data)
+	    (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct UniformBufferObjectVertexShader)))
+	    (vkUnmapMemory device annotation-uniform-buffer-vs-memory)))))))
 
 (defmethod copy-buffer (app src-buffer dst-buffer size)
   (with-slots (device command-pool queue) app

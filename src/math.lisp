@@ -1,5 +1,166 @@
 (in-package :vkapp)
 
+;; invert-matrix inverts the in-matrix and places the result
+;; in out-matrix and then returns the determinant.  The matrices
+;; must be square and of the same size.
+;;
+;; Parameters:
+;;    in-matrix  - matrix to invert
+;;    out-matrix - matrix to return result in
+;;
+(defun invert-4x4-matrix (matrix)
+  (let* ((in-matrix (marr4 matrix))
+	 (out-mat4 (mat4))
+	 (out-matrix (marr4 out-mat4)))
+  
+    (let ((dim 4) ;; dimension of matrix
+          (det 1) ;; determinant of matrix
+          (l nil) ;; permutation vector
+          (m nil) ;; permutation vector
+          (temp 0))       
+
+      ;;(if (not (equal dim (array-dimension in-matrix 1)))
+	;;  (error "invert-matrix () - matrix not square")
+	  ;;)
+
+      ;;(if (not (equal (array-dimensions in-matrix) 
+	;;	      (array-dimensions out-matrix)))
+	  ;;(error "invert-matrix () - matrices not of the same size")
+	  ;;)
+
+      ;; copy in-matrix to out-matrix if they are not the same
+      (when (not (equal in-matrix out-matrix))
+	(do ((i 0 (1+ i)))
+	    ((>= i dim))    
+	  (do ((j 0 (1+ j)))
+	      ((>= j dim)) 
+	    (setf (aref out-matrix (+ i (* j 4))) (aref in-matrix (+ i (* j 4))))
+	    )
+	  )
+        )
+
+      ;; allocate permutation vectors for l and m, with the 
+      ;; same origin as the matrix
+      (setf l (make-array `(,dim)))
+      (setf m (make-array `(,dim)))
+
+      (do ((k 0 (1+ k))
+	   (biga 0)
+	   (recip-biga 0))
+	  ((>= k dim))
+
+	(setf (aref l k) k)
+	(setf (aref m k) k)
+	(setf biga (aref out-matrix (+ k (* 4 k))))
+
+	;; find the biggest element in the submatrix
+	(do ((i k (1+ i)))
+	    ((>= i dim))    
+	  (do ((j k (1+ j)))
+	      ((>= j dim)) 
+	    (when (> (abs (aref out-matrix (+ i (* 4 j)))) (abs biga))
+	      (setf biga (aref out-matrix (+ i (* 4 j))))
+	      (setf (aref l k) i)
+	      (setf (aref m k) j)
+	      )
+	    )
+	  )
+
+	;; interchange rows
+	(if (> (aref l k) k)
+	    (do ((j 0 (1+ j))
+		 (i (aref l k)))
+		((>= j dim)) 
+	      (setf temp (- (aref out-matrix (+ k (* j 4)))))
+	      (setf (aref out-matrix (+ k (* j 4))) (aref out-matrix (+ i (* j 4))))
+	      (setf (aref out-matrix (+ i (* j 4))) temp)
+	      )
+            )
+
+	;; interchange columns 
+	(if (> (aref m k) k)
+	    (do ((i 0 (1+ i))
+		 (j (aref m k)))
+		((>= i dim)) 
+	      (setf temp (- (aref out-matrix (+ i (* k 4)))))
+	      (setf (aref out-matrix (+ i (* k 4))) (aref out-matrix (+ i (* j 4))))
+	      (setf (aref out-matrix (+ i (* j 4))) temp)
+	      )
+            )
+
+	;; divide column by minus pivot (value of pivot 
+	;; element is in biga)
+	(if (equalp biga 0) 
+	    (return-from invert-4x4-matrix 0)
+            )
+	(setf recip-biga (/ 1 biga))
+	(do ((i 0 (1+ i)))
+	    ((>= i dim)) 
+	  (if (not (equal i k))
+	      (setf (aref out-matrix (+ i (* k 4)))
+		    (* (aref out-matrix (+ i (* k 4))) (- recip-biga)))
+	      )
+	  )
+
+	;; reduce matrix
+	(do ((i 0 (1+ i)))
+	    ((>= i dim)) 
+	  (when (not (equal i k))
+	    (setf temp (aref out-matrix (+ i (* k 4))))
+	    (do ((j 0 (1+ j)))
+		((>= j dim)) 
+	      (if (not (equal j k))
+		  (incf (aref out-matrix (+ i (* j 4)))
+			(* temp (aref out-matrix (+ k (* j 4)))))
+		  )
+	      )
+	    )
+	  )
+
+	;; divide row by pivot
+	(do ((j 0 (1+ j)))
+	    ((>= j dim)) 
+	  (if (not (equal j k))
+	      (setf (aref out-matrix (+ k (* j 4)))
+		    (* (aref out-matrix (+ k (* j 4))) recip-biga))
+	      )
+	  )
+
+	(setf det (* det biga))	;; product of pivots
+	(setf (aref out-matrix (+ k (* k 4))) recip-biga)
+        ) ;; k loop
+
+      ;; final row & column interchanges
+      (do ((k (1- dim) (1- k)))
+	  ((< k 0))
+	(if (> (aref l k) k)
+	    (do ((j 0 (1+ j))
+		 (i (aref l k)))
+		((>= j dim))
+	      (setf temp (aref out-matrix (+ j (* k 4))))
+	      (setf (aref out-matrix (+ j (* k 4)))
+		    (- (aref out-matrix (+ j (* i 4)))))
+	      (setf (aref out-matrix (+ j (* i 4))) temp)
+	      )
+            )
+	(if (> (aref m k) k)
+	    (do ((i 0 (1+ i))
+		 (j (aref m k)))
+		((>= i dim))
+	      (setf temp (aref out-matrix (+ k (* i 4))))
+	      (setf (aref out-matrix (+ k (* i 4)))
+		    (- (aref out-matrix (+ j (* i 4)))))
+	      (setf (aref out-matrix (+ j (* i 4))) temp)
+	      )
+            )
+        )
+      (values out-mat4 det) ;; return determinant
+      )
+    )
+  )
+
+#|
+
 (defun dot-product-3d (a b)
   (+ (* (aref a 0) (aref b 0))
      (* (aref a 1) (aref b 1))
@@ -543,3 +704,4 @@
   
 ;;(defun column-major-mxm (m1 m2)
   
+|#
