@@ -3231,12 +3231,12 @@
 
 	  (aref a 8) 0.0d0
 	  (aref a 9) 0.0d0
-	  (aref a 10) (/ -5 (- 5 -5.0d0))
+	  (aref a 10) (/ -6 (- 6 -6.0d0))
 	  (aref a 11) -1.0d0
 
 	  (aref a 12) 0.0d0
 	  (aref a 13) 0.0d0
-	  (aref a 14) (/ (* 5 -5.0d0) (- 5 -5.0d0))
+	  (aref a 14) (/ (* 6 -6.0d0) (- 6 -6.0d0))
 	  (aref a 15) 0.0d0)
     m))
     
@@ -3416,74 +3416,4 @@
 					properties))))
 		  (return i))
 	     finally (error "Could not find suitable memory type!"))))))
-		    
-		    
 
-
-#+NIL
-(defclass vkapp ()
-  ((window) ;; os window
-  
-   (instance) ;; VkInstance
-   (callback) ;; VkDebugReportCallbackEXT
-   (surface)  ;; VkSurfaceKHR
-  
-   (physical-device :initform VK_NULL_HANDLE) ;; VkPhysicalDevice
-   (device)				      ;; VkDevice
-
-   (graphics-queue) ;; VkQueue
-   (present-queue)  ;; VkQueue
-
-   (swapchain) ;; VkSwapchainKHR
-   (swapchain-images
-    :initform (make-array 10 :initial-element VK_NULL_HANDLE :adjustable t :fill-pointer 3)) ;; VkImage
-   (swapchain-image-format) ;; VkFormat
-   (swapchain-extent)	    ;; VkExtent2D
-   (swapchain-image-views
-    :initform (make-array 10 :initial-element VK_NULL_HANDLE :adjustable t :fill-pointer 3)) ;; VkImageView
-   (swapchain-framebuffers
-    :initform (make-array 10 :initial-element VK_NULL_HANDLE :adjustable t :fill-pointer 3)) ;; VkFramebuffer
-
-   (render-pass)	  ;; VkRenderPass
-   (descriptor-set-layout) ;; VkDescriptorSetLayout
-   (pipeline-layout)	   ;; VkPipelineLayout
-   (graphics-pipeline)	   ;; VkPipeline
-
-   (command-pool) ;; VkCommandPool
-
-   (depth-image)       ;; VkImage
-   (depth-image-memory) ;; VkDeviceMemory
-   (depth-image-view)	;; VkImageView
-
-   (texture-image)	 ;; VkImage
-   (texture-image-memory) ;; VkDeviceMemory
-   (texture-image-view)	  ;; VkImageView
-   (texture-sampler)	  ;; VkSampler
-
-   ;; it seems it would only make sense to use lisp arrays if we were running AllegroCL :-(
-   ;;(vertices :initform (make-array (* 5 4096) :element-type 'single-float :initial-element 0.0f0 :adjustable t :fill-pointer 15))
-   ;;(indices :initform (make-array 4096 :element-type '(unsigned-byte 32) :initial-element 0 :djustable t :fill-pointer 3))
-
-   (vertices-host-memory) ;; cffi pointer to foreign array of floats
-   (vertices-size)	  ;; cl:integer
-   (indices-host-memory) ;; cffi pointer to foreign array of unsigned char 32
-   (indices-size)	 ;; cl:integer
-   (vertex-buffer)	 ;; VkBuffer
-   (vertex-buffer-memory) ;; VkDeviceMemory
-   (index-buffer)	  ;; VkBuffer
-   (index-buffer-memory)  ;; VkDeviceMemory
-
-   (uniform-buffer)	  ;; VkBuffer
-   (uniform-buffer-memory) ;; VkDeviceMemory
-
-   (descriptor-pool) ;; VkDescriptorPool
-   (descriptor-set)  ;; VkDescriptorSet
-
-   (command-buffers
-    :initform (make-array 24 :initial-element VK_NULL_HANDLE :adjustable t :fill-pointer 0))
-
-   (image-available-semaphore) ;; VkSemaphore
-   (render-finished-semaphore))) ;; VkSemaphore
-  
-  
-;; consider writing the vulkan part of the imgui demo instead of this one.
