@@ -2,9 +2,13 @@
 
 (defpackage :imgui
   (:nicknames :ig)
-  (:export #:ImGuiVec2
-	   #:ImGuiVec4
-	   
+  (:export #:ImVec2_ImVec2
+	   #:ImVec2_destroy
+	   #:ImVec2_ImVec2Float
+	   #:ImVec4_ImVec4
+	   #:ImVec4_destroy
+	   #:ImVec4_ImVec4Float
+
 	   #:ImGuiWindowFlags_NoTitleBar
 	   #:ImGuiWindowFlags_NoResize
 	   #:ImGuiWindowFlags_NoMove
@@ -218,77 +222,76 @@
 
 	   #:ImDrawListFlags_AntiAliasedLines
 	   #:ImDrawListFlags_AntiAliasedFill
-
+	   
+	   #:igCreateContext
+	   #:igDestroyContext
+	   #:igGetCurrentContext
+	   #:igSetCurrentContext
+	   #:igDebugCheckVersionAndDataLayout
 	   #:igGetIO
 	   #:igGetStyle
-	   #:igGetDrawData
 	   #:igNewFrame
-	   #:igRender
 	   #:igEndFrame
-	   #:igShutdown
+	   #:igRender
+	   #:igGetDrawData
 	   #:igShowDemoWindow
+	   #:igShowAboutWindow
 	   #:igShowMetricsWindow
 	   #:igShowStyleEditor
 	   #:igShowStyleSelector
 	   #:igShowFontSelector
 	   #:igShowUserGuide
+	   #:igGetVersion
+	   #:igStyleColorsDark
+	   #:igStyleColorsClassic
+	   #:igStyleColorsLight
 	   #:igBegin
 	   #:igEnd
-	   #:igBeginChild
-	   #:igBeginChildEx
+	   #:igBeginChildID
 	   #:igEndChild
+	   #:igIsWindowAppearing
+	   #:igIsWindowCollapsed
+	   #:igIsWindowFocused
+	   #:igIsWindowHovered
+	   #:igGetWindowDrawList
+	   #:igGetWindowPos
+	   #:igGetWindowSize
+	   #:igGetWindowWidth
+	   #:igGetWindowHeight
 	   #:igGetContentRegionMax
 	   #:igGetContentRegionAvail
 	   #:igGetContentRegionAvailWidth
 	   #:igGetWindowContentRegionMin
 	   #:igGetWindowContentRegionMax
 	   #:igGetWindowContentRegionWidth
-	   #:igGetWindowDrawList
-	   #:igGetWindowPos
-	   #:igGetWindowSize
-	   #:igGetWindowWidth
-	   #:igGetWindowHeight
-	   #:igIsWindowCollapsed
-	   #:igIsWindowAppearing
-	   #:igSetWindowFontScale
-	   #:igSetNextWindowPos
-	   #:igSetNextWindowSize
-	   #:igSetNextWindowSizeConstraints
-	   #:igSetNextWindowContentSize
 	   #:igSetNextWindowCollapsed
 	   #:igSetNextWindowFocus
-	   #:igSetWindowPos
-	   #:igSetWindowSize
-	   #:igSetWindowCollapsed
+	   #:igSetNextWindowBgAlpha
+	   #:igSetWindowCollapsedBool
 	   #:igSetWindowFocus
-	   #:igSetWindowPosByName
-	   #:igSetWindowSize2
-	   #:igSetWindowCollapsed2
-	   #:igSetWindowFocus2
+	   #:igSetWindowFontScale
+	   #:igSetWindowCollapsedStr
+	   #:igSetWindowFocusStr
 	   #:igGetScrollX
 	   #:igGetScrollY
 	   #:igGetScrollMaxX
 	   #:igGetScrollMaxY
 	   #:igSetScrollX
 	   #:igSetScrollY
-	   #:igSetScrollHere
+	   #:igSetScrollHereY
 	   #:igSetScrollFromPosY
-	   #:igSetStateStorage
-	   #:igGetStateStorage
 	   #:igPushFont
 	   #:igPopFont
 	   #:igPushStyleColorU32
-	   #:igPushStyleColor
 	   #:igPopStyleColor
-	   #:igPushStyleVar
-	   #:igPushStyleVarVec
+	   #:igPushStyleVarFloat
 	   #:igPopStyleVar
 	   #:igGetStyleColorVec4
 	   #:igGetFont
 	   #:igGetFontSize
 	   #:igGetFontTexUvWhitePixel
 	   #:igGetColorU32
-	   #:igGetColorU32Vec
+	   #:igGetColorU32Vec4
 	   #:igGetColorU32U32
 	   #:igPushItemWidth
 	   #:igPopItemWidth
@@ -311,38 +314,26 @@
 	   #:igGetCursorPos
 	   #:igGetCursorPosX
 	   #:igGetCursorPosY
-	   #:igSetCursorPos
 	   #:igSetCursorPosX
 	   #:igSetCursorPosY
 	   #:igGetCursorStartPos
 	   #:igGetCursorScreenPos
-	   #:igSetCursorScreenPos
 	   #:igAlignTextToFramePadding
 	   #:igGetTextLineHeight
 	   #:igGetTextLineHeightWithSpacing
 	   #:igGetFrameHeight
 	   #:igGetFrameHeightWithSpacing
-	   #:igColumns
-	   #:igNextColumn
-	   #:igGetColumnIndex
-	   #:igGetColumnWidth
-	   #:igSetColumnWidth
-	   #:igGetColumnOffset
-	   #:igSetColumnOffset
-	   #:igGetColumnsCount
 	   #:igPushIDStr
-	   #:igPushIDStrRange
+	   #:igPushIDRange
 	   #:igPushIDPtr
 	   #:igPushIDInt
 	   #:igPopID
 	   #:igGetIDStr
-	   #:igGetIDStrRange
+	   #:igGetIDRange
 	   #:igGetIDPtr
 	   #:igTextUnformatted
 	   #:igText
 	   #:igTextV
-	   #:igTextColored
-	   #:igTextColoredV
 	   #:igTextDisabled
 	   #:igTextDisabledV
 	   #:igTextWrapped
@@ -351,26 +342,19 @@
 	   #:igLabelTextV
 	   #:igBulletText
 	   #:igBulletTextV
-	   #:igBullet
-	   #:igButton
 	   #:igSmallButton
-	   #:igInvisibleButton
-	   #:igImage
-	   #:igImageButton
+	   #:igArrowButton
 	   #:igCheckbox
 	   #:igCheckboxFlags
 	   #:igRadioButtonBool
-	   #:igRadioButton
-	   #:igPlotLines
-	   #:igPlotLines2
-	   #:igPlotHistogram
-	   #:igPlotHistogram2
+	   #:igRadioButtonIntPtr
 	   #:igProgressBar
+	   #:igBullet
 	   #:igBeginCombo
 	   #:igEndCombo
 	   #:igCombo
-	   #:igCombo2
-	   #:igCombo3
+	   #:igComboStr
+	   #:igComboFnPtr
 	   #:igDragFloat
 	   #:igDragFloat2
 	   #:igDragFloat3
@@ -381,6 +365,22 @@
 	   #:igDragInt3
 	   #:igDragInt4
 	   #:igDragIntRange2
+	   #:igDragScalar
+	   #:igDragScalarN
+	   #:igSliderFloat
+	   #:igSliderFloat2
+	   #:igSliderFloat3
+	   #:igSliderFloat4
+	   #:igSliderAngle
+	   #:igSliderInt
+	   #:igSliderInt2
+	   #:igSliderInt3
+	   #:igSliderInt4
+	   #:igSliderScalar
+	   #:igSliderScalarN
+	   #:igVSliderFloat
+	   #:igVSliderInt
+	   #:igVSliderScalar
 	   #:igInputText
 	   #:igInputTextMultiline
 	   #:igInputFloat
@@ -391,33 +391,25 @@
 	   #:igInputInt2
 	   #:igInputInt3
 	   #:igInputInt4
-	   #:igSliderFloat
-	   #:igSliderFloat2
-	   #:igSliderFloat3
-	   #:igSliderFloat4
-	   #:igSliderAngle
-	   #:igSliderInt
-	   #:igSliderInt2
-	   #:igSliderInt3
-	   #:igSliderInt4
-	   #:igVSliderFloat
-	   #:igVSliderInt
+	   #:igInputDouble
+	   #:igInputScalar
+	   #:igInputScalarN
 	   #:igColorEdit3
 	   #:igColorEdit4
 	   #:igColorPicker3
 	   #:igColorPicker4
 	   #:igColorButton
 	   #:igSetColorEditOptions
-	   #:igTreeNode
 	   #:igTreeNodeStr
+	   #:igTreeNodeStrStr
 	   #:igTreeNodePtr
-	   #:igTreeNodeStrV
-	   #:igTreeNodePtrV
-	   #:igTreeNodeEx
+	   #:igTreeNodeVStr
+	   #:igTreeNodeVPtr
 	   #:igTreeNodeExStr
+	   #:igTreeNodeExStrStr
 	   #:igTreeNodeExPtr
-	   #:igTreeNodeExV
-	   #:igTreeNodeExPtr
+	   #:igTreeNodeExVStr
+	   #:igTreeNodeExVPtr
 	   #:igTreePushStr
 	   #:igTreePushPtr
 	   #:igTreePop
@@ -425,95 +417,107 @@
 	   #:igGetTreeNodeToLabelSpacing
 	   #:igSetNextTreeNodeOpen
 	   #:igCollapsingHeader
-	   #:igCollapsingHeaderEx
+	   #:igCollapsingHeaderBoolPtr
 	   #:igSelectable
-	   #:igSelectableEx
-	   #:igListBox
-	   #:igListBox2
-	   #:igListBoxHeader
-	   #:igListBoxHeader2
+	   #:igSelectableBoolPtr
+	   #:igListBoxStr_arr
+	   #:igListBoxFnPtr
+	   #:igListBoxHeaderVec2
+	   #:igListBoxHeaderInt
 	   #:igListBoxFooter
 	   #:igValueBool
 	   #:igValueInt
-	   #:igValueUInt
+	   #:igValueUint
 	   #:igValueFloat
-	   #:igSetTooltip
-	   #:igSetTooltipV
-	   #:igBeginTooltip
-	   #:igEndTooltip
 	   #:igBeginMainMenuBar
 	   #:igEndMainMenuBar
 	   #:igBeginMenuBar
 	   #:igEndMenuBar
 	   #:igBeginMenu
 	   #:igEndMenu
-	   #:igMenuItem
-	   #:igMenuItemPtr
+	   #:igMenuItemBool
+	   #:igMenuItemBoolPtr
+	   #:igBeginTooltip
+	   #:igEndTooltip
+	   #:igSetTooltip
+	   #:igSetTooltipV
 	   #:igOpenPopup
-	   #:igOpenPopupOnItemClick
 	   #:igBeginPopup
-	   #:igBeginPopupModal
 	   #:igBeginPopupContextItem
 	   #:igBeginPopupContextWindow
 	   #:igBeginPopupContextVoid
+	   #:igBeginPopupModal
 	   #:igEndPopup
+	   #:igOpenPopupOnItemClick
 	   #:igIsPopupOpen
 	   #:igCloseCurrentPopup
+	   #:igColumns
+	   #:igNextColumn
+	   #:igGetColumnIndex
+	   #:igGetColumnWidth
+	   #:igSetColumnWidth
+	   #:igGetColumnOffset
+	   #:igSetColumnOffset
+	   #:igGetColumnsCount
+	   #:igBeginTabBar
+	   #:igEndTabBar
+	   #:igBeginTabItem
+	   #:igEndTabItem
+	   #:igSetTabItemClosed
 	   #:igLogToTTY
 	   #:igLogToFile
 	   #:igLogToClipboard
 	   #:igLogFinish
 	   #:igLogButtons
-	   #:igLogText
 	   #:igBeginDragDropSource
 	   #:igSetDragDropPayload
 	   #:igEndDragDropSource
 	   #:igBeginDragDropTarget
 	   #:igAcceptDragDropPayload
-	   #:igEndDragDropPayload
+	   #:igEndDragDropTarget
+	   #:igGetDragDropPayload
 	   #:igPushClipRect
 	   #:igPopClipRect
-	   #:igStyleColorsClassic
-	   #:igStyleColorsDark
-	   #:igStyleColorsLight
 	   #:igSetItemDefaultFocus
 	   #:igSetKeyboardFocusHere
 	   #:igIsItemHovered
 	   #:igIsItemActive
+	   #:igIsItemFocused
 	   #:igIsItemClicked
 	   #:igIsItemVisible
+	   #:igIsItemEdited
+	   #:igIsItemActivated
+	   #:igIsItemDeactivated
+	   #:igIsItemDeactivatedAfterEdit
 	   #:igIsAnyItemHovered
 	   #:igIsAnyItemActive
+	   #:igIsAnyItemFocused
 	   #:igGetItemRectMin
 	   #:igGetItemRectMax
 	   #:igGetItemRectSize
 	   #:igSetItemAllowOverlap
-	   #:igIsWindowFocused
-	   #:igIsWindowHovered
-	   #:igIsAnyWindowFocused
-	   #:igIsAnyWindowHovered
 	   #:igIsRectVisible
-	   #:igIsRectVisible2
+	   #:igIsRectVisibleVec2
 	   #:igGetTime
 	   #:igGetFrameCount
 	   #:igGetOverlayDrawList
 	   #:igGetDrawListSharedData
 	   #:igGetStyleColorName
-	   #:igCalcItemRectClosestPoint
+	   #:igSetStateStorage
+	   #:igGetStateStorage
 	   #:igCalcTextSize
 	   #:igCalcListClipping
 	   #:igBeginChildFrame
 	   #:igEndChildFrame
 	   #:igColorConvertU32ToFloat4
 	   #:igColorConvertFloat4ToU32
-	   #:igColorConvertRGBtoHSV
-	   #:igColorConvertHSVtoRGB
 	   #:igGetKeyIndex
 	   #:igIsKeyDown
 	   #:igIsKeyPressed
 	   #:igIsKeyReleased
 	   #:igGetKeyPressedAmount
 	   #:igIsMouseDown
+	   #:igIsAnyMouseDown
 	   #:igIsMouseClicked
 	   #:igIsMouseDoubleClicked
 	   #:igIsMouseReleased
@@ -527,40 +531,67 @@
 	   #:igGetMouseCursor
 	   #:igSetMouseCursor
 	   #:igCaptureKeyboardFromApp
-	   #:igMemAlloc
-	   #:igMemFree
+	   #:igCaptureMouseFromApp
 	   #:igGetClipboardText
 	   #:igSetClipboardText
-	   #:igGetVersion
-	   #:igCreateContext
-	   #:igDestroyContext
-	   #:igGetCurrentContext
-	   #:igSetCurrentContext
-	   #:ImFontConfig_DefaultConstructor
+	   #:igLoadIniSettingsFromDisk
+	   #:igLoadIniSettingsFromMemory
+	   #:igSaveIniSettingsToDisk
+	   #:igSaveIniSettingsToMemory
+	   #:igSetAllocatorFunctions
+	   #:igMemAlloc
+	   #:igMemFree
+	   #:ImGuiStyle_ImGuiStyle
+	   #:ImGuiStyle_destroy
+	   #:ImGuiStyle_ScaleAllSizes
 	   #:ImGuiIO_AddInputCharacter
 	   #:ImGuiIO_AddInputCharactersUTF8
 	   #:ImGuiIO_ClearInputCharacters
-	   #:ImGuiTextFilter_Create
-	   #:ImGuiTextFilter_Destroy
-	   #:ImGuiTextFilter_Clear
+	   #:ImGuiIO_ImGuiIO
+	   #:ImGuiIO_destroy
+	   #:ImGuiInputTextCallbackData_ImGuiInputTextCallbackData
+	   #:ImGuiInputTextCallbackData_destroy
+	   #:ImGuiInputTextCallbackData_DeleteChars
+	   #:ImGuiInputTextCallbackData_InsertChars
+	   #:ImGuiInputTextCallbackData_HasSelection
+	   #:ImGuiPayload_ImGuiPayload
+	   #:ImGuiPayload_destroy
+	   #:ImGuiPayload_Clear
+	   #:ImGuiPayload_IsDataType
+	   #:ImGuiPayload_IsPreview
+	   #:ImGuiPayload_IsDelivery
+	   #:ImGuiOnceUponAFrame_ImGuiOnceUponAFrame
+	   #:ImGuiOnceUponAFrame_destroy
+	   #:ImGuiTextFilter_ImGuiTextFilter
+	   #:ImGuiTextFilter_destroy
 	   #:ImGuiTextFilter_Draw
 	   #:ImGuiTextFilter_PassFilter
-	   #:ImGuiTextFilter_IsActive
 	   #:ImGuiTextFilter_Build
-	   #:ImGuiTextFilter_GetInputBuf
-	   #:ImGuiTextBuffer_Create
-	   #:ImGuiTextBuffer_Destroy
-	   #:ImGuiTextBuffer_index
+	   #:ImGuiTextFilter_Clear
+	   #:ImGuiTextFilter_IsActive
+	   #:TextRange_TextRange
+	   #:TextRange_destroy
+	   #:TextRange_TextRangeStr
+	   #:TextRange_begin
+	   #:TextRange_end
+	   #:TextRange_empty
+	   #:TextRange_split
+	   #:ImGuiTextBuffer_ImGuiTextBuffer
+	   #:ImGuiTextBuffer_destroy
 	   #:ImGuiTextBuffer_begin
 	   #:ImGuiTextBuffer_end
 	   #:ImGuiTextBuffer_size
 	   #:ImGuiTextBuffer_empty
 	   #:ImGuiTextBuffer_clear
+	   #:ImGuiTextBuffer_reserve
 	   #:ImGuiTextBuffer_c_str
-	   #:ImGuiTextBuffer_appendf
+	   #:ImGuiTextBuffer_append
 	   #:ImGuiTextBuffer_appendfv
-	   #:ImGuiStorage_Create
-	   #:ImGuiStorage_Destroy
+	   #:Pair_PairInt
+	   #:Pair_destroy
+	   #:Pair_PairFloat
+	   #:Pair_PairPtr
+	   #:ImGuiStorage_Clear
 	   #:ImGuiStorage_GetInt
 	   #:ImGuiStorage_SetInt
 	   #:ImGuiStorage_GetBool
@@ -574,22 +605,24 @@
 	   #:ImGuiStorage_GetFloatRef
 	   #:ImGuiStorage_GetVoidPtrRef
 	   #:ImGuiStorage_SetAllInt
-	   #:ImGuiTextEditCallbackData_DeleteChars
-	   #:ImGuiTextEditCallbackData_InsertChars
-	   #:ImGuiTextEditCallbackData_HasSelection
+	   #:ImGuiStorage_BuildSortByKey
+	   #:ImGuiListClipper_ImGuiListClipper
+	   #:ImGuiListClipper_destroy
 	   #:ImGuiListClipper_Step
 	   #:ImGuiListClipper_Begin
 	   #:ImGuiListClipper_End
-	   #:ImGuiListClipper_GetDisplayStart
-	   #:ImGuiListClipper_GetDisplayEnd
-	   #:ImDrawList_GetVertexBufferSize
-	   #:ImDrawList_GetVertexPtr
-	   #:ImDrawList_GetIndexBufferSize
-	   #:ImDrawList_GetIndexPtr
-	   #:ImDrawList_GetCmdSize
-	   #:ImDrawList_GetCmdPtr
-	   #:ImDrawList_Clear
-	   #:ImDrawList_ClearFreeMemory
+	   #:ImColor_ImColor
+	   #:ImColor_destroy
+	   #:ImColor_ImColorInt
+	   #:ImColor_ImColorU32
+	   #:ImColor_ImColorFloat
+	   #:ImColor_ImColorVec4
+	   #:ImColor_SetHSV
+	   #:ImColor_HSV
+	   #:ImDrawCmd_ImDrawCmd
+	   #:ImDrawCmd_destroy
+	   #:ImDrawList_ImDrawList
+	   #:ImDrawList_destroy
 	   #:ImDrawList_PushClipRect
 	   #:ImDrawList_PushClipRectFullScreen
 	   #:ImDrawList_PopClipRect
@@ -608,7 +641,7 @@
 	   #:ImDrawList_AddCircle
 	   #:ImDrawList_AddCircleFilled
 	   #:ImDrawList_AddText
-	   #:ImDrawList_AddTextExt
+	   #:ImDrawList_AddTextFontPtr
 	   #:ImDrawList_AddImage
 	   #:ImDrawList_AddImageQuad
 	   #:ImDrawList_AddImageRounded
@@ -629,6 +662,9 @@
 	   #:ImDrawList_ChannelsSetCurrent
 	   #:ImDrawList_AddCallback
 	   #:ImDrawList_AddDrawCmd
+	   #:ImDrawList_CloneOutput
+	   #:ImDrawList_Clear
+	   #:ImDrawList_ClearFreeMemory
 	   #:ImDrawList_PrimReserve
 	   #:ImDrawList_PrimRect
 	   #:ImDrawList_PrimRectUV
@@ -638,56 +674,57 @@
 	   #:ImDrawList_PrimVtx
 	   #:ImDrawList_UpdateClipRect
 	   #:ImDrawList_UpdateTextureID
+	   #:ImDrawData_ImDrawData
+	   #:ImDrawData_destroy
+	   #:ImDrawData_Clear
 	   #:ImDrawData_DeIndexAllBuffers
 	   #:ImDrawData_ScaleClipRects
-	   #:ImFontAtlas_GetTexDataAsRGBA32
-	   #:ImFontAtlas_GetTexDataAsAlpha8
-	   #:ImFontAtlas_SetTexID
+	   #:ImFontConfig_ImFontConfig
+	   #:ImFontConfig_destroy
+	   #:ImFontGlyphRangesBuilder_ImFontGlyphRangesBuilder
+	   #:ImFontGlyphRangesBuilder_destroy
+	   #:ImFontGlyphRangesBuilder_GetBit
+	   #:ImFontGlyphRangesBuilder_SetBit
+	   #:ImFontGlyphRangesBuilder_AddChar
+	   #:ImFontGlyphRangesBuilder_AddText
+	   #:ImFontGlyphRangesBuilder_AddRanges
+	   #:ImFontGlyphRangesBuilder_BuildRanges
+	   #:ImFontAtlas_ImFontAtlas
+	   #:ImFontAtlas_destroy
 	   #:ImFontAtlas_AddFont
 	   #:ImFontAtlas_AddFontDefault
 	   #:ImFontAtlas_AddFontFromFileTTF
 	   #:ImFontAtlas_AddFontFromMemoryTTF
 	   #:ImFontAtlas_AddFontFromMemoryCompressedTTF
 	   #:ImFontAtlas_AddFontFromMemoryCompressedBase85TTF
+	   #:ImFontAtlas_ClearInputData
 	   #:ImFontAtlas_ClearTexData
+	   #:ImFontAtlas_ClearFonts
 	   #:ImFontAtlas_Clear
+	   #:ImFontAtlas_Build
+	   #:ImFontAtlas_GetTexDataAsAlpha8
+	   #:ImFontAtlas_GetTexDataAsRGBA32
+	   #:ImFontAtlas_IsBuilt
+	   #:ImFontAtlas_SetTexID
 	   #:ImFontAtlas_GetGlyphRangesDefault
 	   #:ImFontAtlas_GetGlyphRangesKorean
 	   #:ImFontAtlas_GetGlyphRangesJapanese
-	   #:ImFontAtlas_GetGlyphRangesChinese
+	   #:ImFontAtlas_GetGlyphRangesChineseFull
+	   #:ImFontAtlas_GetGlyphRangesChineseSimplifiedCommon
 	   #:ImFontAtlas_GetGlyphRangesCyrillic
 	   #:ImFontAtlas_GetGlyphRangesThai
-	   #:ImFontAtlas_GetTexID
-	   #:ImFontAtlas_GetTexPixelsAlpha8
-	   #:ImFontAtlas_GetTexPixelsRGBA32
-	   #:ImFontAtlas_GetTexWidth
-	   #:ImFontAtlas_GetTexHeight
-	   #:ImFontAtlas_GetTexDesiredWidth
-	   #:ImFontAtlas_SetTexDesiredWidth
-	   #:ImFontAtlas_GetTexGlyphPadding
-	   #:ImFontAtlas_SetTexGlyphPadding
-	   #:ImFontAtlas_GetTexUvWhitePixel
-	   #:ImFontAtlas_Fonts_size
-	   #:ImFontAtlas_Fonts_index
-	   #:ImFont_GetFontSize
-	   #:ImFont_SetFontSize
-	   #:ImFont_GetScale
-	   #:ImFont_SetScale
-	   #:ImFont_GetDisplayOffset
-	   #:ImFont_GetFallbackGlyph
-	   #:ImFont_SetFallbackGlyph
-	   #:ImFont_GetFallbackAdvanceX
-	   #:ImFont_GetFallbackChar
-	   #:ImFont_GetConfigDataCount
-	   #:ImFont_GetConfigData
-	   #:ImFont_GetContainerAtlas
-	   #:ImFont_GetAscent
-	   #:ImFont_GetDescent
-	   #:ImFont_GetMetricsTotalSurface
-	   #:ImFont_ClearOutputData
-	   #:ImFont_BuildLookupTable
+	   #:CustomRect_CustomRect
+	   #:CustomRect_destroy
+	   #:CustomRect_IsPacked
+	   #:ImFontAtlas_AddCustomRectRegular
+	   #:ImFontAtlas_AddCustomRectFontGlyph
+	   #:ImFontAtlas_GetCustomRectByIndex
+	   #:ImFontAtlas_CalcCustomRectUV
+	   #:ImFontAtlas_GetMouseCursorTexData
+	   #:ImFont_ImFont
+	   #:ImFont_destroy
 	   #:ImFont_FindGlyph
-	   #:ImFont_SetFallbackChar
+	   #:ImFont_FindGlyphNoFallback
 	   #:ImFont_GetCharAdvance
 	   #:ImFont_IsLoaded
 	   #:ImFont_GetDebugName
@@ -695,9 +732,643 @@
 	   #:ImFont_CalcWordWrapPositionA
 	   #:ImFont_RenderChar
 	   #:ImFont_RenderText
-	   #:ImFont_Glyphs_size
-	   #:ImFont_Glyphs_index
-	   #:ImFont_IndexXAdvance_size
-	   #:ImFont_IndexXAdvance_index
-	   #:ImFont_IndexLookup_size
-	   #:ImFont_IndexLookup_index))
+	   #:ImFont_BuildLookupTable
+	   #:ImFont_ClearOutputData
+	   #:ImFont_GrowIndex
+	   #:ImFont_AddGlyph
+	   #:ImFont_AddRemapChar
+	   #:ImFont_SetFallbackChar
+	   #:igGetWindowPos_nonUDT
+	   #:igGetWindowSize_nonUDT
+	   #:igGetContentRegionMax_nonUDT
+	   #:igGetContentRegionAvail_nonUDT
+	   #:igGetWindowContentRegionMin_nonUDT
+	   #:igGetWindowContentRegionMax_nonUDT
+	   #:igGetFontTexUvWhitePixel_nonUDT
+	   #:igGetCursorPos_nonUDT
+	   #:igGetCursorStartPos_nonUDT
+	   #:igGetCursorScreenPos_nonUDT
+	   #:igGetItemRectMin_nonUDT
+	   #:igGetItemRectMax_nonUDT
+	   #:igGetItemRectSize_nonUDT
+	   #:igCalcTextSize_nonUDT
+	   #:igColorConvertU32ToFloat4_nonUDT
+	   #:igGetMousePos_nonUDT
+	   #:igGetMousePosOnOpeningCurrentPopup_nonUDT
+	   #:igGetMouseDragDelta_nonUDT
+	   #:ImColor_HSV_nonUDT
+	   #:ImDrawList_GetClipRectMin_nonUDT
+	   #:ImDrawList_GetClipRectMax_nonUDT
+	   #:ImFont_CalcTextSizeA_nonUDT
+	   #:ImVector_float_ImVector_float
+	   #:ImVector_float_destroy
+	   #:ImVector_ImWchar_ImVector_ImWchar
+	   #:ImVector_ImWchar_destroy
+	   #:ImVector_ImFontConfig_ImVector_ImFontConfig
+	   #:ImVector_ImFontConfig_destroy
+	   #:ImVector_ImFontGlyph_ImVector_ImFontGlyph
+	   #:ImVector_ImFontGlyph_destroy
+	   #:ImVector_TextRange_ImVector_TextRange
+	   #:ImVector_TextRange_destroy
+	   #:ImVector_CustomRect_ImVector_CustomRect
+	   #:ImVector_CustomRect_destroy
+	   #:ImVector_ImDrawChannel_ImVector_ImDrawChannel
+	   #:ImVector_ImDrawChannel_destroy
+	   #:ImVector_char_ImVector_char
+	   #:ImVector_char_destroy
+	   #:ImVector_ImTextureID_ImVector_ImTextureID
+	   #:ImVector_ImTextureID_destroy
+	   #:ImVector_ImDrawVert_ImVector_ImDrawVert
+	   #:ImVector_ImDrawVert_destroy
+	   #:ImVector_int_ImVector_int
+	   #:ImVector_int_destroy
+	   #:ImVector_Pair_ImVector_Pair
+	   #:ImVector_Pair_destroy
+	   #:ImVector_ImFontPtr_ImVector_ImFontPtr
+	   #:ImVector_ImFontPtr_destroy
+	   #:ImVector_ImVec4_ImVector_ImVec4
+	   #:ImVector_ImVec4_destroy
+	   #:ImVector_ImDrawCmd_ImVector_ImDrawCmd
+	   #:ImVector_ImDrawCmd_destroy
+	   #:ImVector_ImDrawIdx_ImVector_ImDrawIdx
+	   #:ImVector_ImDrawIdx_destroy
+	   #:ImVector_ImVec2_ImVector_ImVec2
+	   #:ImVector_ImVec2_destroy
+	   #:ImVector_float_ImVector_floatVector
+	   #:ImVector_ImWchar_ImVector_ImWcharVector
+	   #:ImVector_ImFontConfig_ImVector_ImFontConfigVector
+	   #:ImVector_ImFontGlyph_ImVector_ImFontGlyphVector
+	   #:ImVector_TextRange_ImVector_TextRangeVector
+	   #:ImVector_CustomRect_ImVector_CustomRectVector
+	   #:ImVector_ImDrawChannel_ImVector_ImDrawChannelVector
+	   #:ImVector_char_ImVector_charVector
+	   #:ImVector_ImTextureID_ImVector_ImTextureIDVector
+	   #:ImVector_ImDrawVert_ImVector_ImDrawVertVector
+	   #:ImVector_int_ImVector_intVector
+	   #:ImVector_Pair_ImVector_PairVector
+	   #:ImVector_ImFontPtr_ImVector_ImFontPtrVector
+	   #:ImVector_ImVec4_ImVector_ImVec4Vector
+	   #:ImVector_ImDrawCmd_ImVector_ImDrawCmdVector
+	   #:ImVector_ImDrawIdx_ImVector_ImDrawIdxVector
+	   #:ImVector_ImVec2_ImVector_ImVec2Vector
+	   #:ImVector_float_empty
+	   #:ImVector_ImWchar_empty
+	   #:ImVector_ImFontConfig_empty
+	   #:ImVector_ImFontGlyph_empty
+	   #:ImVector_TextRange_empty
+	   #:ImVector_CustomRect_empty
+	   #:ImVector_ImDrawChannel_empty
+	   #:ImVector_char_empty
+	   #:ImVector_ImTextureID_empty
+	   #:ImVector_ImDrawVert_empty
+	   #:ImVector_int_empty
+	   #:ImVector_Pair_empty
+	   #:ImVector_ImFontPtr_empty
+	   #:ImVector_ImVec4_empty
+	   #:ImVector_ImDrawCmd_empty
+	   #:ImVector_ImDrawIdx_empty
+	   #:ImVector_ImVec2_empty
+	   #:ImVector_float_size
+	   #:ImVector_ImWchar_size
+	   #:ImVector_ImFontConfig_size
+	   #:ImVector_ImFontGlyph_size
+	   #:ImVector_TextRange_size
+	   #:ImVector_CustomRect_size
+	   #:ImVector_ImDrawChannel_size
+	   #:ImVector_char_size
+	   #:ImVector_ImTextureID_size
+	   #:ImVector_ImDrawVert_size
+	   #:ImVector_int_size
+	   #:ImVector_Pair_size
+	   #:ImVector_ImFontPtr_size
+	   #:ImVector_ImVec4_size
+	   #:ImVector_ImDrawCmd_size
+	   #:ImVector_ImDrawIdx_size
+	   #:ImVector_ImVec2_size
+	   #:ImVector_float_size_in_bytes
+	   #:ImVector_ImWchar_size_in_bytes
+	   #:ImVector_ImFontConfig_size_in_bytes
+	   #:ImVector_ImFontGlyph_size_in_bytes
+	   #:ImVector_TextRange_size_in_bytes
+	   #:ImVector_CustomRect_size_in_bytes
+	   #:ImVector_ImDrawChannel_size_in_bytes
+	   #:ImVector_char_size_in_bytes
+	   #:ImVector_ImTextureID_size_in_bytes
+	   #:ImVector_ImDrawVert_size_in_bytes
+	   #:ImVector_int_size_in_bytes
+	   #:ImVector_Pair_size_in_bytes
+	   #:ImVector_ImFontPtr_size_in_bytes
+	   #:ImVector_ImVec4_size_in_bytes
+	   #:ImVector_ImDrawCmd_size_in_bytes
+	   #:ImVector_ImDrawIdx_size_in_bytes
+	   #:ImVector_ImVec2_size_in_bytes
+	   #:ImVector_float_capacity
+	   #:ImVector_ImWchar_capacity
+	   #:ImVector_ImFontConfig_capacity
+	   #:ImVector_ImFontGlyph_capacity
+	   #:ImVector_TextRange_capacity
+	   #:ImVector_CustomRect_capacity
+	   #:ImVector_ImDrawChannel_capacity
+	   #:ImVector_char_capacity
+	   #:ImVector_ImTextureID_capacity
+	   #:ImVector_ImDrawVert_capacity
+	   #:ImVector_int_capacity
+	   #:ImVector_Pair_capacity
+	   #:ImVector_ImFontPtr_capacity
+	   #:ImVector_ImVec4_capacity
+	   #:ImVector_ImDrawCmd_capacity
+	   #:ImVector_ImDrawIdx_capacity
+	   #:ImVector_ImVec2_capacity
+	   #:ImVector_float_clear
+	   #:ImVector_ImWchar_clear
+	   #:ImVector_ImFontConfig_clear
+	   #:ImVector_ImFontGlyph_clear
+	   #:ImVector_TextRange_clear
+	   #:ImVector_CustomRect_clear
+	   #:ImVector_ImDrawChannel_clear
+	   #:ImVector_char_clear
+	   #:ImVector_ImTextureID_clear
+	   #:ImVector_ImDrawVert_clear
+	   #:ImVector_int_clear
+	   #:ImVector_Pair_clear
+	   #:ImVector_ImFontPtr_clear
+	   #:ImVector_ImVec4_clear
+	   #:ImVector_ImDrawCmd_clear
+	   #:ImVector_ImDrawIdx_clear
+	   #:ImVector_ImVec2_clear
+	   #:ImVector_float_begin
+	   #:ImVector_ImWchar_begin
+	   #:ImVector_ImFontConfig_begin
+	   #:ImVector_ImFontGlyph_begin
+	   #:ImVector_TextRange_begin
+	   #:ImVector_CustomRect_begin
+	   #:ImVector_ImDrawChannel_begin
+	   #:ImVector_char_begin
+	   #:ImVector_ImTextureID_begin
+	   #:ImVector_ImDrawVert_begin
+	   #:ImVector_int_begin
+	   #:ImVector_Pair_begin
+	   #:ImVector_ImFontPtr_begin
+	   #:ImVector_ImVec4_begin
+	   #:ImVector_ImDrawCmd_begin
+	   #:ImVector_ImDrawIdx_begin
+	   #:ImVector_ImVec2_begin
+	   #:ImVector_float_begin_const
+	   #:ImVector_ImWchar_begin_const
+	   #:ImVector_ImFontConfig_begin_const
+	   #:ImVector_ImFontGlyph_begin_const
+	   #:ImVector_TextRange_begin_const
+	   #:ImVector_CustomRect_begin_const
+	   #:ImVector_ImDrawChannel_begin_const
+	   #:ImVector_char_begin_const
+	   #:ImVector_ImTextureID_begin_const
+	   #:ImVector_ImDrawVert_begin_const
+	   #:ImVector_int_begin_const
+	   #:ImVector_Pair_begin_const
+	   #:ImVector_ImFontPtr_begin_const
+	   #:ImVector_ImVec4_begin_const
+	   #:ImVector_ImDrawCmd_begin_const
+	   #:ImVector_ImDrawIdx_begin_const
+	   #:ImVector_ImVec2_begin_const
+	   #:ImVector_float_end
+	   #:ImVector_ImWchar_end
+	   #:ImVector_ImFontConfig_end
+	   #:ImVector_ImFontGlyph_end
+	   #:ImVector_TextRange_end
+	   #:ImVector_CustomRect_end
+	   #:ImVector_ImDrawChannel_end
+	   #:ImVector_char_end
+	   #:ImVector_ImTextureID_end
+	   #:ImVector_ImDrawVert_end
+	   #:ImVector_int_end
+	   #:ImVector_Pair_end
+	   #:ImVector_ImFontPtr_end
+	   #:ImVector_ImVec4_end
+	   #:ImVector_ImDrawCmd_end
+	   #:ImVector_ImDrawIdx_end
+	   #:ImVector_ImVec2_end
+	   #:ImVector_float_end_const
+	   #:ImVector_ImWchar_end_const
+	   #:ImVector_ImFontConfig_end_const
+	   #:ImVector_ImFontGlyph_end_const
+	   #:ImVector_TextRange_end_const
+	   #:ImVector_CustomRect_end_const
+	   #:ImVector_ImDrawChannel_end_const
+	   #:ImVector_char_end_const
+	   #:ImVector_ImTextureID_end_const
+	   #:ImVector_ImDrawVert_end_const
+	   #:ImVector_int_end_const
+	   #:ImVector_Pair_end_const
+	   #:ImVector_ImFontPtr_end_const
+	   #:ImVector_ImVec4_end_const
+	   #:ImVector_ImDrawCmd_end_const
+	   #:ImVector_ImDrawIdx_end_const
+	   #:ImVector_ImVec2_end_const
+	   #:ImVector_float_front
+	   #:ImVector_ImWchar_front
+	   #:ImVector_ImFontConfig_front
+	   #:ImVector_ImFontGlyph_front
+	   #:ImVector_TextRange_front
+	   #:ImVector_CustomRect_front
+	   #:ImVector_ImDrawChannel_front
+	   #:ImVector_char_front
+	   #:ImVector_ImTextureID_front
+	   #:ImVector_ImDrawVert_front
+	   #:ImVector_int_front
+	   #:ImVector_Pair_front
+	   #:ImVector_ImFontPtr_front
+	   #:ImVector_ImVec4_front
+	   #:ImVector_ImDrawCmd_front
+	   #:ImVector_ImDrawIdx_front
+	   #:ImVector_ImVec2_front
+	   #:ImVector_float_front_const
+	   #:ImVector_ImWchar_front_const
+	   #:ImVector_ImFontConfig_front_const
+	   #:ImVector_ImFontGlyph_front_const
+	   #:ImVector_TextRange_front_const
+	   #:ImVector_CustomRect_front_const
+	   #:ImVector_ImDrawChannel_front_const
+	   #:ImVector_char_front_const
+	   #:ImVector_ImTextureID_front_const
+	   #:ImVector_ImDrawVert_front_const
+	   #:ImVector_int_front_const
+	   #:ImVector_Pair_front_const
+	   #:ImVector_ImFontPtr_front_const
+	   #:ImVector_ImVec4_front_const
+	   #:ImVector_ImDrawCmd_front_const
+	   #:ImVector_ImDrawIdx_front_const
+	   #:ImVector_ImVec2_front_const
+	   #:ImVector_float_back
+	   #:ImVector_ImWchar_back
+	   #:ImVector_ImFontConfig_back
+	   #:ImVector_ImFontGlyph_back
+	   #:ImVector_TextRange_back
+	   #:ImVector_CustomRect_back
+	   #:ImVector_ImDrawChannel_back
+	   #:ImVector_char_back
+	   #:ImVector_ImTextureID_back
+	   #:ImVector_ImDrawVert_back
+	   #:ImVector_int_back
+	   #:ImVector_Pair_back
+	   #:ImVector_ImFontPtr_back
+	   #:ImVector_ImVec4_back
+	   #:ImVector_ImDrawCmd_back
+	   #:ImVector_ImDrawIdx_back
+	   #:ImVector_ImVec2_back
+	   #:ImVector_float_back_const
+	   #:ImVector_ImWchar_back_const
+	   #:ImVector_ImFontConfig_back_const
+	   #:ImVector_ImFontGlyph_back_const
+	   #:ImVector_TextRange_back_const
+	   #:ImVector_CustomRect_back_const
+	   #:ImVector_ImDrawChannel_back_const
+	   #:ImVector_char_back_const
+	   #:ImVector_ImTextureID_back_const
+	   #:ImVector_ImDrawVert_back_const
+	   #:ImVector_int_back_const
+	   #:ImVector_Pair_back_const
+	   #:ImVector_ImFontPtr_back_const
+	   #:ImVector_ImVec4_back_const
+	   #:ImVector_ImDrawCmd_back_const
+	   #:ImVector_ImDrawIdx_back_const
+	   #:ImVector_ImVec2_back_const
+	   #:ImVector_float_swap
+	   #:ImVector_ImWchar_swap
+	   #:ImVector_ImFontConfig_swap
+	   #:ImVector_ImFontGlyph_swap
+	   #:ImVector_TextRange_swap
+	   #:ImVector_CustomRect_swap
+	   #:ImVector_ImDrawChannel_swap
+	   #:ImVector_char_swap
+	   #:ImVector_ImTextureID_swap
+	   #:ImVector_ImDrawVert_swap
+	   #:ImVector_int_swap
+	   #:ImVector_Pair_swap
+	   #:ImVector_ImFontPtr_swap
+	   #:ImVector_ImVec4_swap
+	   #:ImVector_ImDrawCmd_swap
+	   #:ImVector_ImDrawIdx_swap
+	   #:ImVector_ImVec2_swap
+	   #:ImVector_float__grow_capacity
+	   #:ImVector_ImWchar__grow_capacity
+	   #:ImVector_ImFontConfig__grow_capacity
+	   #:ImVector_ImFontGlyph__grow_capacity
+	   #:ImVector_TextRange__grow_capacity
+	   #:ImVector_CustomRect__grow_capacity
+	   #:ImVector_ImDrawChannel__grow_capacity
+	   #:ImVector_char__grow_capacity
+	   #:ImVector_ImTextureID__grow_capacity
+	   #:ImVector_ImDrawVert__grow_capacity
+	   #:ImVector_int__grow_capacity
+	   #:ImVector_Pair__grow_capacity
+	   #:ImVector_ImFontPtr__grow_capacity
+	   #:ImVector_ImVec4__grow_capacity
+	   #:ImVector_ImDrawCmd__grow_capacity
+	   #:ImVector_ImDrawIdx__grow_capacity
+	   #:ImVector_ImVec2__grow_capacity
+	   #:ImVector_float_resize
+	   #:ImVector_ImWchar_resize
+	   #:ImVector_ImFontConfig_resize
+	   #:ImVector_ImFontGlyph_resize
+	   #:ImVector_TextRange_resize
+	   #:ImVector_CustomRect_resize
+	   #:ImVector_ImDrawChannel_resize
+	   #:ImVector_char_resize
+	   #:ImVector_ImTextureID_resize
+	   #:ImVector_ImDrawVert_resize
+	   #:ImVector_int_resize
+	   #:ImVector_Pair_resize
+	   #:ImVector_ImFontPtr_resize
+	   #:ImVector_ImVec4_resize
+	   #:ImVector_ImDrawCmd_resize
+	   #:ImVector_ImDrawIdx_resize
+	   #:ImVector_ImVec2_resize
+	   #:ImVector_float_resizeT
+	   #:ImVector_ImWchar_resizeT
+	   #:ImVector_ImFontConfig_resizeT
+	   #:ImVector_ImFontGlyph_resizeT
+	   #:ImVector_TextRange_resizeT
+	   #:ImVector_CustomRect_resizeT
+	   #:ImVector_ImDrawChannel_resizeT
+	   #:ImVector_char_resizeT
+	   #:ImVector_ImTextureID_resizeT
+	   #:ImVector_ImDrawVert_resizeT
+	   #:ImVector_int_resizeT
+	   #:ImVector_Pair_resizeT
+	   #:ImVector_ImFontPtr_resizeT
+	   #:ImVector_ImVec4_resizeT
+	   #:ImVector_ImDrawCmd_resizeT
+	   #:ImVector_ImDrawIdx_resizeT
+	   #:ImVector_ImVec2_resizeT
+	   #:ImVector_float_reserve
+	   #:ImVector_ImWchar_reserve
+	   #:ImVector_ImFontConfig_reserve
+	   #:ImVector_ImFontGlyph_reserve
+	   #:ImVector_TextRange_reserve
+	   #:ImVector_CustomRect_reserve
+	   #:ImVector_ImDrawChannel_reserve
+	   #:ImVector_char_reserve
+	   #:ImVector_ImTextureID_reserve
+	   #:ImVector_ImDrawVert_reserve
+	   #:ImVector_int_reserve
+	   #:ImVector_Pair_reserve
+	   #:ImVector_ImFontPtr_reserve
+	   #:ImVector_ImVec4_reserve
+	   #:ImVector_ImDrawCmd_reserve
+	   #:ImVector_ImDrawIdx_reserve
+	   #:ImVector_ImVec2_reserve
+	   #:ImVector_float_push_back
+	   #:ImVector_ImWchar_push_back
+	   #:ImVector_ImFontConfig_push_back
+	   #:ImVector_ImFontGlyph_push_back
+	   #:ImVector_TextRange_push_back
+	   #:ImVector_CustomRect_push_back
+	   #:ImVector_ImDrawChannel_push_back
+	   #:ImVector_char_push_back
+	   #:ImVector_ImTextureID_push_back
+	   #:ImVector_ImDrawVert_push_back
+	   #:ImVector_int_push_back
+	   #:ImVector_Pair_push_back
+	   #:ImVector_ImFontPtr_push_back
+	   #:ImVector_ImVec4_push_back
+	   #:ImVector_ImDrawCmd_push_back
+	   #:ImVector_ImDrawIdx_push_back
+	   #:ImVector_ImVec2_push_back
+	   #:ImVector_float_pop_back
+	   #:ImVector_ImWchar_pop_back
+	   #:ImVector_ImFontConfig_pop_back
+	   #:ImVector_ImFontGlyph_pop_back
+	   #:ImVector_TextRange_pop_back
+	   #:ImVector_CustomRect_pop_back
+	   #:ImVector_ImDrawChannel_pop_back
+	   #:ImVector_char_pop_back
+	   #:ImVector_ImTextureID_pop_back
+	   #:ImVector_ImDrawVert_pop_back
+	   #:ImVector_int_pop_back
+	   #:ImVector_Pair_pop_back
+	   #:ImVector_ImFontPtr_pop_back
+	   #:ImVector_ImVec4_pop_back
+	   #:ImVector_ImDrawCmd_pop_back
+	   #:ImVector_ImDrawIdx_pop_back
+	   #:ImVector_ImVec2_pop_back
+	   #:ImVector_float_push_front
+	   #:ImVector_ImWchar_push_front
+	   #:ImVector_ImFontConfig_push_front
+	   #:ImVector_ImFontGlyph_push_front
+	   #:ImVector_TextRange_push_front
+	   #:ImVector_CustomRect_push_front
+	   #:ImVector_ImDrawChannel_push_front
+	   #:ImVector_char_push_front
+	   #:ImVector_ImTextureID_push_front
+	   #:ImVector_ImDrawVert_push_front
+	   #:ImVector_int_push_front
+	   #:ImVector_Pair_push_front
+	   #:ImVector_ImFontPtr_push_front
+	   #:ImVector_ImVec4_push_front
+	   #:ImVector_ImDrawCmd_push_front
+	   #:ImVector_ImDrawIdx_push_front
+	   #:ImVector_ImVec2_push_front
+	   #:ImVector_float_erase
+	   #:ImVector_ImWchar_erase
+	   #:ImVector_ImFontConfig_erase
+	   #:ImVector_ImFontGlyph_erase
+	   #:ImVector_TextRange_erase
+	   #:ImVector_CustomRect_erase
+	   #:ImVector_ImDrawChannel_erase
+	   #:ImVector_char_erase
+	   #:ImVector_ImTextureID_erase
+	   #:ImVector_ImDrawVert_erase
+	   #:ImVector_int_erase
+	   #:ImVector_Pair_erase
+	   #:ImVector_ImFontPtr_erase
+	   #:ImVector_ImVec4_erase
+	   #:ImVector_ImDrawCmd_erase
+	   #:ImVector_ImDrawIdx_erase
+	   #:ImVector_ImVec2_erase
+	   #:ImVector_float_eraseTPtr
+	   #:ImVector_ImWchar_eraseTPtr
+	   #:ImVector_ImFontConfig_eraseTPtr
+	   #:ImVector_ImFontGlyph_eraseTPtr
+	   #:ImVector_TextRange_eraseTPtr
+	   #:ImVector_CustomRect_eraseTPtr
+	   #:ImVector_ImDrawChannel_eraseTPtr
+	   #:ImVector_char_eraseTPtr
+	   #:ImVector_ImTextureID_eraseTPtr
+	   #:ImVector_ImDrawVert_eraseTPtr
+	   #:ImVector_int_eraseTPtr
+	   #:ImVector_Pair_eraseTPtr
+	   #:ImVector_ImFontPtr_eraseTPtr
+	   #:ImVector_ImVec4_eraseTPtr
+	   #:ImVector_ImDrawCmd_eraseTPtr
+	   #:ImVector_ImDrawIdx_eraseTPtr
+	   #:ImVector_ImVec2_eraseTPtr
+	   #:ImVector_float_erase_unsorted
+	   #:ImVector_ImWchar_erase_unsorted
+	   #:ImVector_ImFontConfig_erase_unsorted
+	   #:ImVector_ImFontGlyph_erase_unsorted
+	   #:ImVector_TextRange_erase_unsorted
+	   #:ImVector_CustomRect_erase_unsorted
+	   #:ImVector_ImDrawChannel_erase_unsorted
+	   #:ImVector_char_erase_unsorted
+	   #:ImVector_ImTextureID_erase_unsorted
+	   #:ImVector_ImDrawVert_erase_unsorted
+	   #:ImVector_int_erase_unsorted
+	   #:ImVector_Pair_erase_unsorted
+	   #:ImVector_ImFontPtr_erase_unsorted
+	   #:ImVector_ImVec4_erase_unsorted
+	   #:ImVector_ImDrawCmd_erase_unsorted
+	   #:ImVector_ImDrawIdx_erase_unsorted
+	   #:ImVector_ImVec2_erase_unsorted
+	   #:ImVector_float_insert
+	   #:ImVector_ImWchar_insert
+	   #:ImVector_ImFontConfig_insert
+	   #:ImVector_ImFontGlyph_insert
+	   #:ImVector_TextRange_insert
+	   #:ImVector_CustomRect_insert
+	   #:ImVector_ImDrawChannel_insert
+	   #:ImVector_char_insert
+	   #:ImVector_ImTextureID_insert
+	   #:ImVector_ImDrawVert_insert
+	   #:ImVector_int_insert
+	   #:ImVector_Pair_insert
+	   #:ImVector_ImFontPtr_insert
+	   #:ImVector_ImVec4_insert
+	   #:ImVector_ImDrawCmd_insert
+	   #:ImVector_ImDrawIdx_insert
+	   #:ImVector_ImVec2_insert
+	   #:ImVector_float_contains
+	   #:ImVector_ImWchar_contains
+	   #:ImVector_char_contains
+	   #:ImVector_int_contains
+	   #:ImVector_float_index_from_ptr
+	   #:ImVector_ImWchar_index_from_ptr
+	   #:ImVector_ImFontConfig_index_from_ptr
+	   #:ImVector_ImFontGlyph_index_from_ptr
+	   #:ImVector_TextRange_index_from_ptr
+	   #:ImVector_CustomRect_index_from_ptr
+	   #:ImVector_ImDrawChannel_index_from_ptr
+	   #:ImVector_char_index_from_ptr
+	   #:ImVector_ImTextureID_index_from_ptr
+	   #:ImVector_ImDrawVert_index_from_ptr
+	   #:ImVector_int_index_from_ptr
+	   #:ImVector_Pair_index_from_ptr
+	   #:ImVector_ImFontPtr_index_from_ptr
+	   #:ImVector_ImVec4_index_from_ptr
+	   #:ImVector_ImDrawCmd_index_from_ptr
+	   #:ImVector_ImDrawIdx_index_from_ptr
+	   #:ImVector_ImVec2_index_from_ptr
+	   #:igLogText
+	   #:ImGuiTextBuffer_appendf
+	   #:igGET_FLT_MAX
+	   #:igColorConvertRGBtoHSV
+	   #:igColorConvertHSVtoRGB
+	   #:ImVector_ImWchar_create
+	   #:ImVector_ImWchar_Init
+	   #:ImVector_ImWchar_UnInit
+	   #:igBeginChild
+	   #:igSetNextWindowPos
+	   #:igSetNextWindowSize
+	   #:igSetNextWindowSizeConstraints
+	   #:igSetNextWindowContentSize
+	   #:igSetWindowPosVec2
+	   #:igSetWindowSizeVec2
+	   #:igSetWindowPosStr
+	   #:igSetWindowSizeStr
+	   #:igPushStyleColor
+	   #:igPushStyleVarVec2
+	   #:igSetCursorPos
+	   #:igSetCursorScreenPos
+	   #:igTextColored
+	   #:igTextColoredV
+	   #:igButton
+	   #:igInvisibleButton
+	   #:igImage
+	   #:igImageButton
+	   #:igPlotLines
+	   #:igPlotLinesFnPtr
+	   #:igPlotHistogramFloatPtr
+	   #:igPlotHistogramFnPtr
+	   #:igInputTextMultiline
+	   #:igVSliderFloat
+	   #:igVSliderInt
+	   #:igColorButton
+	   #:igSelectable
+	   #:igSelectableBoolPtr
+	   #:igListBoxHeaderVec2
+	   #:igPushClipRect
+	   #:igIsRectVisible
+	   #:igBeginChildFrame
+	   #:igColorConvertFloat4ToU32
+	   #:igIsMouseHoveringRect
+	   #:ImDrawList_PushClipRect
+	   #:ImDrawList_AddLine
+	   #:ImDrawList_AddRect
+	   #:ImDrawList_AddRectFilled
+	   #:ImDrawList_AddRectFilledMultiColor
+	   #:ImDrawList_AddQuad
+	   #:ImDrawList_AddQuadFilled
+	   #:ImDrawList_AddTriangle
+	   #:ImDrawList_AddTriangleFilled
+	   #:ImDrawList_AddCircle
+	   #:ImDrawList_AddCircleFilled
+	   #:ImDrawList_AddText
+	   #:ImDrawList_AddTextFontPtr
+	   #:ImDrawList_AddImage
+	   #:ImDrawList_AddImageQuad
+	   #:ImDrawList_AddImageRounded
+	   #:ImDrawList_PathLineTo
+	   #:ImDrawList_PathLineToMergeDuplicate
+	   #:ImDrawList_PathArcTo
+	   #:ImDrawList_PathArcToFast
+	   #:ImDrawList_PathBezierCurveTo
+	   #:ImDrawList_PathRect
+	   #:ImDrawList_PrimRect
+	   #:ImDrawList_PrimRectUV
+	   #:ImDrawList_PrimQuadUV
+	   #:ImDrawList_PrimWriteVtx
+	   #:ImDrawList_PrimVtx
+	   #:ImDrawData_ScaleClipRects
+	   #:igGetWindowPos
+	   #:igGetWindowSize
+	   #:igGetContentRegionMax
+	   #:igGetContentRegionAvail
+	   #:igGetWindowContentRegionMin
+	   #:igGetWindowContentRegionMax
+	   #:igGetFontTexUvWhitePixel
+	   #:igGetCursorPos
+	   #:igGetCursorStartPos
+	   #:igGetCursorScreenPos
+	   #:igGetItemRectMin
+	   #:igGetItemRectMax
+	   #:igGetItemRectSize
+	   #:igCalcTextSize
+	   #:igColorConvertU32ToFloat4
+	   #:igGetMousePos
+	   #:igGetMousePosOnOpeningCurrentPopup
+	   #:igGetMouseDragDelta
+	   #:ImColor_HSV
+	   #:ImDrawList_GetClipRectMin
+	   #:ImDrawList_GetClipRectMax
+	   #:ImFont_CalcTextSizeA
+	   #:igGetWindowPos_nonUDT2
+	   #:igGetWindowSize_nonUDT2
+	   #:igGetContentRegionMax_nonUDT2
+	   #:igGetContentRegionAvail_nonUDT2
+	   #:igGetWindowContentRegionMin_nonUDT2
+	   #:igGetWindowContentRegionMax_nonUDT2
+	   #:igGetFontTexUvWhitePixel_nonUDT2
+	   #:igGetCursorPos_nonUDT2
+	   #:igGetCursorStartPos_nonUDT2
+	   #:igGetCursorScreenPos_nonUDT2
+	   #:igGetItemRectMin_nonUDT2
+	   #:igGetItemRectMax_nonUDT2
+	   #:igCalcTextSize_nonUDT2
+	   #:igColorConvertU32ToFloat4_nonUDT2
+	   #:igGetMousePos_nonUDT2
+	   #:igGetMousePosOnOpeningCurrentPopup_nonUDT2
+	   #:igGetMouseDragDelta_nonUDT2
+	   #:ImColor_HSV_nonUDT2
+	   #:ImDrawList_GetClipRectMin_nonUDT2
+	   #:ImDrawList_GetClipRectMax_nonUDT2
+	   #:ImFont_CalcTextSizeA_nonUDT2))
+   

@@ -1,4 +1,4 @@
-(in-package :vkapp)
+(in-package :vktk)
 
 (defmacro with-vertex-input-binding-description ((var)
 						 &body body)

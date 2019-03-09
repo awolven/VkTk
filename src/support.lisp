@@ -1,6 +1,6 @@
-(in-package :vkapp)
+(in-package :vktk)
 
-(defvar *debug* t)
+(defvar *debug* 1)
 
 (defconstant +NULL+ 0)
 (defconstant VK_TRUE 1)
