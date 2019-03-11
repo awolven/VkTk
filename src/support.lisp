@@ -1,6 +1,6 @@
 (in-package :vktk)
 
-(defvar *debug* 1)
+(defvar *debug* #+windows 1 #+darwin nil)
 
 (defconstant +NULL+ 0)
 (defconstant VK_TRUE 1)

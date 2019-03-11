@@ -1,6 +1,5 @@
 (cl:in-package :vktk)
 
-(cl:defconstant IMGUI_VK_QUEUED_FRAMES 4)
 (defconstant VK_WHOLE_SIZE 0)
 
 (defclass imgui ()
@@ -27,8 +26,8 @@
    (upload-buffer-memory :accessor upload-buffer-memory :initform nil)
    (upload-buffer :accessor upload-buffer :initform nil)
    (imgui-context :accessor imgui-context :initform nil)
-   (frame-data :initform (make-array IMGUI_VK_QUEUED_FRAMES :initial-element nil) :reader frame-data)))
-
+   (frame-count :accessor frame-count)
+   (frame-data :initform nil :accessor frame-data)))
 
 (defclass imgui-frame-data ()
   ((vertex-buffer :initform nil :accessor vertex-buffer)
@@ -122,7 +121,9 @@
 (defparameter *imgui-fragment-shader-binary-size* (* 193 4))
 
 
-
+(defun maybe-init-frame-data (app frame-count)
+  (unless (frame-data app)
+    (setf (frame-data app) (make-array frame-count :initial-element nil))))
 
 (defun imgui-render-draw-lists (app draw-data command-buffer frame-index)
 
@@ -130,6 +131,7 @@
     (return-from imgui-render-draw-lists (values)))
   (with-slots (device allocator buffer-memory-alignment
 		      descriptor-set pipeline-layout frame-data) app
+    (maybe-init-frame-data app (frame-count app))
     (unless (elt frame-data frame-index)
       (setf (elt frame-data frame-index) (make-instance 'imgui-frame-data)))
     (with-slots (vertex-buffer
@@ -297,9 +299,9 @@
 
 		(setf vk::x 0.0f0
 		      vk::y 0.0f0
-		      vk::width display-size-x
+		      vk::width (* display-size-x #+darwin 2.0f0 #+windows 1.0f0)
 		      
-		      vk::height display-size-y
+		      vk::height (* display-size-y #+darwin 2.0f0 #+windows 1.0f0)
 				    
 		      vk::minDepth 0.0f0
 		      vk::maxDepth 1.0f0)
@@ -365,19 +367,21 @@
 				   
 				   (let ((p-clip-rect (foreign-slot-pointer p-cmd '(:struct ig::ImDrawCmd) 'ig::ClipRect)))
 				     
-					 (setf vk::x (max
-						      (round (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x))
-						      0)
-					       vk::y (max
-						      (round (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y))
-						      0)
-					       vk::width (round
-							  (- (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::z)
-							     (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x)))
-					       vk::height (round
-							   (- (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::w)
-							      (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y)))))
-
+				     (setf vk::x (* (max
+						     (round (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x))
+						     0) #+darwin 2 #+windows 1)
+					   vk::y (* (max
+						     (round (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y))
+						     0) #+darwin 2 #+windows 1)
+					   vk::width (* (round
+							 (- (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::z)
+							    (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x)))
+							#+darwin 2 #+windows 1)
+					   vk::height (* (round
+							  (- (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::w)
+							     (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y)))
+							 #+darwin 2 #+windows 1)))
+				   
 				   (vkCmdSetScissor (h command-buffer) 0 1 p-scissor)
 
 				   (vkCmdDrawIndexed (h command-buffer)
@@ -492,8 +496,8 @@
 
 (defun imgui-invalidate-device-objects (app)
   (imgui-invalidate-font-upload-objects app)
-
-  (loop for i from 0 below ImGUI_VK_QUEUED_FRAMES
+  (maybe-init-frame-data app (frame-count app))
+  (loop for i from 0 below (frame-count app)
      do (let ((frame-data-i (elt (frame-data app) i)))
 	  (with-slots (vertex-buffer
 		       vertex-buffer-memory
@@ -764,14 +768,15 @@
 		     (allocator +null-allocator+)
 		     device render-pass
 		     (pipeline-cache +null-pipeline-cache+)
-		     descriptor-pool)		   
+		     descriptor-pool
+		     frame-count)		   
 
   (setf (allocator app) allocator
 	(device app) device
 	(render-pass app) render-pass
 	(pipeline-cache app) pipeline-cache
 	(descriptor-pool app) descriptor-pool
-
+	(frame-count app) frame-count
 	(window app) window)
 
   (setf (imgui-context app) (ig::igCreateContext +nullptr+))

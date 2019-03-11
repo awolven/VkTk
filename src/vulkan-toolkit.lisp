@@ -330,8 +330,8 @@
     (when (and (numberp *debug*) (> *debug* 1))
       (pushnew "VK_LAYER_LUNARG_api_dump" layer-names :test #'string=)))
 
-  (let ((available-layers (available-layers))
-	(available-extensions (available-extensions)))
+  (let ((available-layers (when layer-names (available-layers)))
+	(available-extensions (when extension-names (available-extensions))))
     (loop for layer in layer-names
        unless (find layer available-layers :test #'string=)
        do (error "layer ~S is not available" layer))
@@ -349,7 +349,7 @@
       (loop for i from 0 below glfw-required-extension-count
 	 do (let ((glfw-extension (foreign-string-to-lisp (mem-aref pp-glfw-extensions '(:pointer :char) i))))
 	      (push glfw-extension extension-names)))
-      
+
       (with-foreign-objects ((pp-enabled-extension-names '(:pointer :char) extension-count)
 			     (pp-enabled-layer-names '(:pointer :char) layer-count))
 	(unwind-protect
@@ -390,9 +390,13 @@
 		   
 			 (setf vk::pApplicationInfo p-application-info
 			       vk::enabledExtensionCount extension-count
-			       vk::ppEnabledExtensionNames pp-enabled-extension-names
+			       vk::ppEnabledExtensionNames (if extension-names
+							       pp-enabled-extension-names
+							       +nullptr+)
 			       vk::enabledLayerCount layer-count
-			       vk::ppEnabledLayerNames pp-enabled-layer-names))
+			       vk::ppEnabledLayerNames (if layer-names
+							   pp-enabled-layer-names
+							   +nullptr+)))
 		 
 		       (with-foreign-object (p-instance 'VkInstance)
 			 (check-vk-result (vkCreateInstance p-create-info (h allocator) p-instance))
@@ -4000,15 +4004,15 @@
 (defcstruct UniformBufferObjectVertexShader
   (mxProj (:struct mat4)))
 
-(defun create-command-pools (device queue-family-index)
-  (let ((command-pools (make-array IMGUI_VK_QUEUED_FRAMES)))
-    (dotimes (i IMGUI_VK_QUEUED_FRAMES)
+(defun create-command-pools (device queue-family-index queued-frames)
+  (let ((command-pools (make-array queued-frames)))
+    (dotimes (i queued-frames)
       (setf (elt command-pools i) (create-command-pool device queue-family-index)))
     (setf (command-pools device) command-pools)))
 
-(defun create-command-buffers (device command-pools)
-  (let ((command-buffers (make-array IMGUI_VK_QUEUED_FRAMES)))
-    (dotimes (i IMGUI_VK_QUEUED_FRAMES)
+(defun create-command-buffers (device command-pools queued-frames)
+  (let ((command-buffers (make-array queued-frames)))
+    (dotimes (i queued-frames)
       (setf (elt command-buffers i) (create-command-buffer device (elt command-pools i))))
     (setf (command-buffers device) command-buffers)))
 
@@ -4019,8 +4023,8 @@
      finally (error "Could not find a gpu with window system integration support.")))
 
 (defun setup-vulkan (app &key (width 1280) (height 720))
-  (let* ((vulkan-instance (create-instance :application-name "VkTk Demo"))
-	 (debug-callback (create-debug-report-callback vulkan-instance 'debug-report-callback))
+  (let* ((vulkan-instance (create-instance :application-name "VkTk Demo" #+darwin :layer-names #+darwin nil))
+	 (debug-callback #+windows(create-debug-report-callback vulkan-instance 'debug-report-callback))
 	 (physical-devices (enumerate-physical-devices vulkan-instance))
 	 (main-window (create-window :width width :height height :title "VkTk Demo"))
 	 (surface (create-window-surface vulkan-instance main-window)))
@@ -4034,6 +4038,7 @@
 	     (surface-format (find-supported-format surface))
 	     (present-mode VK_PRESENT_MODE_FIFO_KHR)		     
 	     (swapchain (create-swapchain device surface width height surface-format present-mode))
+	     (queued-frames (number-of-images swapchain))
 	     (render-pass (create-render-pass device surface-format))
 	     (dsl (create-descriptor-set-layout device))
 	     (pipeline-layout (create-pipeline-layout device (list dsl))))	
@@ -4046,7 +4051,7 @@
 	       (geometry-pipeline (create-pipeline device +null-pipeline-cache+ pipeline-layout render-pass
 						   (number-of-images swapchain) width height
 						   vertex-shader fragment-shader))
-	       (command-pools (create-command-pools device index)))
+	       (command-pools (create-command-pools device index queued-frames)))
 
 	  (vkDestroyShaderModule (h device) (h vertex-shader) +nullptr+)
 	  (vkDestroyShaderModule (h device) (h fragment-shader) +nullptr+)
@@ -4059,7 +4064,7 @@
 				     device (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
 		 (descriptor-pool (create-descriptor-pool device))
 		 (descriptor-set (create-descriptor-set device uniform-buffer-vs (list dsl) descriptor-pool))
-		 (command-buffers (create-command-buffers device command-pools)))
+		 (command-buffers (create-command-buffers device command-pools queued-frames)))
 	    (declare (ignorable command-buffers))
 	      
 	    (setf (debug-callback app) debug-callback)
@@ -4075,6 +4080,7 @@
 	    (setf (uniform-buffer-vs app) uniform-buffer-vs)
 	    (setf (command-pools app) command-pools)
 	    (setf (command-buffers app) command-buffers)
+
 	    #+NIL
 	    (loop for i from 0 for command-pool in command-pools
 	       do (setf (elt (command-pools app) i) command-pool))
@@ -4112,7 +4118,8 @@
 		  :device (first (logical-devices app))
 		  :render-pass (render-pass app)
 		  :pipeline-cache (pipeline-cache app)
-		  :descriptor-pool (descriptor-pool app))
+		  :descriptor-pool (descriptor-pool app)
+		  :frame-count (number-of-images (swapchain (render-pass app))))
       (ig::igStyleColorsClassic (ig::igGetStyle))
       (check-vk-result
        (vkResetCommandPool (h device) (h command-pool) 0))
@@ -4252,9 +4259,10 @@
 	       ))))))
 
 (defun frame-present (app)
-  (let ((present-index (if *imgui-unlimited-frame-rate*
-			   (mod (1- (+ (frame-index app) IMGUI_VK_QUEUED_FRAMES)) IMGUI_VK_QUEUED_FRAMES)
-			   (frame-index app))))
+  (let ((present-index (frame-index app)
+	  #+NIL(if *imgui-unlimited-frame-rate*
+		   (mod (1- (+ (frame-index app) IMGUI_VK_QUEUED_FRAMES)) IMGUI_VK_QUEUED_FRAMES)
+		   (frame-index app))))
 
     (with-foreign-objects ((p-swapchains 'VkSwapchainKHR 1)
 			   (p-render-complete-semaphore 'VkSemaphore))
@@ -4281,7 +4289,8 @@
 	     (vkQueuePresentKHR
 	      (h (first (second (first (device-queues (first (logical-devices app))))))) p-info))
 
-	    (setf (frame-index app) (mod (1+ (frame-index app)) IMGUI_VK_QUEUED_FRAMES)))))))
+	    (setf (frame-index app) (mod (1+ (frame-index app))
+					 (number-of-images (swapchain (render-pass app))))))))))
 
   (values))
 
