@@ -212,7 +212,8 @@
    (supported-layers :accessor supported-layers)))
 
 (defclass base-device (handle-mixin)
-  ((parent-instance :accessor parent-instance)
+  ((allocator :accessor allocator :initarg :allocator)
+   (parent-instance :accessor parent-instance)
    (compute-pipeline-manager :accessor compute-pipeline-manager)
    (descriptor-set-layout-manager :accessor descriptor-set-layout-manager)
    (dummy-descriptor-set-group :accessor dummy-descriptor-set-group)
@@ -330,8 +331,9 @@
     (when (and (numberp *debug*) (> *debug* 1))
       (pushnew "VK_LAYER_LUNARG_api_dump" layer-names :test #'string=)))
 
-  (let ((available-layers (when layer-names (available-layers)))
-	(available-extensions (when extension-names (available-extensions))))
+  (let ((available-layers #+windows (available-layers) #+darwin (when layer-names (available-layers)))
+	(available-extensions #+windows (available-extensions)
+			      #+darwin (when extension-names (available-extensions))))
     (loop for layer in layer-names
        unless (find layer available-layers :test #'string=)
        do (error "layer ~S is not available" layer))
@@ -434,16 +436,19 @@
 
 (defclass window-registry ()
   (;;(last-id :accessor last-id :initform 0)
-   (windows :reader registry-windows :initform '())))
+   (windows :accessor registry-windows :initform '())))
 
 (defvar *window-registry* (make-instance 'window-registry))
 
 (defclass window (handle-mixin)
   (
    ;;(id :reader window-id :initform (make-pointer (incf (last-id *window-registry*))))
+   (swapchain :accessor swapchain)
+   (application :accessor application :initarg :app)
    (surface :accessor render-surface)
    (closeable-p)
-   (window-close-finished-p)))
+   (window-close-finished-p)
+   (render-pass :accessor render-pass)))
 
 (defcallback error-callback :void ((error :int) (description (:pointer :char)))
   (error-callback-function error description))
@@ -456,7 +461,7 @@
   (find handle (registry-windows *window-registry*)
 	:key #'h :test #'pointer-eq))
 
-(defun create-window (&key title width height)
+(defun create-window (app &key title width height)
 
   (assert (typep width 'integer))
   (assert (typep height 'integer))
@@ -473,7 +478,12 @@
   
   (let ((window
 	 (make-instance 'window
+			:app app
 			:handle (glfwCreateWindow width height title +nullptr+ +nullptr+))))
+
+    (push window (registry-windows *window-registry*))
+
+    (set-framebuffer-size-callback window)
     
     ;;(glfwSetWindowUserPointer (h window) (h window))
     
@@ -717,10 +727,11 @@
 (defun create-window-surface (instance window &key (allocator +null-allocator+))
   (with-foreign-object (p-surface 'VkSurfaceKHR)
     (check-vk-result (glfwCreateWindowSurface (h instance) (h window) (h allocator) p-surface))
-    (make-instance 'surface
-		   :handle (mem-aref p-surface 'VkSurfaceKHR)
-		   :instance instance
-		   :window window))) ;; can the surface be used by multiple gpus?
+    (let ((surface (make-instance 'surface
+				  :handle (mem-aref p-surface 'VkSurfaceKHR)
+				  :instance instance
+				  :window window)))
+      (setf (render-surface window) surface))))
 
 (defun initialize-window-surface (surface gpu queue-family-index)
   (setf (paired-gpu surface) gpu)
@@ -2225,7 +2236,8 @@
 				(with-foreign-object (p-device 'VkDevice)
 				  (check-vk-result (vkCreateDevice (h gpu) p-create-info (h allocator) p-device))
 				  (let ((device (make-instance 'sgpu-device ;; todo put queue objects in device slots!
-							       :handle (mem-aref p-device 'VkDevice))))
+							       :handle (mem-aref p-device 'VkDevice)
+							       :allocator allocator)))
 				    (setf (parent-instance device) (instance gpu))
 				    (setf (parent-physical-device device) gpu)
 				    (loop for queue in queue-indices-and-totals
@@ -2246,7 +2258,7 @@
 
 
 
-(defun create-swapchain (device surface width height surface-format present-mode
+(defun create-swapchain (device window width height surface-format present-mode
 			 &key (allocator +null-allocator+)
 			   (old-swapchain +null-swapchain+)
 			   (image-usage VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
@@ -2254,6 +2266,7 @@
 			   (pre-transform VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
 			   (composite-alpha VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
 			   (clipped-p t))
+  (with-slots (surface) window
   (with-vk-struct (p-create-info VkSwapchainCreateInfoKHR)
     (with-foreign-slots ((vk::surface
 			  vk::imageFormat
@@ -2317,8 +2330,8 @@
 					    :width fb-width
 					    :height fb-height
 					    :surface-format surface-format)))
-	      (initialize-swapchain swapchain)
-	      swapchain)))))))
+	      (initialize-swapchain swapchain window)
+	      swapchain))))))))
 
 (defun destroy-swapchain (swapchain)
   (with-slots (device) swapchain
@@ -2447,12 +2460,14 @@
 	     (with-foreign-object (p-image-view 'VkImageView)
 	       (check-vk-result (vkCreateImageView (h (device swapchain)) p-create-info (h allocator) p-image-view))
 	       (setf (elt image-views i) (make-instance 'image-view
+							:device (device swapchain)
 							:handle (mem-aref p-image-view 'VkImageView)
 							:image (elt (images swapchain) i)))))))
     image-views))
 	  
 
-(defun initialize-swapchain (swapchain)
+(defun initialize-swapchain (swapchain window)
+  (setf (swapchain window) swapchain)
   (setf (images swapchain) (get-swapchain-images-khr swapchain))
   (setf (color-image-views swapchain) (create-image-views swapchain))
   (setf (depth-image swapchain) (create-depth-image (device swapchain)
@@ -2462,7 +2477,7 @@
 							      (depth-image swapchain)))
   swapchain)
 
-(defclass render-pass (handle-mixin)
+(defclass render-pass (handle-mixin logical-device-mixin)
   ((swapchain :accessor swapchain))) 
 
 (defclass attachment ()
@@ -2597,7 +2612,8 @@
 		
 		 (with-foreign-object (p-render-pass 'VkRenderPass)
 		   (check-vk-result (vkCreateRenderPass (h device) p-info (h allocator) p-render-pass))
-		   (make-instance 'render-pass :handle (mem-aref p-render-pass 'VkRenderPass)))))
+		   (make-instance 'render-pass :handle (mem-aref p-render-pass 'VkRenderPass)
+				  :device device))))
 	  (mapcar #'foreign-free pointers))))))
 
 
@@ -3048,7 +3064,8 @@
 	  (with-foreign-object (p-pipeline-layout 'VkPipelineLayout)
 	    (vkCreatePipelineLayout (h device) p-create-info (h allocator) p-pipeline-layout)
 	    (let ((pipeline-layout
-		   (make-instance 'pipeline-layout :handle (mem-aref p-pipeline-layout 'VkPipelineLayout))))
+		   (make-instance 'pipeline-layout :handle (mem-aref p-pipeline-layout 'VkPipelineLayout)
+				  :device device)))
 	      (loop for dsl in descriptor-set-layouts
 		 do (vector-push-extend dsl (descriptor-set-layouts pipeline-layout)))
 	      pipeline-layout)))))))
@@ -3099,8 +3116,10 @@
   (pos (:struct vec3))
   (color (:struct vec3)))
 
-(defclass pipeline (handle-mixin)
-  ())
+(defclass pipeline (handle-mixin logical-device-mixin)
+  ((vertex-shader :accessor vertex-shader :initarg :vertex-shader)
+   (geometry-shader :accessor geometry-shader :initarg :geometry-shader)
+   (fragment-shader :accessor fragment-shader :initarg :fragment-shader)))
 
 (defclass vertex-input-attribute-description ()
   ((location :initarg :location :reader location)
@@ -3108,7 +3127,7 @@
    (format :initarg :format :initform VK_FORMAT_R32G32B32_SFLOAT :reader desc-format)
    (offset :initarg :offset :reader offset)))
 
-(defun create-pipeline (device pipeline-cache pipeline-layout render-pass back-buffer-count width height vertex-shader-module fragment-shader-module
+(defun create-graphics-pipeline (device pipeline-cache pipeline-layout render-pass back-buffer-count width height vertex-shader-module fragment-shader-module
 			;; todo: make create-pipeline configurable on vertex input attribute description options
 			&rest args
 			&key (allocator +null-allocator+)
@@ -3239,7 +3258,11 @@
 				      (check-vk-result
 				       (vkCreateGraphicsPipelines 
 					(h device) (h pipeline-cache) 1 p-pipeline-ci (h allocator) p-graphics-pipeline))
-				      (make-instance 'pipeline :handle (mem-aref p-graphics-pipeline 'VkPipeline)))))))))))))))))))))
+				      (make-instance 'pipeline :handle (mem-aref p-graphics-pipeline 'VkPipeline)
+						     :device device
+						     :vertex-shader vertex-shader-module
+						     :geometry-shader geometry-shader-module
+						     :fragment-shader fragment-shader-module))))))))))))))))))))
 
 	  
   
@@ -3341,12 +3364,136 @@
 		       :index queue-family-index)))))
 
 (defun resize-framebuffer (window width height)
-  (declare (ignore window width height))
-  ;; todo: recreate-swapchain
-  )
+  (declare (ignore width height))
+  (recreate-swapchain window))
+
+(defun recreate-swapchain (window)
+  (let ((fb-width) (fb-height))
+    (loop while (progn (multiple-value-setq (fb-width fb-height) (get-framebuffer-size window))
+		       (or (zerop fb-width) (zerop fb-height)))
+       do (glfwWaitEvents))
+    
+    (unless (or (zerop fb-width) (zerop fb-height))
+      (with-slots (swapchain application) window
+	(with-slots (device) swapchain
+	  (with-slots (allocator) device
+	  (vkDeviceWaitIdle (h device))
+	  
+	  (vkDestroyImageView (h device) (h (depth-image-view swapchain)) (h allocator))
+	  (vkDestroyImage (h device) (h (depth-image swapchain)) (h allocator))
+	  (vkFreeMemory (h device) (h (allocated-memory (depth-image swapchain))) (h allocator))
+	  
+	  (destroy-framebuffers swapchain);;
+	  (free-command-buffers device);;
+
+	  (let* ((pipeline (geometry-pipeline application))
+		 (vertex-shader (vertex-shader pipeline))
+		 (fragment-shader (fragment-shader pipeline)))
+	  (destroy-pipeline application);;
+	  (destroy-pipeline-layout application);;
+	  (destroy-render-pass window);;
+	  (destroy-image-views swapchain);;
+
+	  (vkDestroySwapchainKHR (h device) (h swapchain) (h allocator))
+
+	  (let ((surface-format (surface-format swapchain))
+		(present-mode VK_PRESENT_MODE_FIFO_KHR))
+
+	    (setf swapchain (create-swapchain device window fb-width fb-height
+					      surface-format present-mode
+					      #+nil :old-swapchain #+nil swapchain))
+
+	    (let ((render-pass
+		   (create-render-pass device surface-format :allocator allocator))
+		  (pipeline-layout
+		   (create-pipeline-layout device (list (create-descriptor-set-layout device))
+					   :allocator allocator))
+		  (queued-frames (number-of-images swapchain)))
+	      ;; todo (above): pipeline-layout reliant on default, cache or specify dsl
+	      (setf (render-pass window) render-pass
+		    (geometry-pipeline-layout application) pipeline-layout
+		    (geometry-pipeline application)
+		    (create-graphics-pipeline device +null-pipeline-cache+ pipeline-layout render-pass
+			   queued-frames fb-width fb-height
+			   vertex-shader fragment-shader))
+	      (setup-framebuffers device render-pass swapchain)
+	      (create-command-buffers device (command-pools device) queued-frames)
+	      ))))))))
+  (values))
+
+(defun destroy-image-views (swapchain)
+  (with-slots (color-image-views) swapchain
+    (loop for image-view across color-image-views
+       do (with-slots (device) image-view
+	    (with-slots (allocator) device
+	      (vkDestroyImageView (h device) (h image-view) (h allocator))))
+       finally (setf color-image-views nil)))
+  (values))
+
+(defun destroy-render-pass (window)
+  (with-slots (render-pass) window
+    (with-slots (device) render-pass
+      (with-slots (allocator) device
+      (vkDestroyRenderPass (h device) (h render-pass) (h allocator))
+      (setf render-pass nil))))
+  (values))
+
+(defun destroy-pipeline (application)
+  (with-slots (geometry-pipeline) application
+    (with-slots (device) geometry-pipeline
+      (with-slots (allocator) device
+	(vkDestroyPipeline (h device) (h geometry-pipeline) (h allocator))
+	(setf geometry-pipeline nil))))
+  (values))
+
+(defun destroy-pipeline-layout (application)
+  (with-slots (geometry-pipeline-layout) application
+    (with-slots (device) geometry-pipeline-layout
+      (with-slots (allocator) device
+      (vkDestroyPipelineLayout (h device) (h geometry-pipeline-layout) (h allocator))
+      (setf geometry-pipeline-layout nil))))
+  (values))
+
+(defun free-command-buffers (device)
+  (loop for command-buffer across (command-buffers device)
+     for command-pool across (command-pools device)
+     do (with-foreign-object (p-command-buffer 'VkCommandBuffer)
+	  (setf (mem-aref p-command-buffer 'VkCommandBuffer) (h command-buffer))
+	  (vkFreeCommandBuffers (h device) (h command-pool) 1 p-command-buffer))
+     finally (setf (command-buffers device) nil))
+  (values))
+
+(defun destroy-command-pools (device)
+  (loop for command-pool across (command-pools device)
+     do (vkDestroyCommandPool (h device) (h command-pool) (h (allocator command-pool)))
+     finally (setf (command-pools device) nil))
+  (values))
+		
+
+(defun destroy-framebuffers (swapchain)
+  (with-slots (device) swapchain
+    (with-slots (allocator) device
+    (let ((framebuffers (framebuffers swapchain))
+	  (device-handle (h device))
+	  (allocator-handle (h allocator)))
+      (loop for framebuffer across framebuffers
+	 do (vkDestroyFramebuffer device-handle (h framebuffer) allocator-handle)
+	 finally (setf (framebuffers swapchain) nil)))))
+  (values))
+
+#+NIL
+(defun destroy-image-views (swapchain)
+  (with-slots (device allocator) swapchain
+    (let ((color-image-views (color-image-views swapchain))
+	  (device-handle (h device))
+	  (allocator-handle (h allocator)))
+      (loop for image-view across color-image-views
+	 do (vkDestroyImageView device-handle (h image-view) allocator-handle)
+	 finally (setf (color-image-views swapchain) nil))))
+  (values))
 
 (defcallback resize-framebuffer-callback :void ((window :pointer) (w :int) (h :int))
-  (resize-framebuffer window w h))
+  (resize-framebuffer (find-window window) w h))
 
 (defun set-framebuffer-size-callback (window &optional (callback-name 'resize-framebuffer-callback))
   (glfwSetFramebufferSizeCallback (h window) (get-callback callback-name)))
@@ -3968,6 +4115,10 @@
    ;; swapchain contains surface-format, present-mode, fb-height, fb-width, device
    (render-pass :accessor render-pass)
    (geometry-pipeline :accessor geometry-pipeline)
+   (geometry-pipeline-layout :accessor geometry-pipeline-layout)
+   (geometry-pipeline-vertex-shader :accessor geometry-pipeline-vertex-shader)
+   (geometry-pipeline-geometry-shader :accessor geometry-pipeline-geometry-shader)
+   (geometry-pipeline-fragment-shader :accessor geometry-pipeline-fragment-shader)
    (logical-devices :initform () :accessor logical-devices)
    (uniform-buffer-vs :accessor uniform-buffer-vs)
    (vertex-buffer :accessor vertex-buffer)
@@ -4026,7 +4177,7 @@
   (let* ((vulkan-instance (create-instance :application-name "VkTk Demo" #+darwin :layer-names #+darwin nil))
 	 (debug-callback #+windows(create-debug-report-callback vulkan-instance 'debug-report-callback))
 	 (physical-devices (enumerate-physical-devices vulkan-instance))
-	 (main-window (create-window :width width :height height :title "VkTk Demo"))
+	 (main-window (create-window app :width width :height height :title "VkTk Demo"))
 	 (surface (create-window-surface vulkan-instance main-window)))
     
     (multiple-value-bind (gpu index)
@@ -4037,24 +4188,32 @@
       (let* ((device (create-logical-device gpu))
 	     (surface-format (find-supported-format surface))
 	     (present-mode VK_PRESENT_MODE_FIFO_KHR)		     
-	     (swapchain (create-swapchain device surface width height surface-format present-mode))
+	     (swapchain (create-swapchain device main-window width height surface-format present-mode))
 	     (queued-frames (number-of-images swapchain))
 	     (render-pass (create-render-pass device surface-format))
 	     (dsl (create-descriptor-set-layout device))
-	     (pipeline-layout (create-pipeline-layout device (list dsl))))	
+	     (pipeline-layout (create-pipeline-layout device (list dsl))))
+	
+	;;(setf (geometry-pipeline-layout app) pipeline-layout)
 
+	(setf (render-pass main-window) render-pass)
 
 	(let* ((vertex-shader (create-shader-module-from-file
 			       device (concatenate 'string *assets-dir* "shaders/vert.spv")))
 	       (fragment-shader (create-shader-module-from-file
 				 device (concatenate 'string *assets-dir* "shaders/frag.spv")))
-	       (geometry-pipeline (create-pipeline device +null-pipeline-cache+ pipeline-layout render-pass
-						   (number-of-images swapchain) width height
-						   vertex-shader fragment-shader))
+	       (geometry-pipeline (create-graphics-pipeline
+				   device +null-pipeline-cache+ pipeline-layout render-pass
+				   (number-of-images swapchain) width height
+				   vertex-shader fragment-shader))
 	       (command-pools (create-command-pools device index queued-frames)))
 
-	  (vkDestroyShaderModule (h device) (h vertex-shader) +nullptr+)
-	  (vkDestroyShaderModule (h device) (h fragment-shader) +nullptr+)
+	  (setf (vertex-shader geometry-pipeline) vertex-shader
+		(fragment-shader geometry-pipeline) fragment-shader
+		(geometry-shader geometry-pipeline) nil)
+
+	  ;;(vkDestroyShaderModule (h device) (h vertex-shader) +nullptr+)
+	  ;;(vkDestroyShaderModule (h device) (h fragment-shader) +nullptr+)
 
 	  (setup-framebuffers device render-pass swapchain)
 	    
@@ -4066,7 +4225,8 @@
 		 (descriptor-set (create-descriptor-set device uniform-buffer-vs (list dsl) descriptor-pool))
 		 (command-buffers (create-command-buffers device command-pools queued-frames)))
 	    (declare (ignorable command-buffers))
-	      
+
+	    (setf (geometry-pipeline-layout app) pipeline-layout)
 	    (setf (debug-callback app) debug-callback)
 	    (setf (system-gpus app) physical-devices)
 	    (setf (logical-devices app) (list device))

@@ -451,7 +451,7 @@
 							 :stage-flags VK_SHADER_STAGE_VERTEX_BIT
 							 :offset 0
 							 :size (* 4 (foreign-type-size :float))))))
-      (setf (pipeline app) (create-pipeline (device app) (pipeline-cache app) (pipeline-layout app)
+      (setf (pipeline app) (create-graphics-pipeline (device app) (pipeline-cache app) (pipeline-layout app)
 					    (render-pass app) 1 width height
 					    vtx-shader idx-shader :allocator allocator
 					    :vertex-type '(:struct ig::ImDrawVert)
@@ -561,37 +561,33 @@
   (setf (mouse-wheel *imgui*) (coerce (+ (mouse-wheel *imgui*) yoffset) 'single-float))
   (values))
 
-(defcallback imgui-key-callback :void ((user-data :pointer) (key :int) (action :int) (mods :int))
-  (declare (ignorable user-data mods))
-  (let ((io (ig::igGetIO)))
+(defcallback imgui-key-callback :void ((user-data :pointer) (key :int) (arg2 :int) (action :int) (mods :int))
+  (declare (ignorable user-data arg2 mods))
+  (imgui-key-callback-function key action))
+
+(defun imgui-key-callback-function (key action)
+  (let* ((io (ig::igGetIO))
+	 (p-keys-down (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)))
     (when (eq action GLFW_PRESS)
-      (setf (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown) :bool key) t))
+      (setf (mem-aref p-keys-down :bool key) t))
     (when (eq action GLFW_RELEASE)
-      (setf (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown) :bool key) nil))
+      (setf (mem-aref p-keys-down :bool key) nil))
 
     (setf (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::KeyCtrl)
-	  (or (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_LEFT_CONTROL)
-	      (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_RIGHT_CONTROL))
+	  (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_CONTROL)
+	      (mem-aref p-keys-down :bool GLFW_KEY_RIGHT_CONTROL))
 		   
 	  (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::KeyShift)
-	  (or (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_LEFT_SHIFT)
-	      (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_RIGHT_SHIFT))
+	  (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_SHIFT)
+	      (mem-aref p-keys-down :bool GLFW_KEY_RIGHT_SHIFT))
 
 	  (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::KeyAlt)
-	  (or (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_LEFT_ALT)
-	      (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_RIGHT_ALT))
+	  (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_ALT)
+	      (mem-aref p-keys-down :bool GLFW_KEY_RIGHT_ALT))
 
 	  (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::KeySuper)
-	  (or (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_LEFT_SUPER)
-	      (mem-aref (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)
-			:bool GLFW_KEY_RIGHT_SUPER)))
+	  (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_SUPER)
+	      (mem-aref p-keys-down :bool GLFW_KEY_RIGHT_SUPER)))
 	       
     (values)))
 
@@ -792,8 +788,10 @@
 	  (mem-aref p-key-map :int ImGuiKey_PageDown) GLFW_KEY_PAGE_DOWN
 	  (mem-aref p-key-map :int ImGuiKey_Home) GLFW_KEY_HOME
 	  (mem-aref p-key-map :int ImGuiKey_End) GLFW_KEY_END
+	  (mem-aref p-key-map :int ig::ImGuiKey_Insert) GLFW_KEY_INSERT
 	  (mem-aref p-key-map :int ImGuiKey_Delete) GLFW_KEY_DELETE
 	  (mem-aref p-key-map :int ImGuiKey_Backspace) GLFW_KEY_BACKSPACE
+	  (mem-aref p-key-map :int ig::ImGuiKey_Space) GLFW_KEY_SPACE
 	  (mem-aref p-key-map :int ImGuiKey_Enter) GLFW_KEY_ENTER
 	  (mem-aref p-key-map :int ImGuiKey_Escape) GLFW_KEY_ESCAPE
 	  (mem-aref p-key-map :int ImGuiKey_A) GLFW_KEY_A

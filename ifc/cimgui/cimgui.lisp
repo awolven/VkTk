@@ -1967,7 +1967,7 @@
 
 (cffi:defcfun ("ImGuiIO_AddInputCharacter" ImGuiIO_AddInputCharacter) :void
   (self :pointer)
-  (c :pointer))
+  (c :unsigned-short))
 
 (cffi:defcfun ("ImGuiIO_AddInputCharactersUTF8" ImGuiIO_AddInputCharactersUTF8) :void
   (self :pointer)
