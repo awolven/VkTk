@@ -235,6 +235,8 @@
    (supports-subset-allocations-p :accessor supports-subset-allocations-p)
    (supported-present-modes :accessor supported-present-modes)))
 
+(defconstant +max-concurrently-processed-frames+ 2)
+
 (defclass swapchain (handle-mixin logical-device-mixin)
   ((surface-format :initarg :surface-format :reader surface-format)
    (create-info :accessor create-info)
@@ -257,7 +259,38 @@
 
 (defparameter +null-swapchain+ (make-instance 'swapchain :handle +nullptr+))
 
+(defclass frame-resources ()
+  ((fence :reader fence :initarg :fence)
+   (fence-waitable-p :accessor fence-waitable-p :initarg :fence-waitable-p)
+   (image-sem :reader image-sem :initarg :image-sem)
+   (draw-sem :reader draw-sem :initarg :draw-sem)
+   (present-sem :reader present-sem :initarg :present-sem)
+   (image-acquired-p :accessor image-acquired-p)
+   (image-sem-waitable-p :accessor image-sem-waitable-p)))
 
+(defun create-frame-resources (device &key (allocator +null-allocator+))
+  (flet ((create-semaphore ()
+	   (with-vk-struct (p-info VkSemaphoreCreateInfo)
+	     (with-foreign-objects ((p-semaphore 'VkSemaphore))
+	       (check-vk-result
+		(vkCreateSemaphore (h device) p-info (h allocator) p-semaphore))
+	       (make-instance 'semaphore
+			      :handle (mem-aref p-semaphore 'VkSemaphore))))))
+    (loop for i from 0 below +max-concurrently-processed-frames+
+       collect (make-instance 'frame-resources
+			      :fence (with-vk-struct (p-info VkFenceCreateInfo)
+				       (with-foreign-slots ((vk::flags)
+							    p-info
+							    (:struct VkFenceCreateInfo))
+					 (setf vk::flags VK_FENCE_CREATE_SIGNALED_BIT)
+					 (with-foreign-object (p-fence 'VkFence)
+					   (check-vk-result (vkCreateFence (h device) p-info (h allocator) p-fence))
+					   (make-instance 'fence :handle (mem-aref p-fence 'VkFence)))))
+			      :fence-waitable-p nil
+			      :image-sem (create-semaphore)
+			      :draw-sem (create-semaphore)
+			      :present-sem (create-semaphore)))))
+			    
 
 
 
@@ -293,18 +326,18 @@
 
 
 (defparameter *validation-layers*
-  (list "VK_LAYER_LUNARG_vktrace" ;; note: trying to enable this layer causes vkcreateinstance to fail, needs to find a connection.
+  (list #-darwin "VK_LAYER_LUNARG_vktrace" ;; note: trying to enable this layer causes vkcreateinstance to fail, needs to find a connection.
 	"VK_LAYER_GOOGLE_unique_objects" ;; the rest seem to work fine
 	"VK_LAYER_GOOGLE_threading"
 	"VK_LAYER_LUNARG_parameter_validation"
 	"VK_LAYER_LUNARG_standard_validation"
-	"VK_LAYER_LUNARG_screenshot"
+	#-darwin "VK_LAYER_LUNARG_screenshot"
 	"VK_LAYER_LUNARG_object_tracker"
-	"VK_LAYER_LUNARG_monitor"
-	"VK_LAYER_LUNARG_device_simulation"
+	#-darwin "VK_LAYER_LUNARG_monitor"
+	#-darwin "VK_LAYER_LUNARG_device_simulation"
 	"VK_LAYER_LUNARG_core_validation"
-	"VK_LAYER_LUNARG_assistant_layer"
-	"VK_LAYER_LUNARG_api_dump"))
+	#-darwin "VK_LAYER_LUNARG_assistant_layer"
+	#-darwin "VK_LAYER_LUNARG_api_dump"))
 
 (defun available-layers ()
   (remove-duplicates (append (mapcar #'first (enumerate-instance-layer-properties)) *validation-layers*) :test #'string=))
@@ -2260,7 +2293,7 @@
 
 (defun create-swapchain (device window width height surface-format present-mode
 			 &key (allocator +null-allocator+)
-			   (old-swapchain +null-swapchain+)
+			   (old-swapchain nil)
 			   (image-usage VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
 			   (image-sharing-mode VK_SHARING_MODE_EXCLUSIVE)
 			   (pre-transform VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
@@ -2292,15 +2325,15 @@
 	    vk::compositeAlpha composite-alpha
 	    vk::presentMode present-mode
 	    vk::clipped (if (or (not clipped-p) (and (integerp clipped-p) (zerop clipped-p))) VK_FALSE VK_TRUE)
-	    vk::oldSwapchain (h old-swapchain))
+	    vk::oldSwapchain (if old-swapchain (h old-swapchain) +nullptr+))
 
       (let* ((capabilities (capabilities surface))
 	     (cap-min-image-count (min-image-count capabilities))
 	     (cap-max-image-count (max-image-count capabilities)))
 	
 	(if (> cap-max-image-count 0)
-	    (setf vk::minImageCount (min (+ cap-min-image-count 2) cap-max-image-count))
-	    (setf vk::minImageCount (+ cap-min-image-count 2)))
+	    (setf vk::minImageCount (min (+ cap-min-image-count 1) cap-max-image-count))
+	    (setf vk::minImageCount (+ cap-min-image-count 1)))
 	
 	(let ((cap-current-extent-width (capabilities-current-extent-width capabilities))
 	      (fb-width)
@@ -2325,6 +2358,7 @@
 
 	  (with-foreign-object (p-swapchain 'VkSwapchainKHR)
 	    (check-vk-result (vkCreateSwapchainKHR (h device) p-create-info (h allocator) p-swapchain))
+	    (when old-swapchain (vkDestroySwapchainKHR (h device) (h old-swapchain) (h allocator)))
 	    (let ((swapchain (make-instance 'swapchain :handle (mem-aref p-swapchain 'VkSwapchainKHR)
 					    :device device
 					    :width fb-width
@@ -3382,42 +3416,47 @@
 	  (vkDestroyImageView (h device) (h (depth-image-view swapchain)) (h allocator))
 	  (vkDestroyImage (h device) (h (depth-image swapchain)) (h allocator))
 	  (vkFreeMemory (h device) (h (allocated-memory (depth-image swapchain))) (h allocator))
+
+	  (destroy-image-views swapchain);;
 	  
 	  (destroy-framebuffers swapchain);;
 	  (free-command-buffers device);;
 
-	  (let* ((pipeline (geometry-pipeline application))
-		 (vertex-shader (vertex-shader pipeline))
-		 (fragment-shader (fragment-shader pipeline)))
-	  (destroy-pipeline application);;
-	  (destroy-pipeline-layout application);;
+	  (let* (#+NIL (pipeline (geometry-pipeline application))
+		 #+NIL (vertex-shader (vertex-shader pipeline))
+		 #+NIL (fragment-shader (fragment-shader pipeline)))
+	    ;;(destroy-pipeline application);;
+	    ;;(destroy-pipeline-layout application);;
 	  (destroy-render-pass window);;
-	  (destroy-image-views swapchain);;
 
-	  (vkDestroySwapchainKHR (h device) (h swapchain) (h allocator))
+	  ;;(vkDestroySwapchainKHR (h device) (h swapchain) (h allocator))
 
 	  (let ((surface-format (surface-format swapchain))
-		(present-mode VK_PRESENT_MODE_FIFO_KHR))
+		(present-mode VK_PRESENT_MODE_FIFO_KHR)
+		(old-swapchain swapchain))
 
 	    (setf swapchain (create-swapchain device window fb-width fb-height
 					      surface-format present-mode
-					      #+nil :old-swapchain #+nil swapchain))
+					      :old-swapchain old-swapchain))
+
+	    
 
 	    (let ((render-pass
 		   (create-render-pass device surface-format :allocator allocator))
+		  #+nil
 		  (pipeline-layout
 		   (create-pipeline-layout device (list (create-descriptor-set-layout device))
 					   :allocator allocator))
 		  (queued-frames (number-of-images swapchain)))
 	      ;; todo (above): pipeline-layout reliant on default, cache or specify dsl
 	      (setf (render-pass window) render-pass
-		    (geometry-pipeline-layout application) pipeline-layout
-		    (geometry-pipeline application)
-		    (create-graphics-pipeline device +null-pipeline-cache+ pipeline-layout render-pass
+		    #+NIL(geometry-pipeline-layout application) #+NIL pipeline-layout
+		    #+NIL(geometry-pipeline application)
+		    #+NIL(create-graphics-pipeline device +null-pipeline-cache+ pipeline-layout render-pass
 			   queued-frames fb-width fb-height
 			   vertex-shader fragment-shader))
 	      (setup-framebuffers device render-pass swapchain)
-	      (create-command-buffers device (command-pools device) queued-frames)
+	      (setf (command-buffers application) (create-command-buffers device (command-pools device) queued-frames))
 	      ))))))))
   (values))
 
@@ -3426,7 +3465,7 @@
     (loop for image-view across color-image-views
        do (with-slots (device) image-view
 	    (with-slots (allocator) device
-	      (vkDestroyImageView (h device) (h image-view) (h allocator))))
+		(vkDestroyImageView (h device) (h image-view) (h allocator))))
        finally (setf color-image-views nil)))
   (values))
 
@@ -3896,9 +3935,7 @@
     descriptor-set))
 
 (defclass command-buffer (handle-mixin)
-  ((fence :accessor fence)
-   (present-complete-semaphore :accessor present-complete-semaphore)
-   (render-complete-semaphore  :accessor render-complete-semaphore)))
+  ())
 
 (defclass fence (handle-mixin)
   ())
@@ -3922,30 +3959,42 @@
 	       (make-instance 'command-buffer
 			      :handle (mem-aref p-command-buffer 'VkCommandBuffer))))
 		
-	  (with-vk-struct (p-info VkFenceCreateInfo)
-	    (with-foreign-slots ((vk::flags)
-				 p-info
-				 (:struct VkFenceCreateInfo))
-	      (setf vk::flags VK_FENCE_CREATE_SIGNALED_BIT)
-	      (with-foreign-object (p-fence 'VkFence)
-		(check-vk-result (vkCreateFence (h device) p-info (h allocator) p-fence))
-		(setf (fence command-buffer)
-		      (make-instance 'fence :handle (mem-aref p-fence 'VkFence))))))
+	  
 
-	  (with-vk-struct (p-info VkSemaphoreCreateInfo)
-	    (with-foreign-objects ((p-present-complete-semaphore 'VkSemaphore)
-				   (p-render-complete-semaphore 'VkSemaphore))
-	      (check-vk-result
-	       (vkCreateSemaphore (h device) p-info (h allocator) p-present-complete-semaphore))
-	      (setf (present-complete-semaphore command-buffer)
-		    (make-instance 'semaphore
-				   :handle (mem-aref p-present-complete-semaphore 'VkSemaphore)))
-	      (check-vk-result
-	       (vkCreateSemaphore (h device) p-info (h allocator) p-render-complete-semaphore))
-	      (setf (render-complete-semaphore command-buffer)
-		    (make-instance 'semaphore
-				   :handle (mem-aref p-render-complete-semaphore 'VkSemaphore)))))
+	  
 	  command-buffer)))))
+
+
+
+(defun create-semaphores-and-fences (application device queued-frames &key (allocator +null-allocator+))
+  (let ((pcs (setf (present-complete-semaphore application) (make-array queued-frames)))
+	(rcs (setf (render-complete-semaphore application) (make-array queued-frames)))
+	(fences (setf (fences application) (make-array queued-frames))))
+    (loop for i from 0 below queued-frames
+       do
+	 (with-vk-struct (p-info VkSemaphoreCreateInfo)
+	   (with-foreign-objects ((p-present-complete-semaphore 'VkSemaphore)
+				  (p-render-complete-semaphore 'VkSemaphore))
+	     (check-vk-result
+	      (vkCreateSemaphore (h device) p-info (h allocator) p-present-complete-semaphore))
+	     (setf (elt pcs i)
+		   (make-instance 'semaphore
+				  :handle (mem-aref p-present-complete-semaphore 'VkSemaphore)))
+	   (check-vk-result
+	    (vkCreateSemaphore (h device) p-info (h allocator) p-render-complete-semaphore))
+	   (setf (elt rcs i)
+		 (make-instance 'semaphore
+				:handle (mem-aref p-render-complete-semaphore 'VkSemaphore)))))
+	 (with-vk-struct (p-info VkFenceCreateInfo)
+	   (with-foreign-slots ((vk::flags)
+				p-info
+				(:struct VkFenceCreateInfo))
+	     (setf vk::flags VK_FENCE_CREATE_SIGNALED_BIT)
+	     (with-foreign-object (p-fence 'VkFence)
+	       (check-vk-result (vkCreateFence (h device) p-info (h allocator) p-fence))
+	       (setf (elt fences i)
+		     (make-instance 'fence :handle (mem-aref p-fence 'VkFence))))))))
+  (values))
 
 (defun begin-single-time-commands (device command-pool)
   (with-vk-struct (p-alloc-info VkCommandBufferAllocateInfo)
@@ -4125,14 +4174,19 @@
    (index-buffer :accessor index-buffer)
    (descriptor-set :accessor descriptor-set)
 
-   (frame-index :initform 0 :accessor frame-index)
+   (current-frame :initform 0 :accessor current-frame)
+   (image-index :accessor image-index)
    (command-pools :accessor command-pools)
    (command-buffers :accessor command-buffers)
    (descriptor-pool :accessor descriptor-pool)
    (pipeline-cache :initform +null-pipeline-cache+ :initarg :pipeline-cache :reader pipeline-cache)
    (allocation-callbacks :initform +null-allocator+ :initarg :allocator :reader allocator)
 
-   (clear-value :initform (make-array 4 :element-type 'single-float) :reader clear-value)))
+   (clear-value :initform (make-array 4 :element-type 'single-float) :reader clear-value)
+   (frame-resources :accessor frame-resources)
+   (fences :accessor fences)
+   (present-complete-semaphore :accessor present-complete-semaphore)
+   (render-complete-semaphore  :accessor render-complete-semaphore)))
 
 (defcstruct mat4
   (x0 :float)
@@ -4226,6 +4280,10 @@
 		 (command-buffers (create-command-buffers device command-pools queued-frames)))
 	    (declare (ignorable command-buffers))
 
+	    ;;(setf (frame-resources app) (make-array +max-concurrently-processed-frames+
+	    ;;					    :initial-contents (create-frame-resources device)))
+	    (create-semaphores-and-fences app device queued-frames)
+
 	    (setf (geometry-pipeline-layout app) pipeline-layout)
 	    (setf (debug-callback app) debug-callback)
 	    (setf (system-gpus app) physical-devices)
@@ -4269,8 +4327,8 @@
 
     (let* ((device (first (logical-devices app)))
 	   (queue (first (second (first (device-queues device))))) ;;crazy
-	   (command-pool (elt (command-pools app) (frame-index app)))
-	   (command-buffer (elt (command-buffers app) (frame-index app))))
+	   (command-pool (elt (command-pools app) 0))
+	   (command-buffer (elt (command-buffers app) 0)))
 
 
       (imgui-init *imgui* (main-window app)
@@ -4279,7 +4337,7 @@
 		  :render-pass (render-pass app)
 		  :pipeline-cache (pipeline-cache app)
 		  :descriptor-pool (descriptor-pool app)
-		  :frame-count (number-of-images (swapchain (render-pass app))))
+		  :frame-count (number-of-images (swapchain (main-window app))))
       (ig::igStyleColorsClassic (ig::igGetStyle))
       (check-vk-result
        (vkResetCommandPool (h device) (h command-pool) 0))
@@ -4410,118 +4468,66 @@
 	       (frame-begin app)
 
 	       ;; draw stuff here
-	       (imgui-render *imgui* (elt (command-buffers app) (frame-index app))
-			     (frame-index app))
+	       (imgui-render *imgui* (elt (command-buffers app) (current-frame app))
+			     (current-frame app))
 
 	       (frame-end app)
 
 	       (frame-present app)
 	       ))))))
 
-(defun frame-present (app)
-  (let ((present-index (frame-index app)
-	  #+NIL(if *imgui-unlimited-frame-rate*
-		   (mod (1- (+ (frame-index app) IMGUI_VK_QUEUED_FRAMES)) IMGUI_VK_QUEUED_FRAMES)
-		   (frame-index app))))
-
-    (with-foreign-objects ((p-swapchains 'VkSwapchainKHR 1)
-			   (p-render-complete-semaphore 'VkSemaphore))
-      (setf (mem-aref p-swapchains 'VkSwapchainKHR 0) (h (swapchain (render-pass app)))
-	    (mem-aref p-render-complete-semaphore 'VkSemaphore)
-	    (h (render-complete-semaphore (elt (command-buffers app) (frame-index app)))))
-      (with-vk-struct (p-info VkPresentInfoKHR)
-	(with-foreign-slots ((vk::waitSemaphoreCount vk::pWaitSemaphores vk::swapchainCount
-						     vk::pSwapchains vk::pImageIndices)
-			     p-info (:struct VkPresentInfoKHR))
-	  (with-foreign-objects ((p-indices :uint32)
-				 (p-swapchain 'VkSwapchainKHR))
-	      
-	    (setf (mem-aref p-indices :uint32) present-index
-		  (mem-aref p-swapchain 'VkSwapchainKHR) (h (swapchain (render-pass app))))
-	      
-	    (setf vk::waitSemaphoreCount 1
-		  vk::pWaitSemaphores p-render-complete-semaphore
-		  vk::swapchainCount 1
-		  vk::pSwapchains p-swapchain
-		  vk::pImageIndices p-indices)
-
-	    (check-vk-result
-	     (vkQueuePresentKHR
-	      (h (first (second (first (device-queues (first (logical-devices app))))))) p-info))
-
-	    (setf (frame-index app) (mod (1+ (frame-index app))
-					 (number-of-images (swapchain (render-pass app))))))))))
-
-  (values))
-
-(defun frame-end (app)
-    (vkCmdEndRenderPass (h (elt (command-buffers app) (frame-index app))))
-    
-    (let ((wait-stage VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT))
-      (with-foreign-objects ((p-wait-stage :int)
-			     (p-command-buffer 'VkCommandBuffer)
-			     (p-present-complete-semaphore 'VkSemaphore)
-			     (p-render-complete-semaphore 'VkSemaphore)
-			     (p-fence 'VkFence))
-	(setf (mem-aref p-wait-stage :int) wait-stage
-	      (mem-aref p-command-buffer 'VkCommandBuffer) (h (elt (command-buffers app) (frame-index app)))
-	      (mem-aref p-present-complete-semaphore 'VkSemaphore)
-	      (h (present-complete-semaphore (elt (command-buffers app) (frame-index app))))
-	      (mem-aref p-render-complete-semaphore 'VkSemaphore)
-	      (h (render-complete-semaphore (elt (command-buffers app) (frame-index app))))
-	      (mem-aref p-fence 'VkFence) (h (fence (elt (command-buffers app) (frame-index app)))))
-	(with-vk-struct (p-info VkSubmitInfo)
-	  (with-foreign-slots ((vk::waitSemaphoreCount vk::pWaitSemaphores vk::pWaitDstStageMask vk::commandBufferCount
-						       vk::pCommandBuffers vk::signalSemaphoreCount
-						       vk::pSignalSemaphores)
-			       p-info (:struct VkSubmitInfo))
-	    
-	    (setf vk::waitSemaphoreCount 1
-		  vk::pWaitSemaphores p-present-complete-semaphore
-		  vk::pWaitDstStageMask p-wait-stage
-		  vk::commandBufferCount 1
-		  vk::pCommandBuffers p-command-buffer
-		  vk::signalSemaphoreCount 1
-		  vk::pSignalSemaphores p-render-complete-semaphore)
-	    (check-vk-result (vkEndCommandBuffer (h (elt (command-buffers app) (frame-index app)))))
-	    (check-vk-result (vkResetFences (h (first (logical-devices app))) 1 p-fence))
-	    (check-vk-result (vkQueueSubmit
-			      (h (first (second (first (device-queues (first (logical-devices app)))))))
-			      1 p-info
-			      (h (fence (elt (command-buffers app) (frame-index app))))))
-	    ;;(igEndFrame);; called in igRender.
-	    (values))))))
-
 (defun frame-begin (app)
-  (let ((device (first (logical-devices app)))
-	(swapchain (swapchain (render-pass app))))
+  (let* ((device (first (logical-devices app)))
+	(swapchain (swapchain (main-window app)))
+	(fence (elt (fences app) (current-frame app)))
+	(present-complete-sem (elt (present-complete-semaphore app) (current-frame app)))
+	(command-pool (elt (command-pools app) 0))
+	(current-command-buffer (elt (command-buffers app) (current-frame app)))
+	(current-framebuffer (elt (framebuffers swapchain) (current-frame app)))
+	)
+	
     (tagbody
+       
      continue
+       
        (with-foreign-object (p-fence 'VkFence)
-	 (setf (mem-aref p-fence 'VkFence) (h (fence (elt (command-buffers app) (frame-index app)))))
+	 
+	 (setf (mem-aref p-fence 'VkFence) (h fence))
+	 
 	 (let ((result (vkWaitForFences (h device) 1 p-fence VK_TRUE 100)))
+	   ;; probably can set wait time to uint32 max and eliminate this tagbody
 	   (when (eq result VK_SUCCESS)
 	     (go break))
 	   (when (eq result VK_TIMEOUT)
 	     (go continue))
 	   (check-vk-result result)))
+       
      break)
 
     (with-foreign-object (p-back-buffer-index :uint32)
 
       (check-vk-result
-       (vkAcquireNextImageKHR (h device) (h (swapchain (render-pass app)))
-			      UINT64_MAX (h (present-complete-semaphore (elt (command-buffers app) (frame-index app))))
-			      VK_NULL_HANDLE p-back-buffer-index))
-      (setf (frame-index app) (mem-aref p-back-buffer-index :uint32)))
+       (vkAcquireNextImageKHR (h device)
+			      (h (swapchain (main-window app)))
+			      UINT64_MAX
+			      (h present-complete-sem)
+			      VK_NULL_HANDLE
+			      p-back-buffer-index))
+      
+      (setf (image-index app) (mem-aref p-back-buffer-index :uint32)))
 
-    (check-vk-result (vkResetCommandPool (h device) (h (elt (command-pools app) (frame-index app))) 0))
+    ;; reset all the command buffers from pool
+    ;;(check-vk-result (vkResetCommandPool (h device) (h command-pool) 0))
 
     (with-vk-struct (p-info VkCommandBufferBeginInfo)
-      (with-foreign-slots ((vk::flags) p-info (:struct VkCommandBufferBeginInfo))
+      (with-foreign-slots ((vk::flags)
+			   p-info
+			   (:struct VkCommandBufferBeginInfo))
+	
 	(setf vk::flags VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
 
-	(check-vk-result (vkBeginCommandBuffer (h (elt (command-buffers app) (frame-index app))) p-info))))
+	;; start recording into current command buffer
+	(check-vk-result (vkBeginCommandBuffer (h current-command-buffer) p-info))))
 
     (with-vk-struct (p-viewports VkViewport)
       (with-foreign-slots ((vk::x
@@ -4538,7 +4544,7 @@
 	      vk::minDepth 0.0f0
 	      vk::maxDepth 1.0f0))
 
-      (vkCmdSetViewport (h (elt (command-buffers app) (frame-index app))) 0 1 p-viewports))
+      (vkCmdSetViewport (h current-command-buffer) 0 1 p-viewports))
 
     (with-vk-struct (p-scissor VkRect2D)
       (setf (foreign-slot-value
@@ -4551,23 +4557,27 @@
 	      '(:struct VkOffset2D)
 	      'vk::y) 0
 	      
-	      (foreign-slot-value
-	       (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
-	       '(:struct VkExtent2D)
-	       'vk::width) (fb-width swapchain)
+	     (foreign-slot-value
+	      (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
+	      '(:struct VkExtent2D)
+	      'vk::width) (fb-width swapchain)
 	       
-	       (foreign-slot-value
-		(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
-		'(:struct VkExtent2D)
-		'vk::height) (fb-height swapchain))
+	     (foreign-slot-value
+	      (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)
+	      '(:struct VkExtent2D)
+	      'vk::height) (fb-height swapchain))
 
-      (vkCmdSetScissor (h (elt (command-buffers app) (frame-index app))) 0 1 p-scissor))
-
+      (vkCmdSetScissor (h current-command-buffer) 0 1 p-scissor))
 
     (with-vk-struct (p-info VkRenderPassBeginInfo)
-      (with-foreign-slots ((vk::renderPass vk::framebuffer vk::renderArea
-					   vk::clearValueCount vk::pClearValues)
-			   p-info (:struct VkRenderPassBeginInfo))
+      
+      (with-foreign-slots ((vk::renderPass
+			    vk::framebuffer
+			    vk::renderArea
+			    vk::clearValueCount
+			    vk::pClearValues)
+			   p-info
+			   (:struct VkRenderPassBeginInfo))
 
 	(with-foreign-object (p-clear-values '(:union VkClearValue) 2)
 	  (setf (mem-aref (mem-aptr p-clear-values '(:union VkClearValue) 0) :float 0) (elt (clear-value app) 0)
@@ -4581,7 +4591,7 @@
 				       'vk::depthStencil)
 		 '(:struct VkClearDepthStencilValue)
 		 'vk::depth) 1.0f0
-
+		 
 		 (foreign-slot-value
 		  (foreign-slot-pointer (mem-aptr p-clear-values '(:union VkClearValue) 1)
 					'(:union VkClearValue)
@@ -4589,8 +4599,8 @@
 		  '(:struct VkClearDepthStencilValue)
 		  'vk::stencil) 0)
 
-	  (setf vk::renderPass (h (render-pass app))
-		vk::framebuffer (h (elt (framebuffers swapchain) (frame-index app)))
+	  (setf vk::renderPass (h (render-pass (main-window app)))
+		vk::framebuffer (h (elt (framebuffers swapchain) (image-index app)))
 
 		(foreign-slot-value
 		 (foreign-slot-pointer
@@ -4599,17 +4609,112 @@
 		 '(:struct VkExtent2D)
 		 'vk::width) (fb-width swapchain)
 
-		 (foreign-slot-value
+		(foreign-slot-value
 		 (foreign-slot-pointer
 		  (foreign-slot-pointer p-info '(:struct VkRenderPassBeginInfo) 'vk::renderArea)
 		  '(:struct VkRect2D) 'vk::extent)
 		 '(:struct VkExtent2D)
 		 'vk::height) (fb-height swapchain)
 		 		  
-		  vk::clearValueCount 2
-		  vk::pClearValues p-clear-values)
-	  (vkCmdBeginRenderPass (h (elt (command-buffers app) (frame-index app))) p-info
-				VK_SUBPASS_CONTENTS_INLINE)))))
+		vk::clearValueCount 2
+		vk::pClearValues p-clear-values)
+	  
+	  (vkCmdBeginRenderPass (h current-command-buffer) p-info VK_SUBPASS_CONTENTS_INLINE)))))
+  (values))
+
+(defun frame-end (app)
+  (let ((device (first (logical-devices app)))
+	(wait-stage VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+	(fence (elt (fences app) (current-frame app)))
+	(current-command-buffer (elt (command-buffers app) (current-frame app)))
+	(present-complete-sem (elt (present-complete-semaphore app) (current-frame app)))
+	(render-complete-sem (elt (render-complete-semaphore app) (current-frame app)))
+	(queue (first (second (first (device-queues (first (logical-devices app))))))))
+
+    (vkCmdEndRenderPass (h current-command-buffer))
+      
+    (with-foreign-objects ((p-wait-stage :int)
+			   (p-command-buffer 'VkCommandBuffer)
+			   (p-present-complete-semaphore 'VkSemaphore)
+			   (p-render-complete-semaphore 'VkSemaphore)
+			   (p-fence 'VkFence))
+	
+      (setf (mem-aref p-wait-stage :int) wait-stage
+	      
+	    (mem-aref p-command-buffer 'VkCommandBuffer) (h (elt (command-buffers app) (current-frame app)))
+	      
+	    (mem-aref p-present-complete-semaphore 'VkSemaphore) (h present-complete-sem)
+	      
+	    (mem-aref p-render-complete-semaphore 'VkSemaphore) (h render-complete-sem)
+	      
+	    (mem-aref p-fence 'VkFence) (h fence))
+	
+      (with-vk-struct (p-info VkSubmitInfo)
+	  
+	(with-foreign-slots ((vk::waitSemaphoreCount
+			      vk::pWaitSemaphores
+			      vk::pWaitDstStageMask
+			      vk::commandBufferCount
+			      vk::pCommandBuffers
+			      vk::signalSemaphoreCount
+			      vk::pSignalSemaphores)
+			     p-info
+			     (:struct VkSubmitInfo))
+	    
+	  (setf vk::waitSemaphoreCount 1
+		vk::pWaitSemaphores p-present-complete-semaphore
+		vk::pWaitDstStageMask p-wait-stage
+		vk::commandBufferCount 1
+		vk::pCommandBuffers p-command-buffer
+		vk::signalSemaphoreCount 1
+		vk::pSignalSemaphores p-render-complete-semaphore)
+	    
+	  ;; End recording of command buffer
+	  (check-vk-result (vkEndCommandBuffer (h current-command-buffer)))
+
+	  ;; set the state of the fence to unsignaled
+	  (check-vk-result (vkResetFences (h device) 1 p-fence))
+
+	  ;; execute the command buffer
+	  (check-vk-result (vkQueueSubmit (h queue) 1 p-info (h fence)))
+	    
+	  ;;(igEndFrame);; called in igRender.
+	    
+	  (values))))))
+
+(defun frame-present (app)
+  (let ((present-index (image-index app)
+	  #+NIL(if *imgui-unlimited-frame-rate*
+		   (mod (1- (+ (frame-index app) IMGUI_VK_QUEUED_FRAMES)) IMGUI_VK_QUEUED_FRAMES)
+		   (frame-index app)))
+	(queue (first (second (first (device-queues (first (logical-devices app))))))))
+
+    (with-foreign-objects ((p-swapchains 'VkSwapchainKHR 1)
+			   (p-render-complete-semaphore 'VkSemaphore))
+      (setf (mem-aref p-swapchains 'VkSwapchainKHR 0) (h (swapchain (main-window app)))
+	    (mem-aref p-render-complete-semaphore 'VkSemaphore)
+	    (h (elt (render-complete-semaphore app) (current-frame app))))
+      (with-vk-struct (p-info VkPresentInfoKHR)
+	(with-foreign-slots ((vk::waitSemaphoreCount vk::pWaitSemaphores vk::swapchainCount
+						     vk::pSwapchains vk::pImageIndices)
+			     p-info (:struct VkPresentInfoKHR))
+	  (with-foreign-objects ((p-indices :uint32)
+				 (p-swapchain 'VkSwapchainKHR))
+	      
+	    (setf (mem-aref p-indices :uint32) present-index
+		  (mem-aref p-swapchain 'VkSwapchainKHR) (h (swapchain (main-window app))))
+	      
+	    (setf vk::waitSemaphoreCount 1
+		  vk::pWaitSemaphores p-render-complete-semaphore
+		  vk::swapchainCount 1
+		  vk::pSwapchains p-swapchain
+		  vk::pImageIndices p-indices)
+
+	    (check-vk-result
+	     (vkQueuePresentKHR (h queue) p-info))
+	    
+	    (setf (current-frame app) (mod (1+ (current-frame app)) +max-concurrently-processed-frames+)))))))
+
   (values))
 
 #+NIL

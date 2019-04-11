@@ -4,7 +4,7 @@
 (progn
   (sb-posix:setenv "VULKAN_SDK" "/Users/awolven/vulkansdk-macos-1.1.97.0/macOS" 0)
   (sb-posix:setenv "VK_ICD_FILENAMES" "/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/etc/vulkan/icd.d/MoltenVK_icd.json" 0)
-  (sb-posix:setenv "VK_LAYER_PATH" "/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/etc/vulkan/explicit_layers.d" 0)
+  (sb-posix:setenv "VK_LAYER_PATH" "/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/etc/vulkan/explicit_layer.d" 0)
   (sb-posix:setenv "DYLD_LIBRARY_PATH" "/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/lib" 0)
   (sb-posix:setenv "VULKAN_FRAMEWORK_PATH" "/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/Frameworks" 0)
   (sb-posix:setenv "DYLD_FRAMEWORK_PATH" "/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/Frameworks" 0)
