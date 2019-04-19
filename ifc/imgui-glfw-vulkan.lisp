@@ -430,7 +430,7 @@
   (multiple-value-bind (width height) (get-framebuffer-size (window app))
     (let ((vtx-shader (create-shader-module (device app) *imgui-vertex-shader-binary*
 					    *imgui-vertex-shader-binary-size*))
-	  (idx-shader (create-shader-module (device app) *imgui-fragment-shader-binary*
+	  (frag-shader (create-shader-module (device app) *imgui-fragment-shader-binary*
 					    *imgui-fragment-shader-binary-size*)))
       (setf (font-sampler app) (create-sampler (device app) :allocator allocator))
       (setf (descriptor-set-layout app)
@@ -453,7 +453,7 @@
 							 :size (* 4 (foreign-type-size :float))))))
       (setf (pipeline app) (create-graphics-pipeline (device app) (pipeline-cache app) (pipeline-layout app)
 					    (render-pass app) 1 width height
-					    vtx-shader idx-shader :allocator allocator
+					    vtx-shader frag-shader :allocator allocator
 					    :vertex-type '(:struct ig::ImDrawVert)
 					    :vertex-input-attribute-descriptions
 					    (list (make-instance 'vertex-input-attribute-description
@@ -484,7 +484,7 @@
 					    :blend-enable VK_TRUE :depth-clamp-enable VK_FALSE
 					    :src-alpha-blend-factor VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA))
       (vkDestroyShaderModule (h (device app)) (h vtx-shader) (h allocator))
-      (vkDestroyShaderModule (h (device app)) (h idx-shader) (h allocator))
+      (vkDestroyShaderModule (h (device app)) (h frag-shader) (h allocator))
       (values))))
 	  
 (defun imgui-invalidate-font-upload-objects (app)

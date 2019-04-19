@@ -186,21 +186,6 @@
 
 (defparameter +null-pipeline-cache+ (make-instance 'pipeline-cache :handle VK_NULL_HANDLE))
 
-(defclass instance-create-info ()
-  ((app-name)
-   (disallowed-instance-level-extensions)
-   (engine-name)
-   (multithread-safe-p)
-   (memory-type-to-use-for-all-allocs)
-   (validation-callback)))
-
-(defclass application-info ()
-  ((application-name)
-   (application-version)
-   (engine-name)
-   (engine-version)
-   (api-version)))
-
 (defclass instance (handle-mixin)
   ((create-info :accessor create-info)
    (enabled-extensions-info :accessor enabled-extensions-info)
@@ -1943,7 +1928,7 @@
 				    (enable-full-draw-index-uint32 nil)
 				    (enable-image-cube-array nil)
 				    (enable-independent-blend nil)
-				    (enable-geometry-shader t)
+				    (enable-geometry-shader nil)
 				    (enable-tessellation-shader nil)
 				    (enable-sample-rate-shading nil)
 				    (enable-dual-src-blend nil)
@@ -1954,7 +1939,7 @@
 				    (enable-depth-bias-clamp nil)
 				    (enable-fill-mode-non-solid nil)
 				    (enable-depth-bounds nil)
-				    (enable-wide-lines t)
+				    (enable-wide-lines nil)
 				    (enable-large-points t)
 				    (enable-alpha-to-one nil)
 				    (enable-multi-viewport nil)
@@ -3094,7 +3079,7 @@
 	    (setf vk::setLayoutCount dsl-count
 		  vk::pSetLayouts p-set-layouts
 		  vk::pushConstantRangeCount push-constant-range-count
-		  vk::pPushConstantRanges p-push-constant-ranges))
+		  vk::pPushConstantRanges (if push-constant-ranges p-push-constant-ranges +nullptr+)))
 	  (with-foreign-object (p-pipeline-layout 'VkPipelineLayout)
 	    (vkCreatePipelineLayout (h device) p-create-info (h allocator) p-pipeline-layout)
 	    (let ((pipeline-layout
@@ -3655,7 +3640,7 @@
 (defun bind-buffer-memory (device buffer buffer-memory)
   (vkBindBufferMemory (h device) (h buffer) (h buffer-memory) 0))
 
-(defmethod copy-buffer (device command-pool queue src-buffer dst-buffer size)
+(defun copy-buffer (device command-pool queue src-buffer dst-buffer size)
   (with-vk-struct (p-alloc-info VkCommandBufferAllocateInfo)
     (with-foreign-slots ((vk::level
 			  vk::commandPool
@@ -3894,7 +3879,8 @@
 			   :handle (mem-aref p-descriptor-set 'VkDescriptorSet))))))))
 
 (defun create-descriptor-set (device uniform-buffer descriptor-set-layouts descriptor-pool
-			      &key (descriptor-type VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER))
+			      &key (descriptor-type VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+				range)
   ;; this function will probably prove to be very over-generalized.
 
   (let ((descriptor-set
@@ -3910,7 +3896,7 @@
 		    
 	  (setf vk::buffer (h uniform-buffer)
 		vk::offset 0
-		vk::range (size uniform-buffer))))
+		vk::range range)))
 
       (with-vk-struct (p-descriptor-write VkWriteDescriptorSet)
 	(with-foreign-slots ((vk::dstSet
@@ -4134,27 +4120,6 @@
 	  ;; todo: change first second first device-queues device to something sane
 	  (end-single-time-commands device command-pool (first (second (first (device-queues device)))) command-buffer))))))
 
-(defparameter *vertices-list*
-  (list -0.5f0 -0.5f0 0.0f0 1.0f0 0.0f0 0.0f0
-	 0.5f0 -0.5f0 0.0f0 0.0f0 1.0f0 0.0f0
-	 0.5f0  0.5f0 0.0f0 0.0f0 0.0f0 1.0f0
-	 -0.5f0  0.5f0 0.0f0 1.0f0 1.0f0 1.0f0
-
-	 -0.5f0 -0.5f0 -0.5f0 1.0f0 0.0f0 0.0f0
-	 0.5f0 -0.5f0 -0.5f0 0.0f0 1.0f0 0.0f0
-	 0.5f0  0.5f0 -0.5f0 0.0f0 0.0f0 1.0f0
-	 -0.5f0  0.5f0 -0.5f0 1.0f0 1.0f0 1.0f0))
-
-(defparameter *vertex-data* (foreign-alloc :float :initial-contents *vertices-list*))
-(defparameter *vertex-data-size* (* (foreign-type-size :float) (length *vertices-list*)))
-
-(defparameter *indices*
-  (list 0 1 2 2 3 0
-	4 5 6 6 7 4))
-
-(defparameter *index-data* (foreign-alloc :unsigned-short :initial-contents *indices*))
-(defparameter *index-data-size* (* (foreign-type-size :unsigned-short) (length *indices*)))
-
 (defclass application ()
   ((vulkan-instance :accessor vulkan-instance)
    (debug-callback :accessor debug-callback)
@@ -4186,7 +4151,10 @@
    (frame-resources :accessor frame-resources)
    (fences :accessor fences)
    (present-complete-semaphore :accessor present-complete-semaphore)
-   (render-complete-semaphore  :accessor render-complete-semaphore)))
+   (render-complete-semaphore  :accessor render-complete-semaphore)
+
+   (imgui-module :accessor imgui-module)
+   (3d-demo-module :accessor 3d-demo-module)))
 
 (defcstruct mat4
   (x0 :float)
@@ -4245,23 +4213,24 @@
 	     (swapchain (create-swapchain device main-window width height surface-format present-mode))
 	     (queued-frames (number-of-images swapchain))
 	     (render-pass (create-render-pass device surface-format))
-	     (dsl (create-descriptor-set-layout device))
-	     (pipeline-layout (create-pipeline-layout device (list dsl))))
+	     #+NIL(dsl (create-descriptor-set-layout device))
+	     #+NIL(pipeline-layout (create-pipeline-layout device (list dsl))))
 	
 	;;(setf (geometry-pipeline-layout app) pipeline-layout)
 
 	(setf (render-pass main-window) render-pass)
 
-	(let* ((vertex-shader (create-shader-module-from-file
+	(let* (#+NIL(vertex-shader (create-shader-module-from-file
 			       device (concatenate 'string *assets-dir* "shaders/vert.spv")))
-	       (fragment-shader (create-shader-module-from-file
+	       #+NIL(fragment-shader (create-shader-module-from-file
 				 device (concatenate 'string *assets-dir* "shaders/frag.spv")))
-	       (geometry-pipeline (create-graphics-pipeline
+	       #+NIL(geometry-pipeline (create-graphics-pipeline
 				   device +null-pipeline-cache+ pipeline-layout render-pass
 				   (number-of-images swapchain) width height
 				   vertex-shader fragment-shader))
 	       (command-pools (create-command-pools device index queued-frames)))
 
+	  #+NIL
 	  (setf (vertex-shader geometry-pipeline) vertex-shader
 		(fragment-shader geometry-pipeline) fragment-shader
 		(geometry-shader geometry-pipeline) nil)
@@ -4271,12 +4240,12 @@
 
 	  (setup-framebuffers device render-pass swapchain)
 	    
-	  (let* ((vertex-buffer (create-vertex-buffer device *vertex-data* *vertex-data-size*))
-		 (index-buffer (create-index-buffer device *index-data* *index-data-size*))
-		 (uniform-buffer-vs (create-uniform-buffer
+	  (let* (#+NIL(vertex-buffer (create-vertex-buffer device *vertex-data* *vertex-data-size*))
+		 #+NIL(index-buffer (create-index-buffer device *index-data* *index-data-size*))
+		 #+NIL(uniform-buffer-vs (create-uniform-buffer
 				     device (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
 		 (descriptor-pool (create-descriptor-pool device))
-		 (descriptor-set (create-descriptor-set device uniform-buffer-vs (list dsl) descriptor-pool))
+		 #+NIL(descriptor-set (create-descriptor-set device uniform-buffer-vs (list dsl) descriptor-pool))
 		 (command-buffers (create-command-buffers device command-pools queued-frames)))
 	    (declare (ignorable command-buffers))
 
@@ -4284,18 +4253,18 @@
 	    ;;					    :initial-contents (create-frame-resources device)))
 	    (create-semaphores-and-fences app device queued-frames)
 
-	    (setf (geometry-pipeline-layout app) pipeline-layout)
+	    #+NIL(setf (geometry-pipeline-layout app) pipeline-layout)
 	    (setf (debug-callback app) debug-callback)
 	    (setf (system-gpus app) physical-devices)
 	    (setf (logical-devices app) (list device))
 	    (setf (main-window app) main-window)
-	    (setf (render-pass app) render-pass)
-	    (setf (geometry-pipeline app) geometry-pipeline)
+	    #+NIL(setf (render-pass app) render-pass)
+	    #+NIL(setf (geometry-pipeline app) geometry-pipeline)
 	    (setf (descriptor-pool app) descriptor-pool)
-	    (setf (descriptor-set app) descriptor-set)
-	    (setf (vertex-buffer app) vertex-buffer)
-	    (setf (index-buffer app) index-buffer)
-	    (setf (uniform-buffer-vs app) uniform-buffer-vs)
+	    #+NIL(setf (descriptor-set app) descriptor-set)
+	    #+NIL(setf (vertex-buffer app) vertex-buffer)
+	    #+NIL(setf (index-buffer app) index-buffer)
+	    #+NIL(setf (uniform-buffer-vs app) uniform-buffer-vs)
 	    (setf (command-pools app) command-pools)
 	    (setf (command-buffers app) command-buffers)
 
@@ -4307,7 +4276,7 @@
 	       do (setf (elt (command-buffers app) i) command-buffer))
 
 	    (values)))))))
-
+#+NIL
 (defclass camera ()
   ((zoom :initform 1.0f0 :accessor zoom)
    (x-loc :initform 1.0f0 :accessor camera-x)
@@ -4317,6 +4286,7 @@
    (eye-y :initform 0.0f0 :accessor eye-y)
    (eye-z :initform 0.0f0 :accessor eye-z)))
 
+#+NIL
 (defvar *camera* (make-instance 'camera))
 
 (defun main (app &rest args &key (w 1280) (h 720))
@@ -4334,10 +4304,21 @@
       (imgui-init *imgui* (main-window app)
 		  :allocator (allocator app)
 		  :device (first (logical-devices app))
-		  :render-pass (render-pass app)
+		  :render-pass (render-pass (main-window app))
 		  :pipeline-cache (pipeline-cache app)
 		  :descriptor-pool (descriptor-pool app)
 		  :frame-count (number-of-images (swapchain (main-window app))))
+      
+      (let ((module (make-instance '3d-demo-module)))
+	(setf (3d-demo-module app) module)
+	(3d-demo-init module :allocator (allocator app)
+		      :device (first (logical-devices app))
+		      :render-pass (render-pass (main-window app))
+		      :window (main-window app)
+		      :pipeline-cache (pipeline-cache app)
+		      :descriptor-pool (descriptor-pool app)
+		      ))
+      
       (ig::igStyleColorsClassic (ig::igGetStyle))
       (check-vk-result
        (vkResetCommandPool (h device) (h command-pool) 0))
@@ -4380,11 +4361,11 @@
 	     (igText "Hello, wworld!")
 
 	     (with-foreign-object (p-f :float)
-	       (setf (mem-aref p-f :float) (zoom *camera*))
+	       (setf (mem-aref p-f :float) (zoom (camera (3d-demo-module app))))
 	     
 	       (igSliderFloat "zoom" p-f 0.1f0 10.0f0 "%f" 1.0f0)
 
-	       (setf (zoom *camera*) (mem-aref p-f :float)))
+	       (setf (zoom (camera (3d-demo-module app))) (mem-aref p-f :float)))
 
 	     (with-foreign-object (p-clear-color :float 4)
 	       (setf (mem-aref p-clear-color :float 0) 0.45f0
@@ -4400,15 +4381,15 @@
 		     (elt (clear-value app) 3) (mem-aref  p-clear-color :float 3)))
 		 
 	     (with-foreign-object (p-camera-pos :float 3)
-	       (setf (mem-aref p-camera-pos :float 0) (camera-x *camera*)
-		     (mem-aref p-camera-pos :float 1) (camera-y *camera*)
-		     (mem-aref p-camera-pos :float 2) (camera-z *camera*))
+	       (setf (mem-aref p-camera-pos :float 0) (camera-x (camera (3d-demo-module app)))
+		     (mem-aref p-camera-pos :float 1) (camera-y (camera (3d-demo-module app)))
+		     (mem-aref p-camera-pos :float 2) (camera-z (camera (3d-demo-module app))))
 		   
 	       (igInputFloat3 "camera position" p-camera-pos "" 0)
 
-	       (setf (camera-x *camera*) (mem-aref p-camera-pos :float 0)
-		     (camera-y *camera*) (mem-aref p-camera-pos :float 1)
-		     (camera-z *camera*) (mem-aref p-camera-pos :float 2)))
+	       (setf (camera-x (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 0)
+		     (camera-y (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 1)
+		     (camera-z (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 2)))
 
 	     (with-foreign-object (p-vec '(:struct ig::ImVec2))
 	       (with-foreign-slots ((ig::x ig::y) p-vec (:struct ig::ImVec2))
@@ -4468,8 +4449,11 @@
 	       (frame-begin app)
 
 	       ;; draw stuff here
+	       (multiple-value-bind (w h) (get-framebuffer-size (main-window app))
+		 (3d-demo-render (3d-demo-module app) (elt (command-buffers app) (current-frame app)) w h))
+			       
 	       (imgui-render *imgui* (elt (command-buffers app) (current-frame app))
-			     (current-frame app))
+				     (current-frame app))
 
 	       (frame-end app)
 

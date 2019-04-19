@@ -17,5 +17,7 @@
    (:file "src/macros")
    (:file "src/support")
    (:file "src/vulkan-toolkit")
-   (:file "ifc/imgui-glfw-vulkan")))
+   (:file "ifc/imgui-glfw-vulkan")
+   (:file "src/vktk-demo")))
+	  
 
