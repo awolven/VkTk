@@ -182,17 +182,12 @@
     (let* ((current-time (get-internal-real-time))
 	   (elapsed-time (- current-time start-time))
 	   (model-matrix
-	    (meye 4)
-	    #+NIL
-	    (m* (mrotation (vec3 0.0 0.0 0.0) (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(/ pi 2.0d0)))
+	    (m* (mrotation (vec3 0.0 0.0 1.0) (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
 		(mtranslation (vec3 1.0 0.0 0.0))))
 	   (view-matrix
-	    (meye 4)
-	    #+NIL
 	    (look-at2 (vec3 (camera-x camera) (camera-y camera) (camera-z camera))
 		      (vec3 0.0 0.0 0.0)
 		      (vec3 0.0 0.0 1.0))))
-      (setq proj-matrix (meye 4))
       (with-foreign-object (p-ubo '(:struct 3DDemoVSUBO))
 	(let ((p-m (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'model))
 	      (p-v (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'view))
@@ -229,45 +224,45 @@
 (defun perspective-2 (width height)
   (let* ((m (mat4))
 	 (a (marr m))
-	 (f (coerce (/ 1.0d0 (tan (/ pi 8))) 'single-float)))
+	 (f (/ 1.0d0 (tan (/ pi 8)))))
     (setf (aref a 0) (/ f (/ width height))
-	  (aref a 1) 0.0f0
-	  (aref a 2) 0.0f0
-	  (aref a 3) 0.0f0
+	  (aref a 1) 0.0d0
+	  (aref a 2) 0.0d0
+	  (aref a 3) 0.0d0
 
-	  (aref a 4) 0.0f0
+	  (aref a 4) 0.0d0
 	  (aref a 5) (- f)
-	  (aref a 6) 0.0f0
-	  (aref a 7) 0.0f0
+	  (aref a 6) 0.0d0
+	  (aref a 7) 0.0d0
 
-	  (aref a 8) 0.0f0
-	  (aref a 9) 0.0f0
-	  (aref a 10) (/ -5 (- 5 -5.0f0))
-	  (aref a 11) -1.0f0
+	  (aref a 8) 0.0d0
+	  (aref a 9) 0.0d0
+	  (aref a 10) (/ -5 (- 5 -5.0d0))
+	  (aref a 11) -1.0d0
 
-	  (aref a 12) 0.0f0
-	  (aref a 13) 0.0f0
-	  (aref a 14) (/ (* 5 -5.0f0) (- 5 -5.0f0))
-	  (aref a 15) 0.0f0)
+	  (aref a 12) 0.0d0
+	  (aref a 13) 0.0d0
+	  (aref a 14) (/ (* 5 -5.0d0) (- 5 -5.0d0))
+	  (aref a 15) 0.0d0)
     m))
 
 (defun 3d-demo-render (module command-buffer fb-width fb-height)
   (with-slots (device) module
-    ;;(unless (vertex-buffer module)
+    (unless (vertex-buffer module)
       #+NIL
       (vkDestroyBuffer (h device) (h (vertex-buffer module)) (h (allocator module)))
       #+NIL
       (vkFreeMemory (h device) (h (allocated-memory (vertex-buffer module))) (h (allocator module)))
       ;;(setf (vertex-buffer module) nil)
-      (setf (vertex-buffer module) (create-vertex-buffer device *vertex-data* *vertex-data-size*));;)
+      (setf (vertex-buffer module) (create-vertex-buffer device *vertex-data* *vertex-data-size*)))
 
-      ;;(unless (index-buffer module)
+    (unless (index-buffer module)
       #+NIL
       (vkDestroyBuffer (h device) (h (index-buffer module)) (h (allocator module)))
       #+NIL
       (vkFreeMemory (h device) (h (allocated-memory (index-buffer module))) (h (allocator module)))
       ;;(setf (index-buffer module) nil)
-      (setf (index-buffer module) (create-index-buffer device *index-data* *index-data-size*));;)
+      (setf (index-buffer module) (create-index-buffer device *index-data* *index-data-size*)))
 
     (let ((geometry-projection-matrix
 	   (if (ortho-p (camera module))
