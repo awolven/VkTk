@@ -1,0 +1,7 @@
+#!/bin/bash
+set -x
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V shader.vert
+
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V shader.frag
+
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V shader.selection.geom -o selection.geom.spv
