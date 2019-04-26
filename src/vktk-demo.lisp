@@ -20,9 +20,11 @@
    (view-matrix :reader view-matrix)
    (projection-matrix :reader projection-matrix)
    (vertex-shader :accessor vertex-shader)
+   (geometry-shader :accessor geometry-shader)
    (fragment-shader :accessor fragment-shader)
 
    (uniform-buffer-vs :accessor uniform-buffer-vs)
+   (uniform-buffer-gs :accessor uniform-buffer-gs)
 
    (vertex-buffer :accessor vertex-buffer :initform nil)
    (index-buffer :accessor index-buffer :initform nil)))
@@ -74,10 +76,15 @@
     (multiple-value-bind (width height) (get-framebuffer-size (window module))
       (let ((vtx-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/vert.spv")))
 	    (frg-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/frag.spv"))))
-	(setf (descriptor-set-layout module) (create-descriptor-set-layout device)
+	(setf (descriptor-set-layout module) (create-descriptor-set-layout device
+									   :bindings (list* (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)
+											    (when (has-geometry-shader-p (parent-physical-device device))
+											      (list (make-instance 'uniform-buffer-for-geometry-shader-dsl-binding)))))
 	      (pipeline-layout module) (create-pipeline-layout device (list (descriptor-set-layout module)))
 	      (pipeline module) (create-graphics-pipeline (device module) (pipeline-cache module) (pipeline-layout module)
 							  (render-pass module) 1 width height vtx-shader frg-shader
+							  :geometry-shader-module (when (has-geometry-shader-p (parent-physical-device device))
+										    (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/selection.geom.spv")))
 							  :vertex-type '(:struct 3DVertex)
 							  :vertex-input-attribute-descriptions
 							  (list (make-instance 'vertex-input-attribute-description
@@ -100,9 +107,17 @@
 	      (fragment-shader module) frg-shader)
 
 	(setf (uniform-buffer-vs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
-	(setf (descriptor-set module) (create-descriptor-set device (uniform-buffer-vs module) (list (descriptor-set-layout module))
+	(setf (uniform-buffer-gs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoGSUBO))))
+	(setf (descriptor-set module) (create-descriptor-set device (list (descriptor-set-layout module))
+							     
 							     (descriptor-pool module)
-							     :range (foreign-type-size '(:struct 3DDemoVSUBO))))
+							     :descriptor-buffer-info
+							     (list (make-instance 'uniform-descriptor-buffer-info
+										  :uniform-buffer (uniform-buffer-vs module)
+										  :range (foreign-type-size '(:struct 3DDemoVSUBO)))
+								   (make-instance 'uniform-descriptor-buffer-info
+										  :uniform-buffer (uniform-buffer-gs module)
+										  :range (foreign-type-size '(:struct 3DDemoGSUBO))))))
 	(values)))))
 
 (defparameter *vertices-list*
@@ -126,6 +141,12 @@
 (defparameter *index-data* (foreign-alloc :unsigned-short :initial-contents *indices*))
 (defparameter *index-data-size* (* (foreign-type-size :unsigned-short) (length *indices*)))
 
+(defcstruct vec4
+  (x :float)
+  (y :float)
+  (z :float)
+  (w :float))
+
 (defcstruct mat4
   (x0 :float)
   (y0 :float)
@@ -146,43 +167,105 @@
 
 (defcstruct 3DDemoVSUBO
   (model (:struct mat4))
-  (view (:struct mat4))
-  (proj (:struct mat4)))
+  (view (:struct mat4)))
+
+(defcstruct 3DDemoGSUBO
+  (proj (:struct mat4))
+  (pickOrigin (:struct vec4))
+  (pickingDir (:struct vec4)))	
 
 (defun look-at2 (eye target up-dir)
-  (declare (type 3d-vectors:vec3 eye)
-	   (type 3d-vectors:vec3 target)
-	   (type 3d-vectors:vec3 up-dir))
 	   
-  (let* ((forward (3d-vectors:vunit (v- eye target)))
-	 (left (3d-vectors:vunit (3d-vectors:vc up-dir forward)))
-	 (up (3d-vectors:vunit (3d-vectors:vc forward left)))
-	 (view-matrix (3d-matrices:mat4)))
+  (let* ((forward (vunit (v- eye target)))
+	 (left (vunit (vc up-dir forward)))
+	 (up (vunit (vc forward left)))
+	 (view-matrix (mat4)))
 
-    (setf (3d-matrices:mcref view-matrix 0 0) (3d-vectors:vx3 left)
-	  (3d-matrices:mcref view-matrix 0 1) (3d-vectors:vy3 left)
-	  (3d-matrices:mcref view-matrix 0 2) (3d-vectors:vz3 left)
-	  (3d-matrices:mcref view-matrix 0 3) (- (3d-vectors:v. left eye))
-	  (3d-matrices:mcref view-matrix 1 0) (3d-vectors:vx3 up)
-	  (3d-matrices:mcref view-matrix 1 1) (3d-vectors:vy3 up)
-	  (3d-matrices:mcref view-matrix 1 2) (3d-vectors:vz3 up)
-	  (3d-matrices:mcref view-matrix 1 3) (- (3d-vectors:v. up eye))
-	  (3d-matrices:mcref view-matrix 2 0) (3d-vectors:vx3 forward)
-	  (3d-matrices:mcref view-matrix 2 1) (3d-vectors:vy3 forward)
-	  (3d-matrices:mcref view-matrix 2 2) (3d-vectors:vz3 forward)
-	  (3d-matrices:mcref view-matrix 2 3) (- (3d-vectors:v. forward eye))
-	  (3d-matrices:mcref view-matrix 3 0) 0.0d0
-	  (3d-matrices:mcref view-matrix 3 1) 0.0d0
-	  (3d-matrices:mcref view-matrix 3 2) 0.0d0
-	  (3d-matrices:mcref view-matrix 3 3) 1.0d0)
+    (setf (mcref view-matrix 0 0) (vx3 left)
+	  (mcref view-matrix 0 1) (vy3 left)
+	  (mcref view-matrix 0 2) (vz3 left)
+	  (mcref view-matrix 0 3) (- (v. left eye))
+	  (mcref view-matrix 1 0) (vx3 up)
+	  (mcref view-matrix 1 1) (vy3 up)
+	  (mcref view-matrix 1 2) (vz3 up)
+	  (mcref view-matrix 1 3) (- (v. up eye))
+	  (mcref view-matrix 2 0) (vx3 forward)
+	  (mcref view-matrix 2 1) (vy3 forward)
+	  (mcref view-matrix 2 2) (vz3 forward)
+	  (mcref view-matrix 2 3) (- (v. forward eye))
+	  (mcref view-matrix 3 0) 0.0d0
+	  (mcref view-matrix 3 1) 0.0d0
+	  (mcref view-matrix 3 2) 0.0d0
+	  (mcref view-matrix 3 3) 1.0d0)
     view-matrix))
 
-(defun update-3d-demo-vs-uniform-buffer-object (module proj-matrix)
-  (with-slots (device camera start-time) module
+(defun compute-picking-ray (window camera projection-matrix view-matrix)
+  (multiple-value-bind (viewport-width viewport-height) (get-framebuffer-size window)
+    (let ((unprojmat (minv projection-matrix)))
+      (multiple-value-bind (mouse-x mouse-y) (get-cursor-pos window)
+	(let* ((ray-nds (vec3 (- (/ (* 2.0f0 mouse-x) viewport-width) 1.0f0) (- (/ (* 2.0f0 mouse-y) viewport-height) 1.0f0) 1.0f0))
+	       (ray-clip1 (vec4 (vx ray-nds) (vy ray-nds) 0.0f0 1.0f0))
+	       (ray-clip2 (vec4 (vx ray-nds) (vy ray-nds) 1.0f0 1.0f0)))
+	  (let ((ray-eye1 (m* unprojmat ray-clip1))
+		(ray-eye2 (m* unprojmat ray-clip2))
+		(ray-world)
+		(inv-view-matrix (minv view-matrix)))
+	    (setq ray-eye1 (m* inv-view-matrix ray-eye1))
+	    (setq ray-eye2 (m* inv-view-matrix ray-eye2))
+
+	    (setq ray-eye1 (vec3 (/ (vx ray-eye1) (vw ray-eye1)) (/ (vy ray-eye1) (vw ray-eye1)) (/ (vz ray-eye1) (vw ray-eye1))))
+	    (setq ray-eye2 (vec3 (/ (vx ray-eye2) (vw ray-eye2)) (/ (vy ray-eye2) (vw ray-eye2)) (/ (vz ray-eye2) (vw ray-eye2))))
+	    #+NIL(igText "ray-eye1") #+NIL (igText (format nil "~S" ray-eye1))
+	    #+NIL(igText "ray-eye2") #+NIL (igText (format nil "~S" ray-eye2))
+	    (setq ray-world (vunit (v- ray-eye1 ray-eye2)))
+
+	    (if (not (ortho-p camera))
+		(values (vec3 (camera-x camera) (camera-y camera) (camera-z camera)) #+NIL ray-world ray-eye2)
+		(values ray-eye1 (v- (vec3 (camera-x camera) (camera-y camera) (camera-z camera)))))))))))
+
+(defun copy-uniform-buffer-memory (device data uniform-buffer-memory size)
+  (with-foreign-object (pp-data :pointer)
+    (vkMapMemory (h device) (h uniform-buffer-memory) 0 size 0 pp-data)
+    (memcpy (mem-aref pp-data :pointer) data size)
+    (vkUnmapMemory (h device) (h uniform-buffer-memory))))
+
+(defun update-3d-demo-gs-uniform-buffer-object (module view-matrix proj-matrix)
+  (with-foreign-object (p-ubo '(:struct 3DDemoGSUBO))
+    (let ((p-p (foreign-slot-pointer p-ubo '(:struct 3DDemoGSUBO) 'proj))
+	  (p-po (foreign-slot-pointer p-ubo '(:struct 3DDemoGSUBO) 'pickOrigin))
+	  (p-pd (foreign-slot-pointer p-ubo '(:struct 3DDemoGSUBO) 'pickingDir)))
+      
+      (multiple-value-bind (pick-origin picking-direction)
+	  (compute-picking-ray (window module) (camera module) proj-matrix view-matrix)
+	
+	(setf (mem-aref p-po :float 0) (coerce (vx pick-origin) 'single-float)
+	      (mem-aref p-po :float 1) (coerce (vy pick-origin) 'single-float)
+	      (mem-aref p-po :float 2) (coerce (vz pick-origin) 'single-float)
+	      (mem-aref p-po :float 3) 1.0f0)
+	  
+	(setf (mem-aref p-pd :float 0) (coerce (vx picking-direction) 'single-float)
+	      (mem-aref p-pd :float 1) (coerce (vy picking-direction) 'single-float)
+	      (mem-aref p-pd :float 2) (coerce (vz picking-direction) 'single-float)
+	      (mem-aref p-pd :float 3) 0.0f0))
+      
+	(let ((pv-mat (m* proj-matrix view-matrix)))
+      (loop for i from 0 below 4
+	 do (loop for j from 0 below 4
+	       do (setf (mem-aref p-p :float (+ i (* j 4))) (coerce (mcref pv-mat i j) 'single-float))))))
+    
+    (copy-uniform-buffer-memory (device module)
+				p-ubo (allocated-memory (uniform-buffer-gs module))
+				(foreign-type-size '(:struct 3DDemoGSUBO))))
+  
+  nil)
+
+(defun update-3d-demo-vs-uniform-buffer-object (module)
+  (with-slots (device camera start-time window) module
     (let* ((current-time (get-internal-real-time))
 	   (elapsed-time (- current-time start-time))
 	   (model-matrix
-	    (m* (mrotation (vec3 0.0 0.0 1.0) (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
+	    (m* (mrotation (vec3 0.0 0.0 1.0)
+			   (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
 		(mtranslation (vec3 1.0 0.0 0.0))))
 	   (view-matrix
 	    (look-at2 (vec3 (camera-x camera) (camera-y camera) (camera-z camera))
@@ -190,8 +273,7 @@
 		      (vec3 0.0 0.0 1.0))))
       (with-foreign-object (p-ubo '(:struct 3DDemoVSUBO))
 	(let ((p-m (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'model))
-	      (p-v (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'view))
-	      (p-p (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'proj)))
+	      (p-v (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'view)))
 
 	  (loop for i from 0 below 4
 	     do (loop for j from 0 below 4
@@ -200,50 +282,43 @@
 	  (loop for i from 0 below 4
 	     do (loop for j from 0 below 4
 		   do (setf (mem-aref p-v :float (+ i (* j 4))) (coerce (mcref view-matrix i j) 'single-float))))
-
-	  (loop for i from 0 below 4
-	     do (loop for j from 0 below 4
-		   do (setf (mem-aref p-p :float (+ i (* j 4))) (coerce (mcref proj-matrix i j) 'single-float))))
-
-	  (with-foreign-object (pp-data :pointer)
-	    (vkMapMemory (h device) (h (allocated-memory (uniform-buffer-vs module))) 0 (foreign-type-size '(:struct 3DDemoVSUBO)) 0 pp-data)
-	    (memcpy (mem-aref pp-data :pointer) p-ubo (foreign-type-size '(:struct 3DDemoVSUBO)))
-	    (vkUnmapMemory (h device) (h (allocated-memory (uniform-buffer-vs module)))))))))
-
-  (values))
+	  
+	  (copy-uniform-buffer-memory (device module)
+				      p-ubo (allocated-memory (uniform-buffer-vs module))
+				      (foreign-type-size '(:struct 3DDemoVSUBO)))))
+      view-matrix)))
 
 (defun convert-projection-matrix-to-vulkan (src)
-  (let ((dest (3d-matrices:mcopy4 src)))
-    (setf (3d-matrices:mcref dest 1 1) (- (3d-matrices:mcref dest 1 1))
-	  (3d-matrices:mcref dest 2 0) (/ (+ (3d-matrices:mcref dest 2 0) (3d-matrices:mcref dest 3 0)) 2)
-	  (3d-matrices:mcref dest 2 1) (/ (+ (3d-matrices:mcref dest 2 1) (3d-matrices:mcref dest 3 1)) 2)
-	  (3d-matrices:mcref dest 2 2) (/ (+ (3d-matrices:mcref dest 2 2) (3d-matrices:mcref dest 3 2)) 2)
-	  (3d-matrices:mcref dest 2 3) (/ (+ (3d-matrices:mcref dest 2 3) (3d-matrices:mcref dest 3 3)) 2))
+  (let ((dest (mcopy4 src)))
+    (setf (mcref dest 1 1) (- (mcref dest 1 1))
+	  (mcref dest 2 0) (/ (+ (mcref dest 2 0) (mcref dest 3 0)) 2)
+	  (mcref dest 2 1) (/ (+ (mcref dest 2 1) (mcref dest 3 1)) 2)
+	  (mcref dest 2 2) (/ (+ (mcref dest 2 2) (mcref dest 3 2)) 2)
+	  (mcref dest 2 3) (/ (+ (mcref dest 2 3) (mcref dest 3 3)) 2))
     dest))
 
 (defun perspective-2 (width height)
   (let* ((m (mat4))
-	 (a (marr m))
-	 (f (/ 1.0d0 (tan (/ pi 8)))))
-    (setf (aref a 0) (/ f (/ width height))
-	  (aref a 1) 0.0d0
-	  (aref a 2) 0.0d0
-	  (aref a 3) 0.0d0
+	 (f (coerce (/ 1.0d0 (tan (/ pi 4))) 'single-float)))
+    (setf (mcref m 0 0) (/ f (/ width height))
+	  (mcref m 0 1) 0.0f0
+	  (mcref m 0 2) 0.0f0
+	  (mcref m 0 3) 0.0f0
 
-	  (aref a 4) 0.0d0
-	  (aref a 5) (- f)
-	  (aref a 6) 0.0d0
-	  (aref a 7) 0.0d0
+	  (mcref m 1 0) 0.0f0
+	  (mcref m 1 1) (- f)
+	  (mcref m 1 2) 0.0f0
+	  (mcref m 1 3) 0.0f0
 
-	  (aref a 8) 0.0d0
-	  (aref a 9) 0.0d0
-	  (aref a 10) (/ -5 (- 5 -5.0d0))
-	  (aref a 11) -1.0d0
+	  (mcref m 2 0) 0.0f0
+	  (mcref m 2 1) 0.0f0
+	  (mcref m 2 2) (/ -5 (- 5 -5.0f0))
+	  (mcref m 2 3) -1.0f0
 
-	  (aref a 12) 0.0d0
-	  (aref a 13) 0.0d0
-	  (aref a 14) (/ (* 5 -5.0d0) (- 5 -5.0d0))
-	  (aref a 15) 0.0d0)
+	  (mcref m 3 0) 0.0f0
+	  (mcref m 3 1) 0.0f0
+	  (mcref m 3 2) (/ (* 5 -5.0f0) (- 5 -5.0f0))
+	  (mcref m 3 3) 0.0f0)
     m))
 
 (defun 3d-demo-render (module command-buffer fb-width fb-height)
@@ -264,21 +339,24 @@
       ;;(setf (index-buffer module) nil)
       (setf (index-buffer module) (create-index-buffer device *index-data* *index-data-size*)))
 
-    (let ((geometry-projection-matrix
+    (let ((projection-matrix
 	   (if (ortho-p (camera module))
 	       (mortho (* (- 2) (zoom (camera module)) (/ fb-width fb-height))
 		       (*    2  (zoom (camera module)) (/ fb-width fb-height))
 		       (* (- 2) (zoom (camera module)))
 		       (*    2  (zoom (camera module)))
 		       -10 10)
-	       (perspective-2 fb-width fb-height))))
+	       (mperspective 75 (/ fb-width fb-height) 0.001 10000))))
 
-      (when (ortho-p (camera module))
-	(setq geometry-projection-matrix (convert-projection-matrix-to-vulkan geometry-projection-matrix)))
+      ;;(when (ortho-p (camera module))
+      (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix));;)
 
       (vkCmdBindPipeline (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline module)))
 
-      (update-3d-demo-vs-uniform-buffer-object module geometry-projection-matrix)
+      (let ((view-matrix (update-3d-demo-vs-uniform-buffer-object module)))
+	(update-3d-demo-gs-uniform-buffer-object module
+						 view-matrix
+						 projection-matrix))
 
       (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
 			     (p-offsets 'VkDeviceSize)

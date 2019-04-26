@@ -1,164 +1,5 @@
 (in-package :vktk)
 
-(defparameter VK_KHR_SURFACE_EXTENSION_NAME "VK_KHR_surface")
-(defparameter VK_KHR_SWAPCHAIN_EXTENSION_NAME "VK_KHR_swapchain")
-(defparameter VK_KHR_DISPLAY_EXTENSION_NAME "VK_KHR_display")
-(defparameter VK_KHR_DISPLAY_SWAPCHAIN_EXTENSION_NAME "VK_KHR_display_swapchain")
-(defparameter VK_KHR_XLIB_SURFACE_EXTENSION_NAME "VK_KHR_xlib_surface")
-(defparameter VK_KHR_XCB_SURFACE_EXTENSION_NAME "VK_KHR_xcb_surface")
-(defparameter VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME "VK_KHR_wayland_surface")
-(defparameter VK_KHR_MIR_SURFACE_EXTENSION_NAME "VK_KHR_mir_surface")
-(defparameter VK_KHR_ANDROID_SURFACE_EXTENSION_NAME "VK_KHR_android_surface")
-(defparameter VK_KHR_WIN32_SURFACE_EXTENSION_NAME "VK_KHR_win32_surface")
-(defparameter VK_EXT_DEBUG_REPORT_EXTENSION_NAME "VK_EXT_debug_report")
-(defparameter VK_NV_GLSL_SHADER_EXTENSION_NAME "VK_NV_glsl_shader")
-(defparameter VK_NV_EXTENSION_1_EXTENSION_NAME "VK_NV_extension_1")
-(defparameter VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME "VK_KHR_sampler_mirror_clamp_to_edge")
-(defparameter VK_IMG_FILTER_CUBIC_EXTENSION_NAME "VK_IMG_filter_cubic")
-(defparameter VK_AMD_EXTENSION_17_EXTENSION_NAME "VK_AMD_extension_17")
-(defparameter VK_AMD_EXTENSION_18_EXTENSION_NAME "VK_AMD_extension_18")
-(defparameter VK_AMD_RASTERIZATION_ORDER_EXTENSION_NAME "VK_AMD_rasterization_order")
-(defparameter VK_AMD_EXTENSION_20_EXTENSION_NAME "VK_AMD_extension_20")
-(defparameter VK_AMD_SHADER_TRINARY_MINMAX_EXTENSION_NAME "VK_AMD_shader_trinary_minmax")
-(defparameter VK_AMD_SHADER_EXPLICIT_VERTEX_PARAMETER_EXTENSION_NAME "VK_AMD_shader_explicit_vertex_parameter")
-(defparameter VK_EXT_DEBUG_MARKER_EXTENSION_NAME "VK_EXT_debug_marker")
-(defparameter VK_AMD_EXTENSION_24_EXTENSION_NAME "VK_AMD_extension_24")
-(defparameter VK_AMD_EXTENSION_25_EXTENSION_NAME "VK_AMD_extension_25")
-(defparameter VK_AMD_GCN_SHADER_EXTENSION_NAME "VK_AMD_gcn_shader")
-(defparameter VK_NV_DEDICATED_ALLOCATION_EXTENSION_NAME "VK_NV_dedicated_allocation")
-(defparameter VK_NV_EXTENSION_28_EXTENSION_NAME "VK_NV_extension_28")
-(defparameter VK_NVX_EXTENSION_29_EXTENSION_NAME "VK_NVX_extension_29")
-(defparameter VK_NVX_EXTENSION_30_EXTENSION_NAME "VK_NVX_extension_30")
-(defparameter VK_NVX_EXTENSION_31_EXTENSION_NAME "VK_NVX_extension_31")
-(defparameter VK_AMD_EXTENSION_32_EXTENSION_NAME "VK_AMD_extension_32")
-(defparameter VK_AMD_EXTENSION_33_EXTENSION_NAME "VK_AMD_extension_33")
-(defparameter VK_AMD_DRAW_INDIRECT_COUNT_EXTENSION_NAME "VK_AMD_draw_indirect_count")
-(defparameter VK_AMD_EXTENSION_35_EXTENSION_NAME "VK_AMD_extension_35")
-(defparameter VK_AMD_NEGATIVE_VIEWPORT_HEIGHT_EXTENSION_NAME "VK_AMD_negative_viewport_height")
-(defparameter VK_AMD_GPU_SHADER_HALF_FLOAT_EXTENSION_NAME "VK_AMD_gpu_shader_half_float")
-(defparameter VK_AMD_SHADER_BALLOT_EXTENSION_NAME "VK_AMD_shader_ballot")
-(defparameter VK_AMD_EXTENSION_39_EXTENSION_NAME "VK_AMD_extension_39")
-(defparameter VK_AMD_EXTENSION_40_EXTENSION_NAME "VK_AMD_extension_40")
-(defparameter VK_AMD_EXTENSION_41_EXTENSION_NAME "VK_AMD_extension_41")
-(defparameter VK_AMD_TEXTURE_GATHER_BIAS_LOD_EXTENSION_NAME "VK_AMD_texture_gather_bias_lod")
-(defparameter VK_AMD_EXTENSION_43_EXTENSION_NAME "VK_AMD_extension_43")
-(defparameter VK_AMD_EXTENSION_44_EXTENSION_NAME "VK_AMD_extension_44")
-(defparameter VK_AMD_EXTENSION_45_EXTENSION_NAME "VK_AMD_extension_45")
-(defparameter VK_AMD_EXTENSION_46_EXTENSION_NAME "VK_AMD_extension_46")
-(defparameter VK_AMD_EXTENSION_47_EXTENSION_NAME "VK_AMD_extension_47")
-(defparameter VK_NVX_EXTENSION_48_EXTENSION_NAME "VK_NVX_extension_48")
-(defparameter VK_GOOGLE_EXTENSION_49_EXTENSION_NAME "VK_GOOGLE_extension_49")
-(defparameter VK_GOOGLE_EXTENSION_50_EXTENSION_NAME "VK_GOOGLE_extension_50")
-(defparameter VK_NVX_EXTENSION_51_EXTENSION_NAME "VK_NVX_extension_51")
-(defparameter VK_NVX_EXTENSION_52_EXTENSION_NAME "VK_NVX_extension_52")
-(defparameter VK_NV_EXTENSION_53_EXTENSION_NAME "VK_NV_extension_53")
-(defparameter VK_KHX_MULTIVIEW_EXTENSION_NAME "VK_KHX_multiview")
-(defparameter VK_IMG_FORMAT_PVRTC_EXTENSION_NAME "VK_IMG_format_pvrtc")
-(defparameter VK_NV_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME "VK_NV_external_memory_capabilities")
-(defparameter VK_NV_EXTERNAL_MEMORY_EXTENSION_NAME "VK_NV_external_memory")
-(defparameter VK_NV_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME "VK_NV_external_memory_win32")
-(defparameter VK_NV_WIN32_KEYED_MUTEX_EXTENSION_NAME "VK_NV_win32_keyed_mutex")
-(defparameter VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION_NAME "VK_KHR_get_physical_device_properties2")
-(defparameter VK_KHX_DEVICE_GROUP_EXTENSION_NAME "VK_KHX_device_group")
-(defparameter VK_EXT_VALIDATION_FLAGS_EXTENSION_NAME "VK_EXT_validation_flags")
-(defparameter VK_NN_VI_SURFACE_EXTENSION_NAME "VK_NN_vi_surface")
-(defparameter VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME "VK_KHR_shader_draw_parameters")
-(defparameter VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME "VK_EXT_shader_subgroup_ballot")
-(defparameter VK_EXT_SHADER_SUBGROUP_VOTE_EXTENSION_NAME "VK_EXT_shader_subgroup_vote")
-(defparameter VK_ARM_EXTENSION_01_EXTENSION_NAME "VK_ARM_extension_01")
-(defparameter VK_ARM_EXTENSION_02_EXTENSION_NAME "VK_ARM_extension_02")
-(defparameter VK_IMG_EXTENSION_69_EXTENSION_NAME "VK_IMG_extension_69")
-(defparameter VK_KHR_MAINTENANCE1_EXTENSION_NAME "VK_KHR_maintenance1")
-(defparameter VK_KHX_DEVICE_GROUP_CREATION_EXTENSION_NAME "VK_KHX_device_group_creation")
-(defparameter VK_KHX_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME "VK_KHX_external_memory_capabilities")
-(defparameter VK_KHX_EXTERNAL_MEMORY_EXTENSION_NAME "VK_KHX_external_memory")
-(defparameter VK_KHX_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME "VK_KHX_external_memory_win32")
-(defparameter VK_KHX_EXTERNAL_MEMORY_FD_EXTENSION_NAME "VK_KHX_external_memory_fd")
-(defparameter VK_KHX_WIN32_KEYED_MUTEX_EXTENSION_NAME "VK_KHX_win32_keyed_mutex")
-(defparameter VK_KHX_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME "VK_KHX_external_semaphore_capabilities")
-(defparameter VK_KHX_EXTERNAL_SEMAPHORE_EXTENSION_NAME "VK_KHX_external_semaphore")
-(defparameter VK_KHX_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME "VK_KHX_external_semaphore_win32")
-(defparameter VK_KHX_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME "VK_KHX_external_semaphore_fd")
-(defparameter VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME "VK_KHR_push_descriptor")
-(defparameter VK_KHR_EXTENSION_82_EXTENSION_NAME "VK_KHR_extension_82")
-(defparameter VK_KHR_EXTENSION_83_EXTENSION_NAME "VK_KHR_extension_83")
-(defparameter VK_KHR_EXTENSION_84_EXTENSION_NAME "VK_KHR_extension_84")
-(defparameter VK_KHR_INCREMENTAL_PRESENT_EXTENSION_NAME "VK_KHR_incremental_present")
-(defparameter VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME "VK_KHR_descriptor_update_template")
-(defparameter VK_NVX_DEVICE_GENERATED_COMMANDS_EXTENSION_NAME "VK_NVX_device_generated_commands")
-(defparameter VK_NV_CLIP_SPACE_W_SCALING_EXTENSION_NAME "VK_NV_clip_space_w_scaling")
-(defparameter VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME "VK_EXT_direct_mode_display")
-(defparameter VK_EXT_ACQUIRE_XLIB_DISPLAY_EXTENSION_NAME "VK_EXT_acquire_xlib_display")
-(defparameter VK_EXT_DISPLAY_SURFACE_COUNTER_EXTENSION_NAME "VK_EXT_display_surface_counter")
-(defparameter VK_EXT_DISPLAY_CONTROL_EXTENSION_NAME "VK_EXT_display_control")
-(defparameter VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME "VK_GOOGLE_display_timing")
-(defparameter VK_KHR_EXTENSION_94_EXTENSION_NAME "VK_KHR_extension_94")
-(defparameter VK_NV_SAMPLE_MASK_OVERRIDE_COVERAGE_EXTENSION_NAME "VK_NV_sample_mask_override_coverage")
-(defparameter VK_NV_GEOMETRY_SHADER_PASSTHROUGH_EXTENSION_NAME "VK_NV_geometry_shader_passthrough")
-(defparameter VK_NV_VIEWPORT_ARRAY2_EXTENSION_NAME "VK_NV_viewport_array2")
-(defparameter VK_NVX_MULTIVIEW_PER_VIEW_ATTRIBUTES_EXTENSION_NAME "VK_NVX_multiview_per_view_attributes")
-(defparameter VK_NV_VIEWPORT_SWIZZLE_EXTENSION_NAME "VK_NV_viewport_swizzle")
-(defparameter VK_EXT_DISCARD_RECTANGLES_EXTENSION_NAME "VK_EXT_discard_rectangles")
-(defparameter VK_NV_EXTENSION_101_EXTENSION_NAME "VK_NV_extension_101")
-(defparameter VK_NV_EXTENSION_102_EXTENSION_NAME "VK_NV_extension_102")
-(defparameter VK_NV_EXTENSION_103_EXTENSION_NAME "VK_NV_extension_103")
-(defparameter VK_NV_EXTENSION_104_EXTENSION_NAME "VK_NV_extension_104")
-(defparameter VK_EXT_SWAPCHAIN_COLORSPACE_EXTENSION_NAME "VK_EXT_swapchain_colorspace")
-(defparameter VK_EXT_HDR_METADATA_EXTENSION_NAME "VK_EXT_hdr_metadata")
-(defparameter VK_IMG_EXTENSION_107_EXTENSION_NAME "VK_IMG_extension_107")
-(defparameter VK_IMG_EXTENSION_108_EXTENSION_NAME "VK_IMG_extension_108")
-(defparameter VK_IMG_EXTENSION_109_EXTENSION_NAME "VK_IMG_extension_109")
-(defparameter VK_IMG_EXTENSION_110_EXTENSION_NAME "VK_IMG_extension_110")
-(defparameter VK_IMG_EXTENSION_111_EXTENSION_NAME "VK_IMG_extension_111")
-(defparameter VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME "VK_KHR_shared_presentable_image")
-(defparameter VK_KHR_EXTENSION_113_EXTENSION_NAME "VK_KHR_extension_113")
-(defparameter VK_KHR_EXTENSION_114_EXTENSION_NAME "VK_KHR_extension_114")
-(defparameter VK_KHR_EXTENSION_115_EXTENSION_NAME "VK_KHR_extension_115")
-(defparameter VK_KHR_EXTENSION_116_EXTENSION_NAME "VK_KHR_extension_116")
-(defparameter VK_KHR_EXTENSION_117_EXTENSION_NAME "VK_KHR_extension_117")
-(defparameter VK_KHR_EXTENSION_118_EXTENSION_NAME "VK_KHR_extension_118")
-(defparameter VK_KHR_EXTENSION_119_EXTENSION_NAME "VK_KHR_extension_119")
-(defparameter VK_KHR_GET_SURFACE_CAPABILITIES2_EXTENSION_NAME "VK_KHR_get_surface_capabilities2")
-(defparameter VK_KHR_VARIABLE_POINTERS_EXTENSION_NAME "VK_KHR_variable_pointers")
-(defparameter VK_KHR_EXTENSION_122_EXTENSION_NAME "VK_KHR_extension_122")
-(defparameter VK_MVK_IOS_SURFACE_EXTENSION_NAME "VK_MVK_ios_surface")
-(defparameter VK_MVK_MACOS_SURFACE_EXTENSION_NAME "VK_MVK_macos_surface")
-(defparameter VK_MVK_MOLTENVK_EXTENSION_NAME "VK_MVK_moltenvk")
-(defparameter VK_MESA_EXTENSION_126_EXTENSION_NAME "VK_MESA_extension_126")
-(defparameter VK_MESA_EXTENSION_127_EXTENSION_NAME "VK_MESA_extension_127")
-(defparameter VK_KHR_EXTENSION_128_EXTENSION_NAME "VK_KHR_extension_128")
-(defparameter VK_EXT_EXTENSION_129_EXTENSION_NAME "VK_EXT_extension_129")
-(defparameter VK_KHR_EXTENSION_130_EXTENSION_NAME "VK_KHR_extension_130")
-(defparameter VK_KHR_EXTENSION_131_EXTENSION_NAME "VK_KHR_extension_131")
-(defparameter VK_KHR_EXTENSION_132_EXTENSION_NAME "VK_KHR_extension_132")
-(defparameter VK_AMD_EXTENSION_133_EXTENSION_NAME "VK_AMD_extension_133")
-(defparameter VK_AMD_EXTENSION_134_EXTENSION_NAME "VK_AMD_extension_134")
-(defparameter VK_AMD_EXTENSION_135_EXTENSION_NAME "VK_AMD_extension_135")
-(defparameter VK_AMD_EXTENSION_136_EXTENSION_NAME "VK_AMD_extension_136")
-(defparameter VK_AMD_EXTENSION_137_EXTENSION_NAME "VK_AMD_extension_137")
-(defparameter VK_AMD_EXTENSION_138_EXTENSION_NAME "VK_AMD_extension_138")
-(defparameter VK_AMD_EXTENSION_139_EXTENSION_NAME "VK_AMD_extension_139")
-(defparameter VK_AMD_EXTENSION_140_EXTENSION_NAME "VK_AMD_extension_140")
-(defparameter VK_AMD_EXTENSION_141_EXTENSION_NAME "VK_AMD_extension_141")
-(defparameter VK_AMD_EXTENSION_142_EXTENSION_NAME "VK_AMD_extension_142")
-(defparameter VK_AMD_EXTENSION_143_EXTENSION_NAME "VK_AMD_extension_143")
-(defparameter VK_AMD_EXTENSION_144_EXTENSION_NAME "VK_AMD_extension_144")
-(defparameter VK_KHR_RELAXED_BLOCK_LAYOUT_EXTENSION_NAME "VK_KHR_relaxed_block_layout")
-(defparameter VK_KHR_EXTENSION_146_EXTENSION_NAME "VK_KHR_extension_146")
-(defparameter VK_KHR_EXTENSION_147_EXTENSION_NAME "VK_KHR_extension_147")
-(defparameter VK_EXT_EXTENSION_148_EXTENSION_NAME "VK_EXT_extension_148")
-(defparameter VK_NV_EXTENSION_149_EXTENSION_NAME "VK_NV_extension_149")
-(defparameter VK_NV_EXTENSION_150_EXTENSION_NAME "VK_NV_extension_150")
-(defparameter VK_NV_EXTENSION_151_EXTENSION_NAME "VK_NV_extension_151")
-(defparameter VK_NV_EXTENSION_152_EXTENSION_NAME "VK_NV_extension_152")
-(defparameter VK_NV_EXTENSION_153_EXTENSION_NAME "VK_NV_extension_153")
-(defparameter VK_NV_EXTENSION_154_EXTENSION_NAME "VK_NV_extension_154")
-(defparameter VK_NV_EXTENSION_155_EXTENSION_NAME "VK_NV_extension_155")
-(defparameter VK_NV_EXTENSION_156_EXTENSION_NAME "VK_NV_extension_156")
-(defparameter VK_KHR_EXTENSION_157_EXTENSION_NAME "VK_KHR_extension_157")
-(defparameter VK_KHR_EXTENSION_158_EXTENSION_NAME "VK_KHR_extension_158")
-(defparameter VK_EXT_EXTENSION_159_EXTENSION_NAME "VK_EXT_extension_159")
-
 (defparameter *assets-dir* "~/vktk/")
 
 (defmacro api-version (major minor patch)
@@ -311,7 +152,7 @@
 
 
 (defparameter *validation-layers*
-  (list #-darwin "VK_LAYER_LUNARG_vktrace" ;; note: trying to enable this layer causes vkcreateinstance to fail, needs to find a connection.
+  (list ;;#-darwin "VK_LAYER_LUNARG_vktrace" ;; note: trying to enable this layer causes vkcreateinstance to fail, needs to find a connection.
 	"VK_LAYER_GOOGLE_unique_objects" ;; the rest seem to work fine
 	"VK_LAYER_GOOGLE_threading"
 	"VK_LAYER_LUNARG_parameter_validation"
@@ -755,7 +596,6 @@
   (setf (paired-gpu surface) gpu)
   (setf (supported-formats surface) (get-surface-formats gpu surface))
   (setf (presentation-modes surface) (get-present-modes gpu surface))
-  (setf (capabilities surface) (get-physical-device-surface-capabilities-khr gpu surface))
   (setf (queue-family-index surface) queue-family-index)
   t)
 
@@ -2312,7 +2152,8 @@
 	    vk::clipped (if (or (not clipped-p) (and (integerp clipped-p) (zerop clipped-p))) VK_FALSE VK_TRUE)
 	    vk::oldSwapchain (if old-swapchain (h old-swapchain) +nullptr+))
 
-      (let* ((capabilities (capabilities surface))
+      (let* ((capabilities (get-physical-device-surface-capabilities-khr
+			    (parent-physical-device device) surface))
 	     (cap-min-image-count (min-image-count capabilities))
 	     (cap-max-image-count (max-image-count capabilities)))
 	
@@ -2497,7 +2338,7 @@
   swapchain)
 
 (defclass render-pass (handle-mixin logical-device-mixin)
-  ((swapchain :accessor swapchain))) 
+  ()) 
 
 (defclass attachment ()
   ((name  :initarg :name :reader attachment-name)
@@ -3383,16 +3224,14 @@
 		       :index queue-family-index)))))
 
 (defun resize-framebuffer (window width height)
-  (declare (ignore width height))
-  (recreate-swapchain window))
+  (recreate-swapchain window (swapchain window) width height))
 
-(defun recreate-swapchain (window)
-  (let ((fb-width) (fb-height))
-    (loop while (progn (multiple-value-setq (fb-width fb-height) (get-framebuffer-size window))
-		       (or (zerop fb-width) (zerop fb-height)))
+(defun recreate-swapchain (window swapchain fb-width fb-height)
+  (let ()
+    (loop while (or (zerop fb-width) (zerop fb-height))
        do (glfwWaitEvents))
     
-    (unless (or (zerop fb-width) (zerop fb-height))
+    (if (not (or (zerop fb-width) (zerop fb-height)))
       (with-slots (swapchain application) window
 	(with-slots (device) swapchain
 	  (with-slots (allocator) device
@@ -3407,14 +3246,14 @@
 	  (destroy-framebuffers swapchain);;
 	  (free-command-buffers device);;
 
-	  (let* (#+NIL (pipeline (geometry-pipeline application))
-		 #+NIL (vertex-shader (vertex-shader pipeline))
-		 #+NIL (fragment-shader (fragment-shader pipeline)))
-	    ;;(destroy-pipeline application);;
-	    ;;(destroy-pipeline-layout application);;
-	  (destroy-render-pass window);;
-
-	  ;;(vkDestroySwapchainKHR (h device) (h swapchain) (h allocator))
+	  (let* (#+NIL(pipeline (pipeline (3d-demo-module application)))
+		      #+NIL(vertex-shader (vertex-shader pipeline))
+		      #+NIL(fragment-shader (fragment-shader pipeline)))
+	    #+NIL(vkDestroyPipeline (h device) (h pipeline) (h allocator))
+	    
+	    #+NIL(vkDestroyPipelineLayout (h device) (h geometry-pipeline-layout) (h allocator))
+	    #+NIL(destroy-pipeline-layout application);;
+	    #+NIL(destroy-render-pass window);;
 
 	  (let ((surface-format (surface-format swapchain))
 		(present-mode VK_PRESENT_MODE_FIFO_KHR)
@@ -3426,21 +3265,18 @@
 
 	    
 
-	    (let ((render-pass
-		   (create-render-pass device surface-format :allocator allocator))
-		  #+nil
-		  (pipeline-layout
-		   (create-pipeline-layout device (list (create-descriptor-set-layout device))
-					   :allocator allocator))
+	    (let (#+NIL(render-pass (create-render-pass device surface-format :allocator allocator))
+		  #+NIL(pipeline-layout (create-pipeline-layout device (list (create-descriptor-set-layout device))
+								:allocator allocator))
 		  (queued-frames (number-of-images swapchain)))
 	      ;; todo (above): pipeline-layout reliant on default, cache or specify dsl
-	      (setf (render-pass window) render-pass
-		    #+NIL(geometry-pipeline-layout application) #+NIL pipeline-layout
-		    #+NIL(geometry-pipeline application)
+	      (setf #+NIL(render-pass window) #+NIL render-pass
+		    #+NIL (geometry-pipeline-layout application) #+NIL pipeline-layout
+		    #+NIL(pipeline (3d-demo-module application))
 		    #+NIL(create-graphics-pipeline device +null-pipeline-cache+ pipeline-layout render-pass
-			   queued-frames fb-width fb-height
-			   vertex-shader fragment-shader))
-	      (setup-framebuffers device render-pass swapchain)
+						   queued-frames fb-width fb-height
+						   vertex-shader fragment-shader))
+	      (setup-framebuffers device (render-pass window) swapchain)
 	      (setf (command-buffers application) (create-command-buffers device (command-pools device) queued-frames))
 	      ))))))))
   (values))
@@ -3474,7 +3310,7 @@
   (with-slots (geometry-pipeline-layout) application
     (with-slots (device) geometry-pipeline-layout
       (with-slots (allocator) device
-      (vkDestroyPipelineLayout (h device) (h geometry-pipeline-layout) (h allocator))
+	(vkDestroyPipelineLayout (h device) (h geometry-pipeline-layout) (h allocator))
       (setf geometry-pipeline-layout nil))))
   (values))
 
@@ -3556,8 +3392,7 @@
 	 (array (make-array count)))
     (loop for i from 0 below count
        do (setf (elt array i) (create-framebuffer device render-pass swapchain i :allocator allocator))
-       finally (setf (framebuffers swapchain) array)
-	 (setf (swapchain render-pass) swapchain)))
+       finally (setf (framebuffers swapchain) array)))
   (values))
 
 
@@ -3878,46 +3713,54 @@
 	    (make-instance 'descriptor-set
 			   :handle (mem-aref p-descriptor-set 'VkDescriptorSet))))))))
 
-(defun create-descriptor-set (device uniform-buffer descriptor-set-layouts descriptor-pool
-			      &key (descriptor-type VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-				range)
+(defclass uniform-descriptor-buffer-info ()
+  ((descriptor-type :reader descriptor-type :initform VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+   (uniform-buffer :reader uniform-buffer :initarg :uniform-buffer)
+   (offset :reader offset :initarg :offset :initform 0)
+   (range :reader range :initarg :range)))
+
+(defun create-descriptor-set (device descriptor-set-layouts descriptor-pool
+			      &key descriptor-buffer-info)
+
   ;; this function will probably prove to be very over-generalized.
 
   (let ((descriptor-set
 	 (allocate-descriptor-set device descriptor-set-layouts descriptor-pool)))
-
-    (with-vk-struct (p-buffer-info VkDescriptorBufferInfo)
-      (when uniform-buffer
-	(with-foreign-slots ((vk::buffer
-			      vk::uniform-buffer
-			      vk::offset
-			      vk::range)
-			     p-buffer-info (:struct VkDescriptorBufferInfo))
-		    
-	  (setf vk::buffer (h uniform-buffer)
-		vk::offset 0
-		vk::range range)))
-
-      (with-vk-struct (p-descriptor-write VkWriteDescriptorSet)
-	(with-foreign-slots ((vk::dstSet
-			      vk::dstBinding
-			      vk::dstArrayElement
-			      vk::descriptorType
-			      vk::descriptorCount
-			      vk::pBufferInfo
-			      vk::pImageInfo
-			      vk::pTexelBufferView)
-			     p-descriptor-write (:struct VkWriteDescriptorSet))
-	  (setf vk::dstSet (h descriptor-set)
-		vk::dstBinding 0
-		vk::dstArrayElement 0
-		vk::descriptorType descriptor-type
-		vk::descriptorCount 1
-		vk::pBufferInfo p-buffer-info
-		vk::pImageInfo +nullptr+
-		vk::pTexelBufferView +nullptr+))
-
-	(vkUpdateDescriptorSets (h device) 1 p-descriptor-write 0 +nullptr+)))
+    
+    (loop for info in descriptor-buffer-info for i from 0
+       do (with-vk-struct (p-buffer-info VkDescriptorBufferInfo)
+	    (with-foreign-slots ((vk::buffer
+				  vk::offset
+				  vk::range)
+				 p-buffer-info
+				 (:struct VkDescriptorBufferInfo))
+	     
+	      (setf vk::buffer (h (uniform-buffer info))
+		    vk::offset (offset info)
+		    vk::range (range info)))
+	    
+	    (with-vk-struct (p-descriptor-write VkWriteDescriptorSet)
+	     (with-foreign-slots ((vk::sType
+				   vk::dstSet
+				   vk::dstBinding
+				   vk::dstArrayElement
+				   vk::descriptorType
+				   vk::descriptorCount
+				   vk::pBufferInfo
+				   vk::pImageInfo
+				   vk::pTexelBufferView)
+				  p-descriptor-write
+				  (:struct VkWriteDescriptorSet))
+	     (setf vk::sType VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+		   vk::dstSet (h descriptor-set)
+		   vk::dstBinding i
+		   vk::dstArrayElement 0
+		   vk::descriptorType (descriptor-type info)
+		   vk::descriptorCount 1
+		   vk::pBufferInfo p-buffer-info
+		   vk::pImageInfo +nullptr+
+		   vk::pTexelBufferView +nullptr+))
+	   (vkUpdateDescriptorSets (h device) 1 p-descriptor-write 0 +nullptr+))))
     descriptor-set))
 
 (defclass command-buffer (handle-mixin)
@@ -3929,7 +3772,7 @@
 (defclass semaphore (handle-mixin)
   ())
 
-(defun create-command-buffer (device command-pool &key (allocator +null-allocator+))
+(defun create-command-buffer (device command-pool)
   (with-vk-struct (p-info VkCommandBufferAllocateInfo)
     (with-foreign-slots ((vk::commandPool
 			  vk::level
@@ -4197,7 +4040,7 @@
 
 (defun setup-vulkan (app &key (width 1280) (height 720))
   (let* ((vulkan-instance (create-instance :application-name "VkTk Demo" #+darwin :layer-names #+darwin nil))
-	 (debug-callback #+windows(create-debug-report-callback vulkan-instance 'debug-report-callback))
+	 (debug-callback #+windows(when *debug* (create-debug-report-callback vulkan-instance 'debug-report-callback)))
 	 (physical-devices (enumerate-physical-devices vulkan-instance))
 	 (main-window (create-window app :width width :height height :title "VkTk Demo"))
 	 (surface (create-window-surface vulkan-instance main-window)))
@@ -4207,7 +4050,7 @@
       
       (initialize-window-surface surface gpu index) ;; pairs surface with gpu
       
-      (let* ((device (create-logical-device gpu))
+      (let* ((device (apply #'create-logical-device gpu (when (has-geometry-shader-p gpu) (list :enable-geometry-shader t))))
 	     (surface-format (find-supported-format surface))
 	     (present-mode VK_PRESENT_MODE_FIFO_KHR)		     
 	     (swapchain (create-swapchain device main-window width height surface-format present-mode))
@@ -4216,18 +4059,18 @@
 	     #+NIL(dsl (create-descriptor-set-layout device))
 	     #+NIL(pipeline-layout (create-pipeline-layout device (list dsl))))
 	
-	;;(setf (geometry-pipeline-layout app) pipeline-layout)
+	#+NIL(setf (geometry-pipeline-layout app) pipeline-layout)
 
 	(setf (render-pass main-window) render-pass)
-
+	
 	(let* (#+NIL(vertex-shader (create-shader-module-from-file
-			       device (concatenate 'string *assets-dir* "shaders/vert.spv")))
+				    device (concatenate 'string *assets-dir* "shaders/vert.spv")))
 	       #+NIL(fragment-shader (create-shader-module-from-file
-				 device (concatenate 'string *assets-dir* "shaders/frag.spv")))
+				      device (concatenate 'string *assets-dir* "shaders/frag.spv")))
 	       #+NIL(geometry-pipeline (create-graphics-pipeline
-				   device +null-pipeline-cache+ pipeline-layout render-pass
-				   (number-of-images swapchain) width height
-				   vertex-shader fragment-shader))
+					device +null-pipeline-cache+ pipeline-layout render-pass
+					(number-of-images swapchain) width height
+					vertex-shader fragment-shader))
 	       (command-pools (create-command-pools device index queued-frames)))
 
 	  #+NIL
@@ -4235,36 +4078,41 @@
 		(fragment-shader geometry-pipeline) fragment-shader
 		(geometry-shader geometry-pipeline) nil)
 
-	  ;;(vkDestroyShaderModule (h device) (h vertex-shader) +nullptr+)
-	  ;;(vkDestroyShaderModule (h device) (h fragment-shader) +nullptr+)
+	  #+NIL(vkDestroyShaderModule (h device) (h vertex-shader) +nullptr+)
+	  #+NIL(vkDestroyShaderModule (h device) (h fragment-shader) +nullptr+)
 
 	  (setup-framebuffers device render-pass swapchain)
 	    
 	  (let* (#+NIL(vertex-buffer (create-vertex-buffer device *vertex-data* *vertex-data-size*))
 		 #+NIL(index-buffer (create-index-buffer device *index-data* *index-data-size*))
 		 #+NIL(uniform-buffer-vs (create-uniform-buffer
-				     device (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
+					  device (foreign-type-size '(:struct UniformBufferObjectVertexShader))))
 		 (descriptor-pool (create-descriptor-pool device))
 		 #+NIL(descriptor-set (create-descriptor-set device uniform-buffer-vs (list dsl) descriptor-pool))
 		 (command-buffers (create-command-buffers device command-pools queued-frames)))
-	    (declare (ignorable command-buffers))
 
-	    ;;(setf (frame-resources app) (make-array +max-concurrently-processed-frames+
-	    ;;					    :initial-contents (create-frame-resources device)))
+	    #+NIL(setf (frame-resources app) (make-array +max-concurrently-processed-frames+
+							 :initial-contents (create-frame-resources device)))
+	    
 	    (create-semaphores-and-fences app device queued-frames)
 
 	    #+NIL(setf (geometry-pipeline-layout app) pipeline-layout)
+	    
 	    (setf (debug-callback app) debug-callback)
 	    (setf (system-gpus app) physical-devices)
 	    (setf (logical-devices app) (list device))
 	    (setf (main-window app) main-window)
+	    
 	    #+NIL(setf (render-pass app) render-pass)
 	    #+NIL(setf (geometry-pipeline app) geometry-pipeline)
+	    
 	    (setf (descriptor-pool app) descriptor-pool)
+	    
 	    #+NIL(setf (descriptor-set app) descriptor-set)
 	    #+NIL(setf (vertex-buffer app) vertex-buffer)
 	    #+NIL(setf (index-buffer app) index-buffer)
 	    #+NIL(setf (uniform-buffer-vs app) uniform-buffer-vs)
+	    
 	    (setf (command-pools app) command-pools)
 	    (setf (command-buffers app) command-buffers)
 
@@ -4276,18 +4124,6 @@
 	       do (setf (elt (command-buffers app) i) command-buffer))
 
 	    (values)))))))
-#+NIL
-(defclass camera ()
-  ((zoom :initform 1.0f0 :accessor zoom)
-   (x-loc :initform 1.0f0 :accessor camera-x)
-   (y-loc :initform 1.0f0 :accessor camera-y)
-   (z-loc :initform 1.0f0 :accessor camera-z)
-   (eye-x :initform 0.0f0 :accessor eye-x)
-   (eye-y :initform 0.0f0 :accessor eye-y)
-   (eye-z :initform 0.0f0 :accessor eye-z)))
-
-#+NIL
-(defvar *camera* (make-instance 'camera))
 
 (defun main (app &rest args &key (w 1280) (h 720))
   (declare (ignore args))
@@ -4390,6 +4226,15 @@
 	       (setf (camera-x (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 0)
 		     (camera-y (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 1)
 		     (camera-z (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 2)))
+	     ;; todo move all this to 3d-demo-module, use a generic function or something.
+	     (let ((ortho (if (ortho-p (camera (3d-demo-module app))) 1 0)))
+	       
+	       (with-foreign-object (p-vec '(:struct ig::ImVec2))
+		 (with-foreign-slots ((ig::x ig::y) p-vec (:struct ig::ImVec2))
+		   (setf ig::x 100.0f0 ig::y 20.0f0)
+				    
+		   (when (not (zerop (igButton "Perspective" p-vec)))
+		     (setf (ortho-p (camera (3d-demo-module app))) (if (zerop (logxor ortho 1)) nil t))))))
 
 	     (with-foreign-object (p-vec '(:struct ig::ImVec2))
 	       (with-foreign-slots ((ig::x ig::y) p-vec (:struct ig::ImVec2))
@@ -4489,14 +4334,12 @@
      break)
 
     (with-foreign-object (p-back-buffer-index :uint32)
-
-      (check-vk-result
-       (vkAcquireNextImageKHR (h device)
-			      (h (swapchain (main-window app)))
-			      UINT64_MAX
-			      (h present-complete-sem)
-			      VK_NULL_HANDLE
-			      p-back-buffer-index))
+      (check-vk-result (vkAcquireNextImageKHR (h device)
+					      (h (swapchain (main-window app)))
+					      UINT64_MAX
+					      (h present-complete-sem)
+					      VK_NULL_HANDLE
+					      p-back-buffer-index))
       
       (setf (image-index app) (mem-aref p-back-buffer-index :uint32)))
 
@@ -4667,105 +4510,38 @@
 	  (values))))))
 
 (defun frame-present (app)
-  (let ((present-index (image-index app)
-	  #+NIL(if *imgui-unlimited-frame-rate*
-		   (mod (1- (+ (frame-index app) IMGUI_VK_QUEUED_FRAMES)) IMGUI_VK_QUEUED_FRAMES)
-		   (frame-index app)))
-	(queue (first (second (first (device-queues (first (logical-devices app))))))))
-
-    (with-foreign-objects ((p-swapchains 'VkSwapchainKHR 1)
-			   (p-render-complete-semaphore 'VkSemaphore))
-      (setf (mem-aref p-swapchains 'VkSwapchainKHR 0) (h (swapchain (main-window app)))
-	    (mem-aref p-render-complete-semaphore 'VkSemaphore)
+  (let ((queue (first (second (first (device-queues (first (logical-devices app))))))))
+    (with-foreign-objects ((p-indices :uint32)
+			   (p-swapchain 'VkSwapchainKHR)
+			   (p-wait-semaphores 'VkSemaphore))
+	      
+      (setf (mem-aref p-indices :uint32) (image-index app)
+	    (mem-aref p-swapchain 'VkSwapchainKHR) (h (swapchain (main-window app)))
+	    (mem-aref p-wait-semaphores 'VkSemaphore)
 	    (h (elt (render-complete-semaphore app) (current-frame app))))
-      (with-vk-struct (p-info VkPresentInfoKHR)
-	(with-foreign-slots ((vk::waitSemaphoreCount vk::pWaitSemaphores vk::swapchainCount
-						     vk::pSwapchains vk::pImageIndices)
-			     p-info (:struct VkPresentInfoKHR))
-	  (with-foreign-objects ((p-indices :uint32)
-				 (p-swapchain 'VkSwapchainKHR))
-	      
-	    (setf (mem-aref p-indices :uint32) present-index
-		  (mem-aref p-swapchain 'VkSwapchainKHR) (h (swapchain (main-window app))))
-	      
-	    (setf vk::waitSemaphoreCount 1
-		  vk::pWaitSemaphores p-render-complete-semaphore
-		  vk::swapchainCount 1
-		  vk::pSwapchains p-swapchain
-		  vk::pImageIndices p-indices)
 
-	    (check-vk-result
-	     (vkQueuePresentKHR (h queue) p-info))
-	    
-	    (setf (current-frame app) (mod (1+ (current-frame app)) +max-concurrently-processed-frames+)))))))
+      (with-vk-struct (p-info VkPresentInfoKHR)
+	(with-foreign-slots ((vk::waitSemaphoreCount
+			      vk::pWaitSemaphores
+			      vk::swapchainCount
+			      vk::pSwapchains
+			      vk::pImageIndices)
+			     p-info
+			     (:struct VkPresentInfoKHR))
+	  
+	  (setf vk::waitSemaphoreCount 1
+		vk::pWaitSemaphores p-wait-semaphores
+		vk::swapchainCount 1
+		vk::pSwapchains p-swapchain
+		vk::pImageIndices p-indices)
+
+	  (let ((result (vkQueuePresentKHR (h queue) p-info)))
+	      
+	    (if (or (eq result VK_ERROR_OUT_OF_DATE_KHR) (eq result VK_SUBOPTIMAL_KHR))
+		(multiple-value-bind (fb-width fb-height) (get-framebuffer-size (main-window app))
+		  (recreate-swapchain (main-window app) (swapchain (main-window app)) fb-width fb-height))
+		(check-vk-result result)))
+	  
+	  (setf (current-frame app) (mod (1+ (current-frame app)) +max-concurrently-processed-frames+))))))
 
   (values))
-
-#+NIL
-(defun create-depth-image (device width height &key (allocator +null-allocator+)
-						 (format (find-supported-depth-format
-							  (parent-physical-device device)))
-						 (tiling VK_IMAGE_TILING_OPTIMAL)
-						 (usage VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
-						 (properties VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
-
-  (with-vk-struct (p-image-info VkImageCreateInfo)
-    (with-foreign-slots ((vk::imageType
-			  vk::mipLevels
-			  vk::arrayLayers
-			  vk::format
-			  vk::tiling
-			  vk::initialLayout
-			  vk::usage
-			  vk::samples
-			  vk::sharingMode)
-			 p-image-info (:struct VkImageCreateInfo))
-      (setf vk::imageType VK_IMAGE_TYPE_2D
-	    vk::mipLevels 1
-	    vk::arrayLayers 1
-	    vk::format format
-	    vk::tiling tiling
-	    vk::initialLayout VK_IMAGE_LAYOUT_UNDEFINED
-	    vk::usage usage
-	    vk::samples VK_SAMPLE_COUNT_1_BIT
-	    vk::sharingMode VK_SHARING_MODE_EXCLUSIVE
-
-	    (foreign-slot-value
-	     (foreign-slot-pointer p-image-info '(:struct VkImageCreateInfo) 'vk::extent)
-	     '(:struct VkExtent3D) 'vk::width) width
-
-	     (foreign-slot-value
-	      (foreign-slot-pointer p-image-info '(:struct VkImageCreateInfo) 'vk::extent)
-	      '(:struct VkExtent3D) 'vk::height) height
-
-	      (foreign-slot-value
-	       (foreign-slot-pointer p-image-info '(:struct VkImageCreateInfo) 'vk::extent)
-	       '(:struct VkExtent3D) 'vk::depth) 1))
-    (with-foreign-object (p-image 'VkImage)
-      (check-vk-result (vkCreateImage (h device) p-image-info (h allocator) p-image))
-      
-      (with-vk-struct (p-requirements VkMemoryRequirements)
-	(vkGetImageMemoryRequirements (h device) (mem-aref p-image 'VkImage) p-requirements)
-	(with-foreign-slots ((vk::size
-			      vk::memoryTypeBits)
-			     p-requirements
-			     (:struct VkMemoryRequirements))
-	  
-
-	  (with-vk-struct (p-alloc-info VkMemoryAllocateInfo)
-	    (with-foreign-slots ((vk::allocationSize
-				  vk::memoryTypeIndex)
-				 p-alloc-info
-				 (:struct VkMemoryAllocateInfo))
-	      (setf vk::allocationSize vk::size
-		    vk::memoryTypeIndex (find-memory-type (parent-physical-device device)
-							  vk::memoryTypeBits
-							  properties)))
-	    (with-foreign-object (p-memory 'VkDeviceMemory)
-	      (check-vk-result (vkAllocateMemory (h device) p-alloc-info (h allocator) p-memory))
-	      (vkBindImageMemory (h device) (mem-aref p-image 'VkImage) (mem-aref p-memory 'VkDeviceMemory) 0)
-	      (make-instance 'depth-image
-			     :handle (mem-aref p-image 'VkImage)
-			     :memory (make-instance 'allocated-memory
-						    :handle (mem-aref p-memory 'VkDeviceMemory))
-			     :device device))))))))
