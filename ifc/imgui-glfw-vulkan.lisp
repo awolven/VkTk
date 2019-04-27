@@ -37,8 +37,6 @@
    (vertex-buffer-memory :initform nil :accessor vertex-buffer-memory)
    (index-buffer-memory :initform nil :accessor index-buffer-memory)))
 
-(defvar *imgui* (make-instance 'imgui))
-
 (defvar *imgui-vertex-shader-binary*
   (foreign-alloc
    :uint32
@@ -489,20 +487,22 @@
 	  
 (defun imgui-invalidate-font-upload-objects (app)
   (when (upload-buffer app)
-    (vkDestroyBuffer (h (device app)) (h (upload-buffer app)) (h (allocator app))))
+    (vkDestroyBuffer (h (device app)) (h (upload-buffer app)) (h (allocator app)))
+    (setf (upload-buffer app) nil))
   (when (upload-buffer-memory app)
-    (vkFreeMemory (h (device app)) (h (upload-buffer-memory app)) (h (allocator app))))
+    (vkFreeMemory (h (device app)) (h (upload-buffer-memory app)) (h (allocator app)))
+    (setf (upload-buffer-memory app) nil))
   (values))
 
 (defun imgui-invalidate-device-objects (app)
   (imgui-invalidate-font-upload-objects app)
-  (maybe-init-frame-data app (frame-count app))
-  (loop for i from 0 below (frame-count app)
-     do (let ((frame-data-i (elt (frame-data app) i)))
+
+  (loop for frame-datum across (frame-data app) for i from 0
+     do (when frame-datum
 	  (with-slots (vertex-buffer
 		       vertex-buffer-memory
 		       index-buffer
-		       index-buffer-memory) frame-data-i
+		       index-buffer-memory) frame-datum
 	    (when vertex-buffer
 	      (vkDestroyBuffer (h (device app)) (h vertex-buffer) (h (allocator app)))
 	      (setf vertex-buffer nil))
@@ -514,7 +514,8 @@
 	      (setf index-buffer nil))
 	    (when index-buffer-memory
 	      (vkFreeMemory (h (device app)) (h index-buffer-memory) (h (allocator app)))
-	      (setf index-buffer-memory nil)))))
+	      (setf index-buffer-memory nil))
+	    (setf (elt (frame-data app) i) nil))))
 
   (when (font-view app)
     (vkDestroyImageView (h (device app)) (h (font-view app)) (h (allocator app)))
@@ -550,15 +551,17 @@
 
 (defcallback imgui-mouse-button-callback :void ((user-data :pointer) (button :int) (action :int) (mods :int))
   (declare (ignorable user-data mods))
-  (when (and (eq action GLFW_PRESS)
-	     (>= button 0)
-	     (< button 3))
-    (setf (elt (mouse-pressed *imgui*) button) t))
+  (let ((imgui (imgui-module (application (find-window user-data)))))
+    (when (and (eq action GLFW_PRESS)
+	       (>= button 0)
+	       (< button 3))
+      (setf (elt (mouse-pressed imgui) button) t)))
   (values))
 
 (defcallback imgui-scroll-callback :void ((user-data :pointer) (xoffset :double) (yoffset :double))
   (declare (ignorable user-data xoffset))
-  (setf (mouse-wheel *imgui*) (coerce (+ (mouse-wheel *imgui*) yoffset) 'single-float))
+  (let ((imgui (imgui-module (application (find-window user-data)))))
+    (setf (mouse-wheel imgui) (coerce (+ (mouse-wheel imgui) yoffset) 'single-float)))
   (values))
 
 (defcallback imgui-key-callback :void ((user-data :pointer) (key :int) (arg2 :int) (action :int) (mods :int))

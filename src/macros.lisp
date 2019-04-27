@@ -66,3 +66,6 @@
 (defmacro with-pipeline-color-blend-state-create-info ((var) &body body)
   `(with-vk-struct (,var VkPipelineColorBlendStateCreateInfo)
      ,@body))
+
+(defmacro api-version (major minor patch)
+  `(logior (ash ,major 22) (ash ,minor 12) ,patch))

@@ -1,5 +1,21 @@
 (in-package :vktk)
 
+(defun run-demo (&optional (debug t))
+  (let* ((*debug* debug)
+	 (app (make-instance 'application)))
+    #+windows
+    (sb-thread:make-thread
+     (lambda ()
+       (main app)))
+    #+darwin
+    (sb-thread:interrupt-thread
+     (sb-thread:main-thread)
+     (lambda ()
+       (sp-int:with-float-traps-masked
+	   (:invalid :inexact :overflow)
+	 (main app))))
+    app))
+
 (defclass vktk-module ()
   ((allocator :accessor allocator)
    (device :accessor device)
@@ -16,9 +32,6 @@
    
    (camera :initform (make-instance 'camera) :reader camera)
    (start-time :reader start-time :initform (get-internal-real-time))
-   (model-matrix :reader model-matrix)
-   (view-matrix :reader view-matrix)
-   (projection-matrix :reader projection-matrix)
    (vertex-shader :accessor vertex-shader)
    (geometry-shader :accessor geometry-shader)
    (fragment-shader :accessor fragment-shader)
@@ -75,16 +88,17 @@
   (with-slots (device) module
     (multiple-value-bind (width height) (get-framebuffer-size (window module))
       (let ((vtx-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/vert.spv")))
-	    (frg-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/frag.spv"))))
+	    (frg-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/frag.spv")))
+	    (geo-shader (when (has-geometry-shader-p (physical-device device))
+			  (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/selection.geom.spv")))))
 	(setf (descriptor-set-layout module) (create-descriptor-set-layout device
 									   :bindings (list* (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)
-											    (when (has-geometry-shader-p (parent-physical-device device))
+											    (when (has-geometry-shader-p (physical-device device))
 											      (list (make-instance 'uniform-buffer-for-geometry-shader-dsl-binding)))))
 	      (pipeline-layout module) (create-pipeline-layout device (list (descriptor-set-layout module)))
 	      (pipeline module) (create-graphics-pipeline (device module) (pipeline-cache module) (pipeline-layout module)
 							  (render-pass module) 1 width height vtx-shader frg-shader
-							  :geometry-shader-module (when (has-geometry-shader-p (parent-physical-device device))
-										    (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/selection.geom.spv")))
+							  :geometry-shader-module geo-shader
 							  :vertex-type '(:struct 3DVertex)
 							  :vertex-input-attribute-descriptions
 							  (list (make-instance 'vertex-input-attribute-description
@@ -104,6 +118,7 @@
 							  :depth-clamp-enable VK_FALSE
 							  :src-alpha-blend-factor VK_BLEND_FACTOR_ONE))
 	(setf (vertex-shader module) vtx-shader
+	      (geometry-shader module) geo-shader
 	      (fragment-shader module) frg-shader)
 
 	(setf (uniform-buffer-vs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
@@ -119,6 +134,74 @@
 										  :uniform-buffer (uniform-buffer-gs module)
 										  :range (foreign-type-size '(:struct 3DDemoGSUBO))))))
 	(values)))))
+
+(defun shutdown-3d-demo (module)
+  (let* ((window (window module))
+	 (swapchain (swapchain window)))
+
+    (when (vertex-shader module)
+      (destroy-shader-module (vertex-shader module))
+      (setf (vertex-shader module) nil))
+
+    (when (fragment-shader module)
+      (destroy-shader-module (fragment-shader module))
+      (setf (fragment-shader module) nil))
+
+    ;; fixme: geometry shader unbound
+    (when (geometry-shader module)
+      (destroy-shader-module (geometry-shader module))
+      (setf (geometry-shader module) nil))
+
+    (when (depth-image-view swapchain)
+      (destroy-image-view (depth-image-view swapchain))
+      (setf (depth-image-view swapchain) nil))
+    
+    (when (depth-image swapchain)
+      (destroy-image (depth-image swapchain))
+      (setf (depth-image swapchain) nil))
+    
+    (loop for image-view across (color-image-views swapchain)
+       do (destroy-image-view image-view)
+       finally (setf (color-image-views swapchain) nil))
+    
+    (loop for framebuffer across (framebuffers swapchain)
+       do (destroy-framebuffer framebuffer)
+       finally (setf (framebuffers swapchain) nil))
+    
+    (when (pipeline module)
+      (destroy-pipeline (pipeline module))
+      (setf (pipeline module) nil))
+    
+    (when (pipeline-layout module)
+      (destroy-pipeline-layout (pipeline-layout module))
+      (setf (pipeline-layout module) nil))
+
+    #+NIL
+    (when (descriptor-set module)
+      (free-descriptor-sets (list (descriptor-set module)) (descriptor-pool module))
+      (setf (descriptor-set module) nil))
+    
+    (when (descriptor-set-layout module)
+      (destroy-descriptor-set-layout (descriptor-set-layout module))
+      (setf (descriptor-set-layout module) nil))
+    
+    (when (vertex-buffer module)
+      (destroy-buffer (vertex-buffer module))
+      (setf (vertex-buffer module) nil))
+    
+    (when (index-buffer module)
+      (destroy-buffer (index-buffer module))
+      (setf (index-buffer module) nil))
+
+    (when (uniform-buffer-gs module)
+      (destroy-buffer (uniform-buffer-gs module))
+      (setf (uniform-buffer-gs module) nil))
+
+    (when (uniform-buffer-vs module)
+      (destroy-buffer (uniform-buffer-vs module))
+      (setf (uniform-buffer-gs module) nil))
+
+    (values)))
 
 (defparameter *vertices-list*
   (list -0.5f0 -0.5f0 0.0f0 1.0f0 0.0f0 0.0f0
@@ -324,10 +407,6 @@
 (defun 3d-demo-render (module command-buffer fb-width fb-height)
   (with-slots (device) module
     (unless (vertex-buffer module)
-      #+NIL
-      (vkDestroyBuffer (h device) (h (vertex-buffer module)) (h (allocator module)))
-      #+NIL
-      (vkFreeMemory (h device) (h (allocated-memory (vertex-buffer module))) (h (allocator module)))
       ;;(setf (vertex-buffer module) nil)
       (setf (vertex-buffer module) (create-vertex-buffer device *vertex-data* *vertex-data-size*)))
 
@@ -346,7 +425,7 @@
 		       (* (- 2) (zoom (camera module)))
 		       (*    2  (zoom (camera module)))
 		       -10 10)
-	       (mperspective 75 (/ fb-width fb-height) 0.001 10000))))
+	       (mperspective (* 75 (zoom (camera module))) (/ fb-width fb-height) 0.001 10000))))
 
       ;;(when (ortho-p (camera module))
       (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix));;)

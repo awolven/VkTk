@@ -1,12 +1,19 @@
 (in-package :cl-user)
 
-(in-package :cl-user)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  
+(defmacro my-define-foreign-library (name-and-options &body pairs)
+  `(cffi:define-foreign-library ,name-and-options
+     ,@(mapcar (lambda (pair)
+		 (list (first pair) (eval (second pair))))
+	       pairs)))
 
 (defparameter *home-dir* #+darwin "/Users/awolven" #+windows "C:/Users/awolven")
 
 (defparameter *vulkan-sdk-path*
   #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.106.0/macOS")
   #+windows "C:/VulkanSDK/1.1.97.0")
+)
 
 #+darwin
 (progn
@@ -18,15 +25,15 @@
   (sb-posix:setenv "DYLD_FRAMEWORK_PATH" (concatenate 'string *vulkan-sdk-path* "/Frameworks") 0)
 )
 
-(cffi:define-foreign-library vulkan-loader
+(my-define-foreign-library vulkan-loader
   (:darwin "libvulkan.1.dylib")
   (:windows (concatenate 'string *vulkan-sdk-path* "/Source/lib/vulkan-1.dll")))
 
-(cffi:define-foreign-library cimgui
+(my-define-foreign-library cimgui
   (:darwin "/usr/local/lib/cimgui.dylib")
   (:windows (concatenate 'string *home-dir* "/vktk/cimgui/build/Debug/cimgui.dll")))
 
-(cffi:define-foreign-library glfw3
+(my-define-foreign-library glfw3
   (:darwin "/usr/local/lib/libglfw.dylib")
   (:windows (concatenate 'string *home-dir* "/vktk/glfw/build/src/Debug/glfw3.dll")))
 
