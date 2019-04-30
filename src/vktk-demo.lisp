@@ -11,7 +11,7 @@
     (sb-thread:interrupt-thread
      (sb-thread:main-thread)
      (lambda ()
-       (sp-int:with-float-traps-masked
+       (sb-int:with-float-traps-masked
 	   (:invalid :inexact :overflow)
 	 (main app))))
     app))
@@ -211,9 +211,10 @@
       (setf (fragment-shader module) nil))
 
     ;; fixme: geometry shader unbound
-    (when (geometry-shader module)
-      (destroy-shader-module (geometry-shader module))
-      (setf (geometry-shader module) nil))
+    (when (has-geometry-shader-p (physical-device (device swapchain)))
+      (when (geometry-shader module)
+	(destroy-shader-module (geometry-shader module))
+	(setf (geometry-shader module) nil)))
 
     (when (depth-image-view swapchain)
       (destroy-image-view (depth-image-view swapchain))
@@ -256,9 +257,10 @@
       (destroy-buffer (index-buffer module))
       (setf (index-buffer module) nil))
 
-    (when (uniform-buffer-gs module)
-      (destroy-buffer (uniform-buffer-gs module))
-      (setf (uniform-buffer-gs module) nil))
+    (when (has-geometry-shader-p (physical-device (device swapchain)))
+      (when (uniform-buffer-gs module)
+	(destroy-buffer (uniform-buffer-gs module))
+	(setf (uniform-buffer-gs module) nil)))
 
     (when (uniform-buffer-vs module)
       (destroy-buffer (uniform-buffer-vs module))
@@ -604,12 +606,13 @@
 							 (m* projection-matrix view-matrix)
 							 (if (has-geometry-shader-p (physical-device device))
 							     model-matrix
-							     (m* projection-matrix view-matrix model-matrix))))
+							     (m* projection-matrix (m* view-matrix model-matrix)))))
 	  
-	  (unless annotation-pipeline-p
-	    (update-3d-demo-gs-uniform-buffer-object module
-						     view-matrix
-						     projection-matrix))))
+	    (unless annotation-pipeline-p
+	      (when (has-geometry-shader-p (physical-device device))
+		(update-3d-demo-gs-uniform-buffer-object module
+							 view-matrix
+							 projection-matrix)))))
 
       (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
 			     (p-offsets 'VkDeviceSize)
