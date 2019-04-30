@@ -27,6 +27,7 @@
   (:import-from :sb-ext #:quit #:exit)
 
   (:export #:*debug*
+	   #:run-demo
 	   #:with-vk-struct
 	   #:h
 	   #:device
