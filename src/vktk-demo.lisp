@@ -23,24 +23,49 @@
    (pipeline-cache :accessor pipeline-cache)
    (descriptor-pool :accessor descriptor-pool)))
 
-(defclass 3d-demo-module (vktk-module)
-  ((window :accessor window)
-   (descriptor-set-layout :accessor descriptor-set-layout)
+(defclass 3d-demo-module-mixin ()
+  ((descriptor-set-layout :accessor descriptor-set-layout)
    (descriptor-set :accessor descriptor-set)
    (pipeline-layout :accessor pipeline-layout)
-   (pipeline :accessor pipeline)		   
-   
-   (camera :initform (make-instance 'camera) :reader camera)
-   (start-time :reader start-time :initform (get-internal-real-time))
+   (pipeline :accessor pipeline)
+
    (vertex-shader :accessor vertex-shader)
-   (geometry-shader :accessor geometry-shader)
    (fragment-shader :accessor fragment-shader)
 
    (uniform-buffer-vs :accessor uniform-buffer-vs)
+   
+   (vertex-buffer :accessor vertex-buffer :initform nil)
+   (index-buffer :accessor index-buffer :initform nil)
+
+   (vertex-data :accessor vertex-data)
+   (vertex-data-size :accessor vertex-data-size)
+   (index-data :accessor index-data)
+   (index-data-size :accessor index-data-size)
+   (index-count :accessor index-count)))
+
+(defclass 3d-demo-module (vktk-module 3d-demo-module-mixin)
+  ((window :accessor window)
+   
+   (camera :initform (make-instance 'camera) :reader camera)
+   (start-time :reader start-time :initform (get-internal-real-time))
+
+   ;;(vertex-shader :accessor vertex-shader)
+   (geometry-shader :accessor geometry-shader)
+   ;;(fragment-shader :accessor fragment-shader)
+
+   ;;(uniform-buffer-vs :accessor uniform-buffer-vs)
    (uniform-buffer-gs :accessor uniform-buffer-gs)
 
-   (vertex-buffer :accessor vertex-buffer :initform nil)
-   (index-buffer :accessor index-buffer :initform nil)))
+   ;;(vertex-buffer :accessor vertex-buffer :initform nil)
+   ;;(index-buffer :accessor index-buffer :initform nil)
+   ))
+
+(defclass 3d-demo-annotation-module (vktk-module 3d-demo-module-mixin)
+  ((window :accessor window)
+   (parent-module :initform nil :initarg :parent-module :accessor parent-module)))
+
+(defmethod camera ((module 3d-demo-annotation-module))
+  (camera (parent-module module)))
 
 (defclass camera ()
   ((ortho-p :initform t :accessor ortho-p)
@@ -53,12 +78,18 @@
    (eye-z :initform 0.0f0 :accessor eye-z)))
 
 (defun 3d-demo-init (module &key
-			   device
-			   (allocator +null-allocator+)
-			   window
-			   render-pass
-			   pipeline-cache
-			   descriptor-pool)
+			      parent
+			      device
+			      (allocator +null-allocator+)
+			      window
+			      render-pass
+			      pipeline-cache
+			      descriptor-pool
+			      vertex-data
+			      vertex-data-size
+			      index-data
+			      index-data-size
+			      index-count)
   
   (setf (allocator module) allocator
 	(device module) device
@@ -67,9 +98,25 @@
 	(descriptor-pool module) descriptor-pool
 	(window module) window)
 
-  (3d-demo-create-device-objects module)
+  (when parent
+    (setf (parent-module module) parent))
+
+  ;; todo: make these slots compute vertex-buffer etc dynamically.
+  (setf (vertex-data module)
+	vertex-data
+	(vertex-data-size module)
+	vertex-data-size
+	(index-data module) index-data
+	(index-data-size module)
+	index-data-size
+	(index-count module) index-count)
+  
+  (create-device-objects module)
   
   (values))
+
+(defun 3d-demo-annotation-init (module &rest args &key parent)
+  (apply #'3d-demo-init module :parent parent args))
 			   
 (defcstruct vec2
   (a :float)
@@ -84,58 +131,74 @@
   (position (:struct vec3))
   (color (:struct vec3)))
 
-(defun 3d-demo-create-device-objects (module)
-  (with-slots (device) module
-    (multiple-value-bind (width height) (get-framebuffer-size (window module))
-      (let ((vtx-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/vert.spv")))
-	    (frg-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/frag.spv")))
-	    (geo-shader (when (has-geometry-shader-p (physical-device device))
-			  (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/selection.geom.spv")))))
-	(setf (descriptor-set-layout module) (create-descriptor-set-layout device
-									   :bindings (list* (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)
-											    (when (has-geometry-shader-p (physical-device device))
-											      (list (make-instance 'uniform-buffer-for-geometry-shader-dsl-binding)))))
-	      (pipeline-layout module) (create-pipeline-layout device (list (descriptor-set-layout module)))
-	      (pipeline module) (create-graphics-pipeline (device module) (pipeline-cache module) (pipeline-layout module)
-							  (render-pass module) 1 width height vtx-shader frg-shader
-							  :geometry-shader-module geo-shader
-							  :vertex-type '(:struct 3DVertex)
-							  :vertex-input-attribute-descriptions
-							  (list (make-instance 'vertex-input-attribute-description
-									       :location 0
-									       :format VK_FORMAT_R32G32B32_SFLOAT
-									       :offset (foreign-slot-offset '(:struct 3DVertex) 'position))
-								(make-instance 'vertex-input-attribute-description
-									       :location 1
-									       :format VK_FORMAT_R32G32B32_SFLOAT
-									       :offset (foreign-slot-offset '(:struct 3DVertex) 'color)))
-							  :min-sample-shading 1.0f0
-							  :depth-test-enable VK_TRUE
-							  :depth-write-enable VK_TRUE
-							  :depth-compare-op VK_COMPARE_OP_LESS
-							  :logic-op VK_LOGIC_OP_COPY
-							  :blend-enable VK_FALSE
-							  :depth-clamp-enable VK_FALSE
-							  :src-alpha-blend-factor VK_BLEND_FACTOR_ONE))
-	(setf (vertex-shader module) vtx-shader
-	      (geometry-shader module) geo-shader
-	      (fragment-shader module) frg-shader)
+(defmethod create-device-objects ((module 3d-demo-annotation-module))
+  (3d-demo-create-device-objects module :use-geometry-shader nil :topology VK_PRIMITIVE_TOPOLOGY_LINE_LIST))
 
-	(setf (uniform-buffer-vs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
-	(setf (uniform-buffer-gs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoGSUBO))))
-	(setf (descriptor-set module) (create-descriptor-set device (list (descriptor-set-layout module))
+(defmethod create-device-objects ((module 3d-demo-module))
+  (3d-demo-create-device-objects module))
+  
+(defun 3d-demo-create-device-objects (module &key (use-geometry-shader t)
+					       (topology VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST))
+  (with-slots (device) module
+    (let ((geometry-shader-p (and use-geometry-shader (has-geometry-shader-p (physical-device device)))))
+      (multiple-value-bind (width height) (get-framebuffer-size (window module))
+	(let ((vtx-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/vert.spv")))
+	      (frg-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/frag.spv")))
+	      (geo-shader (when geometry-shader-p
+			    (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/selection.geom.spv")))))
+	  (setf (descriptor-set-layout module) (create-descriptor-set-layout device
+									     :bindings (list* (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)
+											      (when geometry-shader-p
+												(list (make-instance 'uniform-buffer-for-geometry-shader-dsl-binding)))))
+		(pipeline-layout module) (create-pipeline-layout device (list (descriptor-set-layout module)))
+		(pipeline module) (apply #'create-graphics-pipeline (device module) (pipeline-cache module) (pipeline-layout module)
+					 (render-pass module) 1 width height vtx-shader frg-shader
+					 #+windows :line-width #+windows 3.0f0
+					 :vertex-type '(:struct 3DVertex)
+					 :vertex-input-attribute-descriptions
+					 (list (make-instance 'vertex-input-attribute-description
+							      :location 0
+							      :format VK_FORMAT_R32G32B32_SFLOAT
+							      :offset (foreign-slot-offset '(:struct 3DVertex) 'position))
+					       (make-instance 'vertex-input-attribute-description
+							      :location 1
+							      :format VK_FORMAT_R32G32B32_SFLOAT
+							      :offset (foreign-slot-offset '(:struct 3DVertex) 'color)))
+					 :topology topology
+					 :min-sample-shading 1.0f0
+					 :depth-test-enable VK_TRUE
+					 :depth-write-enable VK_TRUE
+					 :depth-compare-op VK_COMPARE_OP_LESS
+					 :logic-op VK_LOGIC_OP_COPY
+					 :blend-enable VK_FALSE
+					 :depth-clamp-enable VK_FALSE
+					 :src-alpha-blend-factor VK_BLEND_FACTOR_ONE
+					 (when geometry-shader-p
+					   (list :geometry-shader-module geo-shader))))
+	  (setf (vertex-shader module) vtx-shader
+
+		(fragment-shader module) frg-shader)
+
+	  (when geometry-shader-p (setf (geometry-shader module) geo-shader))
+
+	  (setf (uniform-buffer-vs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
+	  (when geometry-shader-p
+	    (setf (uniform-buffer-gs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoGSUBO)))))
+	  (setf (descriptor-set module) (create-descriptor-set device (list (descriptor-set-layout module))
 							     
-							     (descriptor-pool module)
-							     :descriptor-buffer-info
-							     (list (make-instance 'uniform-descriptor-buffer-info
-										  :uniform-buffer (uniform-buffer-vs module)
-										  :range (foreign-type-size '(:struct 3DDemoVSUBO)))
-								   (make-instance 'uniform-descriptor-buffer-info
-										  :uniform-buffer (uniform-buffer-gs module)
-										  :range (foreign-type-size '(:struct 3DDemoGSUBO))))))
+							       (descriptor-pool module)
+							       :descriptor-buffer-info
+							       (list* (make-instance 'uniform-descriptor-buffer-info
+										     :uniform-buffer (uniform-buffer-vs module)
+										     :range (foreign-type-size '(:struct 3DDemoVSUBO)))
+								      (when geometry-shader-p
+									(list
+									 (make-instance 'uniform-descriptor-buffer-info
+											:uniform-buffer (uniform-buffer-gs module)
+											:range (foreign-type-size '(:struct 3DDemoGSUBO)))))))))
 	(values)))))
 
-(defun shutdown-3d-demo (module)
+(defmethod shutdown-3d-demo ((module 3d-demo-module))
   (let* ((window (window module))
 	 (swapchain (swapchain window)))
 
@@ -199,30 +262,128 @@
 
     (when (uniform-buffer-vs module)
       (destroy-buffer (uniform-buffer-vs module))
-      (setf (uniform-buffer-gs module) nil))
+      (setf (uniform-buffer-vs module) nil))
+
+    #+NOTYET
+    (progn
+    (when (vertex-data module)
+      (foreign-free (vertex-data module))
+      (setf (vertex-data module) nil))
+
+    (setf (vertex-data-size module) nil)
+
+    (when (index-data module)
+      (foreign-free (index-data module))
+      (setf (index-data module) nil))
+
+    (setf (index-data-size module) nil)    
+    )
+    (values)))
+
+(defmethod shutdown-3d-demo ((module 3d-demo-annotation-module))
+  (let* (#+NIL(window (window module))
+	      #+NIL(swapchain (swapchain window)))
+
+    (when (vertex-shader module)
+      (destroy-shader-module (vertex-shader module))
+      (setf (vertex-shader module) nil))
+
+    (when (fragment-shader module)
+      (destroy-shader-module (fragment-shader module))
+      (setf (fragment-shader module) nil))
+    
+    (when (pipeline module)
+      (destroy-pipeline (pipeline module))
+      (setf (pipeline module) nil))
+    
+    (when (pipeline-layout module)
+      (destroy-pipeline-layout (pipeline-layout module))
+      (setf (pipeline-layout module) nil))
+
+    #+NIL
+    (when (descriptor-set module)
+      (free-descriptor-sets (list (descriptor-set module)) (descriptor-pool module))
+      (setf (descriptor-set module) nil))
+    
+    (when (descriptor-set-layout module)
+      (destroy-descriptor-set-layout (descriptor-set-layout module))
+      (setf (descriptor-set-layout module) nil))
+    
+    (when (vertex-buffer module)
+      (destroy-buffer (vertex-buffer module))
+      (setf (vertex-buffer module) nil))
+    
+    (when (index-buffer module)
+      (destroy-buffer (index-buffer module))
+      (setf (index-buffer module) nil))
+
+    (when (uniform-buffer-vs module)
+      (destroy-buffer (uniform-buffer-vs module))
+      (setf (uniform-buffer-vs module) nil))
+
+    #+NOTYET
+    (progn
+      (when (vertex-data module)
+	(foreign-free (vertex-data module))
+	(setf (vertex-data module) nil))
+      
+      (setf (vertex-data-size module) nil)
+      
+      (when (index-data module)
+	(foreign-free (index-data module))
+	(setf (index-data module) nil))
+      
+      (setf (index-data-size module) nil)
+      )
 
     (values)))
 
 (defparameter *vertices-list*
-  (list -0.5f0 -0.5f0 0.0f0 1.0f0 0.0f0 0.0f0
-	 0.5f0 -0.5f0 0.0f0 0.0f0 1.0f0 0.0f0
-	 0.5f0  0.5f0 0.0f0 0.0f0 0.0f0 1.0f0
-	 -0.5f0  0.5f0 0.0f0 1.0f0 1.0f0 1.0f0
+  (list -0.5f0 -0.5f0 0.5f0 1.0f0 0.0f0 0.0f0
+	 0.5f0 -0.5f0 0.5f0 0.0f0 1.0f0 0.0f0
+	 0.5f0  0.5f0 0.5f0 0.0f0 0.0f0 1.0f0
+	 -0.5f0  0.5f0 0.5f0 1.0f0 1.0f0 1.0f0
 
 	 -0.5f0 -0.5f0 -0.5f0 1.0f0 0.0f0 0.0f0
 	 0.5f0 -0.5f0 -0.5f0 0.0f0 1.0f0 0.0f0
 	 0.5f0  0.5f0 -0.5f0 0.0f0 0.0f0 1.0f0
-	 -0.5f0  0.5f0 -0.5f0 1.0f0 1.0f0 1.0f0))
+	 -0.5f0  0.5f0 -0.5f0 1.0f0 1.0f0 1.0f0
+	))
 
 (defparameter *vertex-data* (foreign-alloc :float :initial-contents *vertices-list*))
 (defparameter *vertex-data-size* (* (foreign-type-size :float) (length *vertices-list*)))
 
 (defparameter *indices*
   (list 0 1 2 2 3 0
-	4 5 6 6 7 4))
+	4 5 6 6 7 4
+	0 1 4 4 5 1
+	1 2 6 1 5 6
+	0 4 7 0 3 7
+	7 6 3 3 2 6))
 
 (defparameter *index-data* (foreign-alloc :unsigned-short :initial-contents *indices*))
 (defparameter *index-data-size* (* (foreign-type-size :unsigned-short) (length *indices*)))
+
+(defparameter *axes-coord-list*
+  (list 0.0f0 0.0f0 0.0f0 1.0f0 0.0f0 0.0f0
+	1.0f0 0.0f0 0.0f0 1.0f0 0.0f0 0.0f0
+	0.0f0 0.0f0 0.0f0 0.0f0 1.0f0 0.0f0
+	0.0f0 1.0f0 0.0f0 0.0f0 1.0f0 0.0f0
+	0.0f0 0.0f0 0.0f0 0.0f0 0.0f0 1.0f0
+	0.0f0 0.0f0 1.0f0 0.0f0 0.0f0 1.0f0))
+
+(defparameter *axes-coord-data*
+  (foreign-alloc :float :initial-contents *axes-coord-list*))
+
+(defparameter *axes-coord-data-size*
+  (* (foreign-type-size :float) (length *axes-coord-list*)))
+
+(defparameter *axes-indices*
+  (list 0 1 2 3 4 5))
+
+(defparameter *axes-index-data* (foreign-alloc :unsigned-short :initial-contents *axes-indices*))
+
+(defparameter *axes-index-data-size* (* (foreign-type-size :unsigned-short) (length *axes-indices*)))
 
 (defcstruct vec4
   (x :float)
@@ -342,26 +503,17 @@
   
   nil)
 
-(defun update-3d-demo-vs-uniform-buffer-object (module)
-  (with-slots (device camera start-time window) module
-    (let* ((current-time (get-internal-real-time))
-	   (elapsed-time (- current-time start-time))
-	   (model-matrix
-	    (m* (mrotation (vec3 0.0 0.0 1.0)
-			   (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
-		(mtranslation (vec3 1.0 0.0 0.0))))
-	   (view-matrix
-	    (look-at2 (vec3 (camera-x camera) (camera-y camera) (camera-z camera))
-		      (vec3 0.0 0.0 0.0)
-		      (vec3 0.0 0.0 1.0))))
+(defun update-3d-demo-vs-uniform-buffer-object (module matrix)
+			    
       (with-foreign-object (p-ubo '(:struct 3DDemoVSUBO))
 	(let ((p-m (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'model))
-	      (p-v (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'view)))
+	      #+NIL(p-v (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'view)))
 
 	  (loop for i from 0 below 4
 	     do (loop for j from 0 below 4
-		   do (setf (mem-aref p-m :float (+ i (* j 4))) (coerce (mcref model-matrix i j) 'single-float))))
+		   do (setf (mem-aref p-m :float (+ i (* j 4))) (coerce (mcref matrix i j) 'single-float))))
 
+	  #+NIL
 	  (loop for i from 0 below 4
 	     do (loop for j from 0 below 4
 		   do (setf (mem-aref p-v :float (+ i (* j 4))) (coerce (mcref view-matrix i j) 'single-float))))
@@ -369,7 +521,7 @@
 	  (copy-uniform-buffer-memory (device module)
 				      p-ubo (allocated-memory (uniform-buffer-vs module))
 				      (foreign-type-size '(:struct 3DDemoVSUBO)))))
-      view-matrix)))
+      (values))
 
 (defun convert-projection-matrix-to-vulkan (src)
   (let ((dest (mcopy4 src)))
@@ -404,11 +556,11 @@
 	  (mcref m 3 3) 0.0f0)
     m))
 
-(defun 3d-demo-render (module command-buffer fb-width fb-height)
+(defun 3d-demo-render (module command-buffer fb-width fb-height &key (annotation-pipeline-p nil))
   (with-slots (device) module
     (unless (vertex-buffer module)
       ;;(setf (vertex-buffer module) nil)
-      (setf (vertex-buffer module) (create-vertex-buffer device *vertex-data* *vertex-data-size*)))
+      (setf (vertex-buffer module) (create-vertex-buffer device (vertex-data module) (vertex-data-size module))))
 
     (unless (index-buffer module)
       #+NIL
@@ -416,7 +568,7 @@
       #+NIL
       (vkFreeMemory (h device) (h (allocated-memory (index-buffer module))) (h (allocator module)))
       ;;(setf (index-buffer module) nil)
-      (setf (index-buffer module) (create-index-buffer device *index-data* *index-data-size*)))
+      (setf (index-buffer module) (create-index-buffer device (index-data module) (index-data-size module))))
 
     (let ((projection-matrix
 	   (if (ortho-p (camera module))
@@ -432,10 +584,32 @@
 
       (vkCmdBindPipeline (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline module)))
 
-      (let ((view-matrix (update-3d-demo-vs-uniform-buffer-object module)))
-	(update-3d-demo-gs-uniform-buffer-object module
-						 view-matrix
-						 projection-matrix))
+      (with-slots (device window) module
+	(let ((model-matrix)
+	      (camera (camera module)))
+	  (unless annotation-pipeline-p
+	    (let* ((current-time (get-internal-real-time))
+		   (elapsed-time (- current-time (start-time module))))
+	      (setq model-matrix
+		    (m* (mrotation (vec3 0.0 0.0 1.0)
+				   (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
+			(mtranslation (vec3 1.0 0.0 0.0))))))
+	  (let ((view-matrix
+		 (look-at2 (vec3 (camera-x camera) (camera-y camera) (camera-z camera))
+			   (vec3 0.0 0.0 0.0)
+			   (vec3 0.0 0.0 1.0))))
+	    
+	    (update-3d-demo-vs-uniform-buffer-object module
+						     (if annotation-pipeline-p
+							 (m* projection-matrix view-matrix)
+							 (if (has-geometry-shader-p (physical-device device))
+							     model-matrix
+							     (m* projection-matrix view-matrix model-matrix))))
+	  
+	  (unless annotation-pipeline-p
+	    (update-3d-demo-gs-uniform-buffer-object module
+						     view-matrix
+						     projection-matrix))))
 
       (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
 			     (p-offsets 'VkDeviceSize)
@@ -482,9 +656,9 @@
 		    vk::width fb-width
 		    vk::height fb-height)
 				   
-	      (vkCmdSetScissor (h command-buffer) 0 1 p-scissor)))))
+	      (vkCmdSetScissor (h command-buffer) 0 1 p-scissor))))))
 
-      (vkCmdDrawIndexed (h command-buffer) (length *indices*) 1 0 0 0)
+      (vkCmdDrawIndexed (h command-buffer) (index-count module) 1 0 0 0)
 
       (values))))
 

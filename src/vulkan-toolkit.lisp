@@ -3261,7 +3261,7 @@
 	      (destroy-image (depth-image swapchain))
 	      (setf (depth-image swapchain) nil)
 
-	      ;;(vkFreeMemory (h device) (h (allocated-memory (depth-image swapchain))) (h allocator))
+	      #+NIL(vkFreeMemory (h device) (h (allocated-memory (depth-image swapchain))) (h allocator))
 
 	      (loop for image-view across (color-image-views swapchain)
 		 do (destroy-image-view image-view)
@@ -3410,7 +3410,8 @@
 
     (vkDeviceWaitIdle (h device))
     (setf (shutting-down-p app) t)
-    
+
+    (shutdown-3d-demo (3d-demo-annotation-module app))
     (shutdown-3d-demo (3d-demo-module app))
     (imgui-shutdown (imgui-module app))
 
@@ -3426,8 +3427,24 @@
 	 finally (setf (command-buffers command-pool) nil))
 
       (destroy-command-pool command-pool))
+
+    (loop for fence across (fences app)
+       do (vkDestroyFence (h device) (h fence) (h (allocator fence)))
+       finally (setf (fences app) nil))
+
+    (loop for sem across (render-complete-semaphore app)
+       do (vkDestroySemaphore (h device) (h sem) (h (allocator sem)))
+       finally (setf (render-complete-semaphore app) nil))
+
+    (loop for sem across (present-complete-semaphore app)
+       do (vkDestroySemaphore (h device) (h sem) (h (allocator sem)))
+       finally (setf (present-complete-semaphore app) nil))    
+
+    (vkDestroyDescriptorPool (h device) (h (descriptor-pool app)) (h (allocator (descriptor-pool app))))
     
     (glfwDestroyWindow (h window))
+
+    (vkDestroyDevice (h device) (h (allocator device)))
     
     (values)))
 
@@ -4098,6 +4115,7 @@
 
    (imgui-module :accessor imgui-module)
    (3d-demo-module :accessor 3d-demo-module)
+   (3d-demo-annotation-module :accessor 3d-demo-annotation-module)
    (shutting-down-p :accessor shutting-down-p :initform nil)))
 
 (defcstruct mat4
@@ -4117,9 +4135,6 @@
   (y3 :float)
   (z3 :float)
   (w3 :float))
-
-(defcstruct UniformBufferObjectVertexShader
-  (mxProj (:struct mat4)))
 
 (defun create-command-buffers (device command-pool queued-frames)
   (let ((command-buffers (make-array queued-frames)))
@@ -4247,15 +4262,24 @@
 		    :frame-count (number-of-images (swapchain (main-window app))))
 	(setf (imgui-module app) imgui))
       
-      (let ((module (make-instance '3d-demo-module)))
+      (let ((module (make-instance '3d-demo-module))
+	    (args (list :allocator (allocator app)
+			:device (first (logical-devices app))
+			:render-pass (render-pass (main-window app))
+			:window (main-window app)
+			:pipeline-cache (pipeline-cache app)
+			:descriptor-pool (descriptor-pool app))))
 	(setf (3d-demo-module app) module)
-	(3d-demo-init module :allocator (allocator app)
-		      :device (first (logical-devices app))
-		      :render-pass (render-pass (main-window app))
-		      :window (main-window app)
-		      :pipeline-cache (pipeline-cache app)
-		      :descriptor-pool (descriptor-pool app)
-		      ))
+	(apply #'3d-demo-init module :vertex-data *vertex-data* :vertex-data-size *vertex-data-size*
+	       :index-data *index-data* :index-data-size *index-data-size*
+	       :index-count (length *indices*) args)
+	(let ((annotation-module (make-instance '3d-demo-annotation-module)))
+	  (setf (3d-demo-annotation-module app) annotation-module)
+	  (apply #'3d-demo-init annotation-module :parent module
+		 :vertex-data *axes-coord-data*
+		 :vertex-data-size *axes-coord-data-size*
+		 :index-data *axes-index-data* :index-data-size *axes-index-data-size*
+		 :index-count (length *axes-indices*) args)))
       
       (ig::igStyleColorsClassic (ig::igGetStyle))
       (check-vk-result
@@ -4399,6 +4423,10 @@
 
 	       ;; draw stuff here
 	       (multiple-value-bind (w h) (get-framebuffer-size (main-window app))
+		 (3d-demo-render (3d-demo-annotation-module app)
+				 (elt (command-buffers command-pool)
+				      (current-frame app))
+				 w h :annotation-pipeline-p t)
 		 (3d-demo-render (3d-demo-module app)
 				 (elt (command-buffers command-pool)
 				      (current-frame app))
