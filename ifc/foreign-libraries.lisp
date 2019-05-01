@@ -31,6 +31,8 @@
 
 (defparameter *home-dir* #+darwin "/Users/awolven" #+windows "C:/Users/awolven")
 
+(defparameter *vktk-dir* (concatenate 'string *home-dir* "/vktk-test"))
+
 (defparameter *vulkan-sdk-path*
   #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.106.0/macOS")
   #+windows "C:/VulkanSDK/1.1.97.0")
@@ -52,11 +54,11 @@
 
 (my-define-foreign-library cimgui
   (:darwin "/usr/local/lib/cimgui.dylib")
-  (:windows (concatenate 'string *home-dir* "/vktk/cimgui/build/Debug/cimgui.dll")))
+  (:windows (concatenate 'string *vktk-dir* "/ifc/lib/cimgui.dll")))
 
 (my-define-foreign-library glfw3
   (:darwin "/usr/local/lib/libglfw.dylib")
-  (:windows (concatenate 'string *home-dir* "/vktk/glfw/build/src/Debug/glfw3.dll")))
+  (:windows (concatenate 'string *vktk-dir* "/ifc/lib/glfw3.dll")))
 
 (cffi:use-foreign-library vulkan-loader)
 (cffi:use-foreign-library cimgui)
