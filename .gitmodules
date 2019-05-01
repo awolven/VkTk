@@ -1,6 +1,6 @@
 [submodule "cimgui"]
 	path = cimgui
-	url = git@bitbucket.org:awolven/cimgui.git
+	url = git@github.com:awolven/cimgui.git
 	branch = cimgui-cffi
 [submodule "glfw"]
 	path = glfw
