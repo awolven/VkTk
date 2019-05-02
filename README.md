@@ -4,7 +4,7 @@ Install vulkan sdk.
 
 `git clone https://github.com/awolven/VkTk.git <vktk-dir>`
 
-Where <vktk-dir> is the directory you want git to create, defaults to VkTk.
+Where `<vktk-dir>` is a placeholder for the directory you want git to create.  Pick a directory name to use there.  (Defaults to VkTk.)
 
 `cd <vktk-dir>`
 
@@ -18,9 +18,9 @@ Where <vktk-dir> is the directory you want git to create, defaults to VkTk.
 
 Edit ifc/foreign-libraries.lisp:
 
-Change *vktk-dir* to point to your <vktk-dir>.
+Change `*vktk-dir*` to point to your `<vktk-dir>`.
 
-Change *vulkan-sdk-path* to point to your vulkan sdk.
+Change `*vulkan-sdk-path*` to point to your vulkan sdk.
 
 In emacs `M-x slime`.
 
