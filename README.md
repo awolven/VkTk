@@ -1,5 +1,7 @@
 # Quick start:
 
+These instructions assume you have [SBCL](http://www.sbcl.org/) installed on your system with asdf and quicklisp.  If you have a macOS port of SBCL that is single threaded, you can easily build a multithreaded version, but the single thread version should run the VkTk Demo just fine.
+
 Install vulkan sdk.
 
 `git clone https://github.com/awolven/VkTk.git <vktk-dir>`
