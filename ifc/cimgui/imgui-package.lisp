@@ -23,7 +23,144 @@
 
 (defpackage :imgui
   (:nicknames :ig)
-  (:export #:ImVec2_ImVec2
+  (:export #:bullet-text
+	   #:show-demo-window
+	   #:begin
+	   #:end
+	   #:set-next-window-pos
+	   #:set-next-window-size
+	   #:text
+	   #:push-item-width
+	   #:pop-item-width
+	   #:calc-item-width
+	   #:push-text-wrap-pos
+	   #:push-allow-keyboard-focus
+	   #:pop-allow-keyboard-focus
+	   #:push-button-repeat
+	   #:pop-button-repeat
+	   #:separator
+	   #:same-line
+	   #:new-line
+	   #:spacing
+	   #:dummy
+	   #:indent
+	   #:unindent
+	   #:begin-group
+	   #:end-group
+	   #:imgui-get-cursor-pos
+	   #:get-cursor-pos-x
+	   #:get-cursor-pos-y
+	   #:get-cursor-start-pos
+	   #:get-cursor-screen-pos
+	   #:align-text-to-frame-padding
+	   #:get-text-line-height
+	   #:get-frame-height-with-spacing
+	   #:push-id
+	   #:pop-id
+	   #:get-id
+	   #:text-unformatted
+	   #:text-colored
+	   #:text-disabled
+	   #:text-wrapped
+	   #:label-text
+	   #:button
+	   #:small-button
+	   #:invisible-button
+	   #:arrow-button
+	   #:image
+	   #:image-button
+	   #:checkbox
+	   #:checkbox-flags
+	   #:radio-button
+	   #:progress-bar
+	   #:bullet
+	   #:begin-combo
+	   #:end-combo
+	   #:combo
+	   #:drag-float
+	   #:drag-float2
+	   #:drag-float3
+	   #:drag-float4
+	   #:drag-float-range2
+	   #:drag-int
+	   #:drag-int2
+	   #:drag-int3
+	   #:drag-int-range2
+	   #:drag-scalar
+	   #:drag-scalar-n
+	   #:slider-float
+	   #:slider-float2
+	   #:slider-float3
+	   #:slider-float4
+	   #:slider-angle
+	   #:slider-int
+	   #:slider-int2
+	   #:slider-int3
+	   #:slider-int4
+	   #:slider-scalar
+	   #:slider-scalar-n
+	   #:input-text
+	   #:input-text-multiline
+	   #:input-float
+	   #:input-float2
+	   #:input-float3
+	   #:input-float4
+	   #:input-int
+	   #:input-int2
+	   #:input-int3
+	   #:input-int4
+	   #:input-double
+	   #:input-scalar
+	   #:input-scalar-n
+	   #:color-edit3
+	   #:color-edit4
+	   #:color-picker3
+	   #:color-picker4
+	   #:color-button
+	   #:set-color-edit-options
+	   #:tree-node
+	   #:tree-node-ex
+	   #:tree-push
+	   #:tree-pop
+	   #:tree-advance-to-label-pos
+	   #:get-tree-node-to-label-spacing
+	   #:set-next-tree-node-open
+	   #:collapsing-header
+	   #:selectable
+	   #:list-box
+	   #:list-box-header
+	   #:list-box-footer
+	   #:plot-lines
+	   #:plot-histogram
+	   #:begin-main-menu-bar
+	   #:end-main-menu-bar
+	   #:begin-menu-bar
+	   #:end-menu-bar
+	   #:end-menu
+	   #:begin-tooltip
+	   #:end-tooltip
+	   #:set-tooltip
+	   #:open-popup
+	   #:begin-popup
+	   #:begin-popep-context-item
+	   #:begin-popup-context-window
+	   #:begin-popup-context-void
+	   #:begin-popup-modal
+	   #:end-popup
+	   #:begin-child
+	   #:bool-receptor
+	   #:flags-receptor
+	   #:get-receptor-value
+	   #:log-finish
+	   #:log-text
+	   #:log-to-clipboard
+	   #:key-pressed-p
+	   #:menu-item
+	   #:begin-menu
+	   
+	   
+	   #:ImVec2_Simple
+	   #:ImVec2_ImVec2
 	   #:ImVec2_destroy
 	   #:ImVec2_ImVec2Float
 	   #:ImVec4_ImVec4
@@ -37,6 +174,8 @@
 	   #:ImGuiWindowFlags_NoScrollWithMouse
 	   #:ImGuiWindowFlags_NoCollapse
 	   #:ImGuiWindowFlags_AlwaysAutoResize
+	   #:ImGuiWindowFlags_NoBackground
+	   #:ImGuiWindowFlags_NoMouseInputs
 	   #:ImGuiWindowFlags_NoSavedSettings
 	   #:ImGuiWindowFlags_NoInputs
 	   #:ImGuiWindowFlags_MenuBar
@@ -47,6 +186,17 @@
 	   #:ImGuiWindowFlags_AlwaysHorizontalScrollbar
 	   #:ImGuiWindowFlags_AlwaysUseWindowPadding
 	   #:ImGuiWindowFlags_ResizeFromAnySide
+	   #:ImGuiWindowFlags_NoNavInputs
+	   #:ImGuiWindowFlags_NoNavFocus
+	   #:ImGuiWindowFlags_UnsavedDocument
+	   #:ImGuiWindowFlags_NoNav
+	   #:ImGuiWindowFlags_NoDecoration
+	   #:ImGuiWindowFlags_NavFlattened
+	   #:ImGuiWindowFlags_ChildWindow
+	   #:ImGuiWindowFlags_Tooltip
+	   #:ImGuiWindowFlags_Popup
+	   #:ImGuiWindowFlags_Modal
+	   #:ImGuiWindowFlags_ChildMenu
 	   
 	   #:ImGuiInputTextFlags_CharsDecimal
 	   #:ImGuiInputTextFlags_CharsHexadecimal
@@ -77,6 +227,7 @@
 	   #:ImGuiTreeNodeFlags_Leaf
 	   #:ImGuiTreeNodeFlags_Bullet
 	   #:ImGuiTreeNodeFlags_FramePadding
+	   #:ImGuiTreeNodeFlags_NavLeftJumpsBackHere
 	   #:ImGuiTreeNodeFlags_CollapsingHeader
 
 	   #:ImGuiSelectableFlags_DontClosePopups
@@ -204,6 +355,7 @@
 	   #:ImGuiColorEditFlags_NoTooltip
 	   #:ImGuiColorEditFlags_NoLabel
 	   #:ImGuiColorEditFlags_NoSidePreview
+	   #:ImGuiColorEditFlags_NoDragDrop
 	   #:ImGuiColorEditFlags_AlphaBar
 	   #:ImGuiColorEditFlags_AlphaPreview
 	   #:ImGuiColorEditFlags_AlphaPreviewHalf

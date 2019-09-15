@@ -48,6 +48,8 @@
 
 (defparameter +null-pipeline-cache+ (make-instance 'pipeline-cache :handle VK_NULL_HANDLE))
 
+(defvar *vulkan-instance* nil)
+
 (defclass instance (handle-mixin allocator-mixin)
   ((create-info :accessor create-info)
    (enabled-extensions-info :accessor enabled-extensions-info)
@@ -56,7 +58,29 @@
    (global-layer :accessor global-layer)
    (physical-device-groups :accessor physical-device-groups)
    (physical-devices :accessor physical-devices)
-   (supported-layers :accessor supported-layers)))
+   (supported-layers :accessor supported-layers)
+   (logical-devices :initform () :accessor logical-devices)))
+
+(defun destroy-vulkan-instance (instance)
+  (when instance
+    (loop for device in (logical-devices instance)
+       do (let ((command-pools (command-pools device)))
+	    (loop for entry in command-pools
+	       do (free-command-buffers (second entry))))
+       finally (vkDestroyDevice (h device) (h (allocator device))))
+    (vkDestroyInstance (h instance) (h (allocator instance)))
+    (setq *vulkan-instance* nil)
+    t))    
+
+(defun free-command-buffers (command-pool)
+  (let* ((command-buffers (command-buffers command-pool))
+	 (count (length command-buffers)))
+    (with-slots (device) command-pool
+      (with-foreign-object (p-command-buffers 'VkCommandBuffer count)
+	(loop for command-buffer across command-buffers for i from 0
+	   do (setf (mem-aref p-command-buffers 'VkCommandBuffer i) (h command-buffer)))
+	(vkFreeCommandBuffers (h device) (h command-pool) count p-command-buffers)
+	(setf (fill-pointer command-buffers) 0)))))
 
 (defclass base-device (handle-mixin allocator-mixin)
   ((instance :accessor instance)
@@ -69,7 +93,7 @@
    (pipeline-layout-manager :accessor pipeline-layout-manager)
    (shader-module-cache :accessor shader-module-cache)
    (command-pools :accessor command-pools :initform nil)
-   ;;(command-buffers :accessor command-buffers)
+   (descriptor-pool :accessor descriptor-pool :initform nil)
    (queues :initform nil :accessor device-queues)))
 
 (defclass sgpu-device (base-device)
@@ -195,10 +219,6 @@
 (defun available-extensions ()
   (mapcar #'first (remove-duplicates (remove-if #'null (mapcar #'enumerate-instance-extension-properties (available-layers))) :test #'equalp)))
 
-(defun destroy-instance (instance &key (allocator +null-allocator+))
-  (vkDestroyInstance (h instance) (h allocator))
-  (values))
-
 (defun create-instance (&key (application-name "")
 			  (application-version 0)
 			  (engine-name "")
@@ -285,7 +305,7 @@
 		 
 		       (with-foreign-object (p-instance 'VkInstance)
 			 (check-vk-result (vkCreateInstance p-create-info (h allocator) p-instance))
-			 (make-instance 'instance :handle (mem-aref p-instance 'VkInstance) :allocator allocator)))))))
+			 (setq *vulkan-instance* (make-instance 'instance :handle (mem-aref p-instance 'VkInstance) :allocator allocator))))))))
 
 	  (loop for i from 0 below extension-count
 	     do (foreign-string-free (mem-aref pp-enabled-extension-names '(:pointer :char) i)))
@@ -579,9 +599,31 @@
 	  (check-vk-result (vkGetPhysicalDeviceSurfaceSupportKHR (h gpu) i (h surface) p-res))
 	  (when (eq (mem-aref p-res 'VkBool32) VK_TRUE)
 	      (return i)))
-       finally (error "No WSI support on physical device")))
+     finally (error "No WSI support on physical device")))
 
+(defun get-queue-family-index-with-dedicated-compute-support (gpu)
+  (loop for i from 0 for queue-family in (queue-families gpu)
+     do (when (eq VK_QUEUE_COMPUTE_BIT (queue-flags queue-family))
+	  (return-from get-queue-family-index-with-dedicated-compute-support i))
+     finally (return nil)))
 
+(defun get-any-queue-family-index-with-compute-support (gpu)
+  (loop for i from 0 for queue-family in (queue-families gpu)
+     do (when (compute-queue-family-p queue-family)
+	  (return-from get-any-queue-family-index-with-compute-support i))
+     finally (return nil)))
+
+(defun get-queue-family-index-with-dedicated-transfer-support (gpu)
+  (loop for i from 0 for queue-family in (queue-families gpu)
+     do (when (eq VK_QUEUE_TRANSFER_BIT (queue-flags queue-family))
+	  (return-from get-queue-family-index-with-dedicated-transfer-support i))
+     finally (return nil)))
+
+(defun get-any-queue-family-index-with-transfer-support (gpu)
+  (loop for i from 0 for queue-family in (queue-families gpu)
+     do (when (transfer-queue-family-p queue-family)
+	  (return-from get-any-queue-family-index-with-transfer-support i))
+     finally (return nil)))
 
 (defun offscreen-rendering-enabled-p (surface)
   )
@@ -2128,6 +2170,7 @@
 							       :instance (instance gpu)
 							       :physical-device gpu
 							       :allocator allocator)))
+				    (push device (logical-devices (instance gpu)))
 				    (loop for queue in queue-indices-and-totals
 				       do
 					 (push (list (first queue)
@@ -2505,17 +2548,34 @@
 
 (defclass descriptor-set-layout-binding ()
   ((binding :initarg :binding :initform 0 :reader binding)
-   (descriptor-type :initarg :type :initform VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :reader descriptor-type)
+   (descriptor-type :initarg :type :initform nil :reader descriptor-type)
    (descriptor-count :initarg :count :initform 1 :reader descriptor-count)
    (stage-flags :initarg :flags :reader stage-flags)
    (immutable-samplers :initform nil :initarg :samplers :reader immutable-samplers)))
 
 (defclass uniform-buffer-for-vertex-shader-dsl-binding (descriptor-set-layout-binding)
-  ((stage-flags :initform VK_SHADER_STAGE_VERTEX_BIT)))
+  ((descriptor-type :initform VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+   (stage-flags :initform VK_SHADER_STAGE_VERTEX_BIT)))
 
 (defclass uniform-buffer-for-geometry-shader-dsl-binding (descriptor-set-layout-binding)
   ((binding :initform 1)
+   (descriptor-type :initform VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
    (stage-flags :initform VK_SHADER_STAGE_GEOMETRY_BIT)))
+
+(defclass sample-uniform-buffer-for-compute-shader-dsl-binding (descriptor-set-layout-binding)
+  ((binding :initform 0)
+   (descriptor-type :initform VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+   (stage-flags :initform VK_SHADER_STAGE_COMPUTE_BIT)))
+
+(defclass sample-input-storage-buffer-for-compute-shader-dsl-binding (descriptor-set-layout-binding)
+  ((binding :initform 1)
+   (descriptor-type :initform VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+   (stage-flags :initform VK_SHADER_STAGE_COMPUTE_BIT)))
+
+(defclass sample-output-storage-buffer-for-compute-shader-dsl-binding (descriptor-set-layout-binding)
+  ((binding :initform 2)
+   (descriptor-type :initform VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+   (stage-flags :initform VK_SHADER_STAGE_COMPUTE_BIT)))
 
 (defclass descriptor-set-layout (handle-mixin logical-device-mixin)
   ())
@@ -2546,7 +2606,7 @@
 				       (:struct VkDescriptorSetLayoutBinding))
 		    (let* ((is-count (length (immutable-samplers binding)))
 			   (p-immutable-samplers (foreign-alloc 'VkSampler :count is-count)))
-			(loop for i below is-count for is in (immutable-samplers binding)
+			(loop for is in (immutable-samplers binding) for i from 0
 			   do (setf (mem-aref p-immutable-samplers 'VkSampler i) (h is)))
 			(setf vk::binding (binding binding)
 			      vk::descriptorType (descriptor-type binding)
@@ -3004,6 +3064,12 @@
   (color (:struct vec3)))
 
 (defclass pipeline (handle-mixin logical-device-mixin)
+  ())
+
+(defclass compute-pipeline (pipeline)
+  ())
+
+(defclass graphics-pipeline (pipeline)
   ((vertex-shader :accessor vertex-shader :initarg :vertex-shader)
    (geometry-shader :accessor geometry-shader :initarg :geometry-shader)
    (fragment-shader :accessor fragment-shader :initarg :fragment-shader)))
@@ -3013,6 +3079,83 @@
    (binding :initarg :binding :initform 0 :reader binding)
    (format :initarg :format :initform VK_FORMAT_R32G32B32_SFLOAT :reader desc-format)
    (offset :initarg :offset :reader offset)))
+
+(defclass compute-pipeline-create-info ()
+  ((flags :initform 0 :initarg :flags)
+   (stage :initarg :stage :initform nil)
+   (layout :initarg :layout :initform nil)
+   (base-pipeline :initarg :base-pipeline :initform +nullptr+)
+   (base-pipeline-index :initarg :base-pipeline-index :initform 0)))
+
+(defclass shader-stage-create-info ()
+  ((stage :initform #x00000020 :initarg :stage)
+   (module :initarg :module :initform nil)
+   (name :initarg :name :initform "main")
+   (specialization-info :initarg :specialization-info :initform nil)))   
+
+(defun test (device)
+  (create-compute-pipeline
+   device
+   (create-pipeline-layout
+    device
+    (list
+     (create-descriptor-set-layout
+      device
+      :bindings (list (make-instance 'sample-uniform-buffer-for-compute-shader-dsl-binding)
+		      (make-instance 'sample-storage-buffer-for-compute-shader-dsl-binding)))))
+   (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/comp.spv"))))
+
+(defun create-compute-pipeline (device pipeline-layout shader-module
+				&key
+				  (pipeline-cache +null-pipeline-cache+)
+				  (create-infos
+				   (list (make-instance 'compute-pipeline-create-info
+							:stage (make-instance 'shader-stage-create-info
+									      :module shader-module)
+							:layout pipeline-layout)))
+				  (allocator +null-allocator+))
+
+  (let ((create-info-count (length create-infos)))
+    (with-foreign-object (p-create-infos '(:struct VkComputePipelineCreateInfo) create-info-count)
+      (loop for ci in create-infos for i from 0
+	 do (let ((p-create-info (mem-aptr p-create-infos '(:struct VkComputePipelineCreateInfo) i)))
+	      (zero-struct p-create-info '(:struct VkComputePipelineCreateInfo))
+	      (with-vk-struct (p-ssci VkPipelineShaderStageCreateInfo)
+		(let ((stage (slot-value ci 'stage)))
+		  (fill-pipeline-shader-stage-create-info
+		   p-ssci
+		   :stage (slot-value stage 'stage)
+		   :module (slot-value stage 'module)
+		   :p-name (foreign-string-alloc (slot-value stage 'name)))) ;;memory leak
+
+		(with-foreign-slots ((vk::sType
+				      vk::pNext
+				      vk::flags
+				      vk::stage
+				      vk::layout
+				      vk::basePipelineHandle
+				      vk::basePipelineIndex)
+				     p-create-info (:struct VkComputePipelineCreateInfo))
+		
+		  (setf vk::sType VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO
+			vk::pNext +nullptr+
+			vk::flags (slot-value ci 'flags)
+			vk::stage p-ssci
+			vk::layout (h (slot-value ci 'layout))
+			vk::basePipelineHandle (if (null-pointer-p (slot-value ci 'base-pipeline))
+						   (slot-value ci 'base-pipeline)
+						   (h (slot-value ci 'base-pipeline)))
+			vk::basePipelineIndex (slot-value ci 'base-pipeline-index))))))
+
+      (with-foreign-object (p-pipelines 'VkPipeline 1)
+	(check-vk-result
+	 (vkCreateComputePipelines (h device) (h pipeline-cache)
+				   create-info-count p-create-infos
+				   (h allocator) p-pipelines))
+	(make-instance 'compute-pipeline :handle (mem-aref p-pipelines 'VkPipeline)
+		       :device device
+		       :allocator allocator)))))
+  
 
 (defun create-graphics-pipeline (device pipeline-cache pipeline-layout render-pass back-buffer-count width height vertex-shader-module fragment-shader-module
 			;; todo: make create-pipeline configurable on vertex input attribute description options
@@ -3145,7 +3288,7 @@
 				      (check-vk-result
 				       (vkCreateGraphicsPipelines 
 					(h device) (h pipeline-cache) 1 p-pipeline-ci (h allocator) p-graphics-pipeline))
-				      (make-instance 'pipeline :handle (mem-aref p-graphics-pipeline 'VkPipeline)
+				      (make-instance 'graphics-pipeline :handle (mem-aref p-graphics-pipeline 'VkPipeline)
 						     :device device
 						     :allocator allocator
 						     :vertex-shader vertex-shader-module
@@ -3238,7 +3381,7 @@
 
 (defclass command-pool (handle-mixin logical-device-mixin)
   ((queue-family-index :initarg :index :reader queue-family-index)
-   (command-buffers :accessor command-buffers :initform nil)))
+   (command-buffers :accessor command-buffers :initform (make-array 4 :adjustable t :fill-pointer 0))))
 
 (defun create-command-pool (device queue-family-index &key (allocator +null-allocator+))
   (with-vk-struct (p-info VkCommandPoolCreateInfo)
@@ -3254,7 +3397,13 @@
 			      :allocator allocator
 			      :index queue-family-index)))
 	  (push (list queue-family-index command-pool) (command-pools device))
-	  command-pool)))))		
+	  command-pool)))))
+
+(defun create-command-buffers (device command-pool queued-frames &key (allocator +null-allocator+))
+  (let ((command-buffers (command-buffers command-pool)))
+    (dotimes (i queued-frames)
+      (vector-push-extend (create-command-buffer device command-pool :allocator allocator) command-buffers))
+    command-buffers))
 
 (defun resize-framebuffer (window width height)
   (recreate-swapchain window (swapchain window) width height))
@@ -3262,8 +3411,7 @@
 (defun find-command-pool (device queue-family-index)
   (let ((entry (assoc queue-family-index (command-pools device))))
     (if entry
-	(second entry)
-	(error "Could not find command-pool for queue family index of ~A" queue-family-index))))
+	(second entry) nil)))
 
 (defun recreate-swapchain (window swapchain fb-width fb-height)
   (loop while (or (zerop fb-width) (zerop fb-height))
@@ -3322,22 +3470,17 @@
 							 queued-frames fb-width fb-height
 							 vertex-shader fragment-shader))
 		    (setup-framebuffers device (render-pass window) swapchain)
-		    (setf (command-buffers command-pool) (create-command-buffers device command-pool queued-frames)))
-		    )))))))
-  (values))
+		    (create-command-buffers device command-pool queued-frames :allocator allocator)
 
-(defun free-command-buffers (command-pool)
-  (with-slots (device) command-pool
-    (loop for command-buffer across (command-buffers command-pool)
-       do (with-foreign-object (p-command-buffer 'VkCommandBuffer)
-	    (setf (mem-aref p-command-buffer 'VkCommandBuffer) (h command-buffer))
-	    (vkFreeCommandBuffers (h device) (h command-pool) 1 p-command-buffer))
-       finally (setf (command-buffers command-pool) nil)))
+		    ))))))))
   (values))
 
 (defun destroy-command-pool (command-pool)
   (with-slots (device allocator) command-pool
-    (vkDestroyCommandPool (h device) (h command-pool) (h allocator)))
+    (vkDestroyCommandPool (h device) (h command-pool) (h allocator))
+    (setf (command-pools device) (remove-if #'(lambda (item)
+						(pointer-eq (h (cadr item)) (h command-pool)))
+					    (command-pools device))))
   (values))    
 
 (defun destroy-framebuffers (swapchain)
@@ -3430,10 +3573,11 @@
 	 (queue-family-index (queue-family-index (render-surface window))))
 
     (vkDeviceWaitIdle (h device))
-    (setf (shutting-down-p app) t)
+    ;;(setf (shutting-down-p app) t)
 
-    (shutdown-3d-demo (3d-demo-annotation-module app))
-    (shutdown-3d-demo (3d-demo-module app))
+    (destroy-device-objects (annotation-renderer app))
+    (destroy-device-objects (edge-renderer app))
+    (destroy-device-objects (face-renderer app))
     (imgui-shutdown (imgui-module app))
 
     (destroy-swapchain swapchain)
@@ -3445,7 +3589,7 @@
     (let ((command-pool (find-command-pool device queue-family-index)))
       (loop for command-buffer across (command-buffers command-pool)
 	 do (free-command-buffer command-buffer)
-	 finally (setf (command-buffers command-pool) nil))
+	 finally (setf (fill-pointer (command-buffers command-pool)) 0))
 
       (destroy-command-pool command-pool))
 
@@ -3465,8 +3609,8 @@
     
     (glfwDestroyWindow (h window))
 
-    (vkDestroyDevice (h device) (h (allocator device)))
-    
+    (throw 'exit t)
+
     (values)))
 
 (defun set-window-close-callback (window &optional (callback-name 'window-close-callback))
@@ -3640,7 +3784,20 @@
   (src :pointer)
   (count size-t))
 
+(defun create-empty-buffer (device size usage &key (allocator +null-allocator+)
+						(memory-properties
+						 (logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+							 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+						(buffer-class 'buffer))
+  (let* ((buffer (create-buffer-1 device size usage :buffer-class buffer-class :allocator allocator))
+	 (buffer-memory (allocate-buffer-memory device buffer memory-properties
+						:allocator allocator)))
+    (bind-buffer-memory device buffer buffer-memory)
+    (setf (allocated-memory buffer) buffer-memory)
+    buffer))
+
 (defun create-buffer (device data size usage &key (allocator +null-allocator+)
+					       (memory-properties VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 					       (buffer-class 'buffer))
   (let* ((staging-buffer (create-buffer-1 device size VK_BUFFER_USAGE_TRANSFER_SRC_BIT :allocator allocator))
 	 (staging-buffer-memory (allocate-buffer-memory device staging-buffer
@@ -3655,9 +3812,10 @@
 
     (let* ((buffer (create-buffer-1 device size (logior VK_BUFFER_USAGE_TRANSFER_DST_BIT usage)
 				    :buffer-class buffer-class :allocator allocator))
-	   (buffer-memory (allocate-buffer-memory device buffer VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+	   (buffer-memory (allocate-buffer-memory device buffer memory-properties
 						  :allocator allocator))
-	   (queue (find-queue device 0)) ;; fixme: have it grab a transfer queue and generate command-buffer(s) for the right queue-family-index 
+	   (queue-family-index (get-any-queue-family-index-with-transfer-support (physical-device device)))
+	   (queue (find-queue device queue-family-index))
 	   (command-pool (find-command-pool device (queue-family-index queue))))
       (bind-buffer-memory device buffer buffer-memory)
       (copy-buffer device command-pool queue staging-buffer buffer size)
@@ -3672,6 +3830,21 @@
 	(first (second entry))
 	(error "Could not find device queue fo device ~S of queue-family-index ~A" device queue-family-index))))
 
+(defun compute-queue (device)
+  (let ((gpu (physical-device device)))
+    (flet ((fallback ()
+	     (let ((multipurpose (get-any-queue-family-index-with-compute-support gpu)))
+	       (if multipurpose
+		   (let ((entry (assoc multipurpose (device-queues device))))
+		     (when entry (values (first (second entry)) multipurpose)))))))
+      
+      (let ((dedicated (get-queue-family-index-with-dedicated-compute-support gpu)))
+	(if dedicated
+	    (let ((entry (assoc dedicated (device-queues device))))
+	      (if entry
+		  (values (first (second entry)) dedicated)
+		  (fallback)))
+	    (fallback))))))
 
 (defun create-vertex-buffer (device data size &key (allocator +null-allocator+))
   (create-buffer device data size VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -3829,7 +4002,7 @@
 (defun allocate-descriptor-set (device descriptor-set-layouts descriptor-pool)
   (let ((dsl-count (length descriptor-set-layouts)))
     (with-foreign-object (p-descriptor-set-layouts 'VkDescriptorSetLayout dsl-count)
-      (loop for i from 0 below dsl-count for dsl in descriptor-set-layouts
+      (loop for dsl in descriptor-set-layouts for i from 0
 	 do (setf (mem-aref p-descriptor-set-layouts 'VkDescriptorSetLayout i) (h dsl)))
       (with-vk-struct (p-alloc-info VkDescriptorSetAllocateInfo)
 	(with-foreign-slots ((vk::descriptorPool
@@ -3847,54 +4020,71 @@
 			   :device device
 			   :descriptor-pool descriptor-pool)))))))
 
-(defclass uniform-descriptor-buffer-info ()
-  ((descriptor-type :reader descriptor-type :initform VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-   (uniform-buffer :reader uniform-buffer :initarg :uniform-buffer)
+(defclass descriptor-buffer-info ()
+  ((descriptor-type :reader descriptor-type :initform nil)
+   (buffer :reader buffer :initarg :buffer)
    (offset :reader offset :initarg :offset :initform 0)
    (range :reader range :initarg :range)))
+
+(defclass descriptor-uniform-buffer-info (descriptor-buffer-info)
+  ((descriptor-type :reader descriptor-type :initform VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)))
+
+(defclass descriptor-storage-buffer-info (descriptor-buffer-info)
+  ((descriptor-type :reader descriptor-type :initform VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)))
 
 (defun create-descriptor-set (device descriptor-set-layouts descriptor-pool
 			      &key descriptor-buffer-info)
 
   ;; this function will probably prove to be very over-generalized.
 
-  (let ((descriptor-set
-	 (allocate-descriptor-set device descriptor-set-layouts descriptor-pool)))
+  (let* ((descriptor-set
+	  (allocate-descriptor-set device descriptor-set-layouts descriptor-pool))
+	 (count (length descriptor-buffer-info))
+	 (p-buffer-infos (foreign-alloc '(:struct VkDescriptorBufferInfo) :count count))
+	 (p-descriptor-writes (foreign-alloc '(:struct VkWriteDescriptorSet) :count count)))
     
-    (loop for info in descriptor-buffer-info for i from 0
-       do (with-vk-struct (p-buffer-info VkDescriptorBufferInfo)
-	    (with-foreign-slots ((vk::buffer
-				  vk::offset
-				  vk::range)
-				 p-buffer-info
-				 (:struct VkDescriptorBufferInfo))
-	     
-	      (setf vk::buffer (h (uniform-buffer info))
-		    vk::offset (offset info)
-		    vk::range (range info)))
-	    
-	    (with-vk-struct (p-descriptor-write VkWriteDescriptorSet)
-	     (with-foreign-slots ((vk::sType
-				   vk::dstSet
-				   vk::dstBinding
-				   vk::dstArrayElement
-				   vk::descriptorType
-				   vk::descriptorCount
-				   vk::pBufferInfo
-				   vk::pImageInfo
-				   vk::pTexelBufferView)
-				  p-descriptor-write
-				  (:struct VkWriteDescriptorSet))
-	     (setf vk::sType VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
-		   vk::dstSet (h descriptor-set)
-		   vk::dstBinding i
-		   vk::dstArrayElement 0
-		   vk::descriptorType (descriptor-type info)
-		   vk::descriptorCount 1
-		   vk::pBufferInfo p-buffer-info
-		   vk::pImageInfo +nullptr+
-		   vk::pTexelBufferView +nullptr+))
-	   (vkUpdateDescriptorSets (h device) 1 p-descriptor-write 0 +nullptr+))))
+    (unwind-protect
+	 (progn
+	   (loop for info in descriptor-buffer-info for i from 0
+	      do (let ((p-buffer-info (mem-aptr p-buffer-infos '(:struct VkDescriptorBufferInfo) i)))
+		   (zero-struct p-buffer-info '(:struct VkDescriptorBufferInfo))
+		   (with-foreign-slots ((vk::buffer
+					 vk::offset
+					 vk::range)
+					p-buffer-info
+					(:struct VkDescriptorBufferInfo))
+		     
+		     (setf vk::buffer (h (buffer info))
+			   vk::offset (offset info)
+			   vk::range (range info)))
+	   
+		   (let ((p-descriptor-write
+			  (mem-aptr p-descriptor-writes '(:struct VkWriteDescriptorSet) i)))
+		     (zero-struct p-descriptor-write '(:struct VkWriteDescriptorSet))
+		     (with-foreign-slots ((vk::sType
+					   vk::dstSet
+					   vk::dstBinding
+					   vk::dstArrayElement
+					   vk::descriptorType
+					   vk::descriptorCount
+					   vk::pBufferInfo
+					   vk::pImageInfo
+					   vk::pTexelBufferView)
+					  p-descriptor-write
+					  (:struct VkWriteDescriptorSet))
+		       (setf vk::sType VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+			     vk::dstSet (h descriptor-set)
+			     vk::dstBinding i
+			     vk::dstArrayElement 0
+			     vk::descriptorType (descriptor-type info)
+			     vk::descriptorCount 1
+			     vk::pBufferInfo p-buffer-info
+			     vk::pImageInfo +nullptr+
+			     vk::pTexelBufferView +nullptr+)))))
+	   (vkUpdateDescriptorSets (h device) count p-descriptor-writes 0 +nullptr+))
+      (foreign-free p-buffer-infos)
+      (foreign-free p-descriptor-writes))
+    
     descriptor-set))
 
 (defclass command-buffer (handle-mixin logical-device-mixin)
@@ -3906,7 +4096,7 @@
 (defclass semaphore (handle-mixin logical-device-mixin)
   ())
 
-(defun create-command-buffer (device command-pool)
+(defun create-command-buffer (device command-pool &key (allocator +null-allocator+))
   (with-vk-struct (p-info VkCommandBufferAllocateInfo)
     (with-foreign-slots ((vk::commandPool
 			  vk::level
@@ -3921,7 +4111,8 @@
 	(let ((command-buffer
 	       (make-instance 'command-buffer
 			      :handle (mem-aref p-command-buffer 'VkCommandBuffer)
-			      :device device :command-pool command-pool)))
+			      :device device :command-pool command-pool
+			      :allocator allocator)))
 		
 	  
 
@@ -4103,9 +4294,11 @@
 
 (defclass application ()
   ((vulkan-instance :accessor vulkan-instance)
+   (default-logical-device :accessor default-logical-device)
    (debug-callback :accessor debug-callback)
    (system-gpus :accessor system-gpus)
    (main-window :accessor main-window) ;; contains surface, width, height
+   (scene :initarg :scene)
    ;; surface contains gpu and swapchain
    ;; swapchain contains surface-format, present-mode, fb-height, fb-width, device
    (render-pass :accessor render-pass)
@@ -4114,7 +4307,7 @@
    (geometry-pipeline-vertex-shader :accessor geometry-pipeline-vertex-shader)
    (geometry-pipeline-geometry-shader :accessor geometry-pipeline-geometry-shader)
    (geometry-pipeline-fragment-shader :accessor geometry-pipeline-fragment-shader)
-   (logical-devices :initform () :accessor logical-devices)
+   
    (uniform-buffer-vs :accessor uniform-buffer-vs)
    (vertex-buffer :accessor vertex-buffer)
    (index-buffer :accessor index-buffer)
@@ -4128,15 +4321,17 @@
    (pipeline-cache :initform +null-pipeline-cache+ :initarg :pipeline-cache :reader pipeline-cache)
    (allocation-callbacks :initform +null-allocator+ :initarg :allocator :reader allocator)
 
-   (clear-value :initform (make-array 4 :element-type 'single-float) :reader clear-value)
+   (clear-value :initform (make-array 4 :element-type 'single-float
+				      :initial-contents (list 0.45f0 0.55f0 0.60f0 1.0f0)) :reader clear-value)
    (frame-resources :accessor frame-resources)
    (fences :accessor fences)
    (present-complete-semaphore :accessor present-complete-semaphore)
    (render-complete-semaphore  :accessor render-complete-semaphore)
 
    (imgui-module :accessor imgui-module)
-   (3d-demo-module :accessor 3d-demo-module)
-   (3d-demo-annotation-module :accessor 3d-demo-annotation-module)
+   (face-renderer :accessor face-renderer)
+   (edge-renderer :accessor edge-renderer)
+   (annotation-renderer :accessor annotation-renderer)
    (shutting-down-p :accessor shutting-down-p :initform nil)))
 
 (defcstruct mat4
@@ -4157,12 +4352,6 @@
   (z3 :float)
   (w3 :float))
 
-(defun create-command-buffers (device command-pool queued-frames)
-  (let ((command-buffers (make-array queued-frames)))
-    (dotimes (i queued-frames)
-      (setf (elt command-buffers i) (create-command-buffer device command-pool)))
-    command-buffers))
-
 (defun pick-graphics-gpu (gpus surface)
   (loop for gpu in gpus
      do (let ((index (get-queue-family-index-with-wsi-support gpu surface)))
@@ -4170,11 +4359,13 @@
      finally (error "Could not find a gpu with window system integration support.")))
 
 (defun setup-vulkan (app &key (width 1280) (height 720))
-  (let* ((vulkan-instance (create-instance :application-name "VkTk Demo" #+darwin :layer-names #+darwin nil))
-	 (debug-callback #+windows(when *debug* (create-debug-report-callback vulkan-instance 'debug-report-callback)))
-	 (physical-devices (enumerate-physical-devices vulkan-instance))
-	 (main-window (create-window app :width width :height height :title "VkTk Demo"))
-	 (surface (create-window-surface vulkan-instance main-window)))
+  (let ((vulkan-instance (or *vulkan-instance*
+			     (create-instance :application-name "VkTk Demo" #+darwin :layer-names #+darwin nil))))
+    (setf (vulkan-instance app) vulkan-instance)
+    (let* ((debug-callback #+windows(when *debug* (create-debug-report-callback vulkan-instance 'debug-report-callback)))
+	   (physical-devices (enumerate-physical-devices vulkan-instance))
+	   (main-window (create-window app :width width :height height :title "VkTk Demo"))
+	   (surface (create-window-surface vulkan-instance main-window)))
     
     (multiple-value-bind (gpu index)
 	(pick-graphics-gpu physical-devices surface)
@@ -4182,6 +4373,7 @@
       (initialize-window-surface surface gpu index) ;; pairs surface with gpu
       
       (let* ((device (apply #'create-logical-device gpu
+			    :compute-queue-count 1
 			    (when (has-geometry-shader-p gpu) (list :enable-geometry-shader t))))
 	     (surface-format (find-supported-format surface))
 	     (present-mode VK_PRESENT_MODE_FIFO_KHR)		     
@@ -4223,24 +4415,31 @@
 		 #+NIL(descriptor-set (create-descriptor-set device uniform-buffer-vs (list dsl) descriptor-pool))
 		 (command-buffers (create-command-buffers device command-pool queued-frames)))
 
-	    (setf (command-buffers command-pool) command-buffers)
+	    ;;(setf (command-buffers command-pool) command-buffers)
 
 	    #+NIL(setf (frame-resources app) (make-array +max-concurrently-processed-frames+
 							 :initial-contents (create-frame-resources device)))
 	    
 	    (create-semaphores-and-fences app device queued-frames)
 
+	    (multiple-value-bind (compute-queue compute-qfi)
+		(compute-queue device)
+	      (declare (ignore compute-queue))
+	      (let ((command-pool (or (find-command-pool device compute-qfi)
+				      (create-command-pool device compute-qfi))))
+		(create-command-buffers device command-pool 1)))
 	    #+NIL(setf (geometry-pipeline-layout app) pipeline-layout)
 	    
 	    (setf (debug-callback app) debug-callback)
 	    (setf (system-gpus app) physical-devices)
-	    (setf (logical-devices app) (list device))
+	    (setf (default-logical-device app) device)
 	    (setf (main-window app) main-window)
 	    
 	    #+NIL(setf (render-pass app) render-pass)
 	    #+NIL(setf (geometry-pipeline app) geometry-pipeline)
 	    
 	    (setf (descriptor-pool app) descriptor-pool)
+	    (setf (descriptor-pool device) descriptor-pool)
 	    
 	    #+NIL(setf (descriptor-set app) descriptor-set)
 	    #+NIL(setf (vertex-buffer app) vertex-buffer)
@@ -4257,210 +4456,155 @@
 	    (loop for i from 0 for command-buffer in command-buffers
 	       do (setf (elt (command-buffers app) i) command-buffer))
 
-	    (values)))))))
+	    (values))))))))
 
+(defun begin-command-buffer (command-buffer)
+  (with-vk-struct (p-begin-info VkCommandBufferBeginInfo)
+    (with-foreign-slots ((vk::flags)
+			 p-begin-info (:struct VkCommandBufferBeginInfo))
+      (setf vk::flags (logior vk::flags VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT))
+      
+      (check-vk-result
+       (vkBeginCommandBuffer (h command-buffer) p-begin-info)))))
 
+(defun cmd-bind-vertex-buffers (command-buffer vertex-buffers &optional (buffer-offsets (list 0))
+								(first-binding 0)
+								(binding-count 1))
+  (let ((number-buffers (length vertex-buffers))
+	(number-offsets (length buffer-offsets)))
+    (assert (or (eq number-buffers number-offsets) (eq number-offsets 1)))
+    (when (and (> number-buffers 1) (eq number-offsets 1))
+      (setq buffer-offsets (make-list number-buffers :initial-element (first buffer-offsets))))
+    (with-foreign-objects ((p-vertex-buffers 'VkBuffer number-buffers)
+			   (p-offsets 'VkDeviceSize number-buffers))
+      (loop for i from 0 below number-buffers for buffer in vertex-buffers for offset in buffer-offsets
+	 do (setf (mem-aref p-vertex-buffers 'VkBuffer i) (h buffer)
+		  (mem-aref p-offsets 'VkDeviceSize) offset))
+      (vkCmdBindVertexBuffers (h command-buffer) first-binding binding-count p-vertex-buffers p-offsets))))
+
+(defun cmd-bind-descriptor-sets (command-buffer pipeline-layout descriptor-sets &optional (bind-point :graphics))
+  (let ((count (length descriptor-sets)))
+    (with-foreign-object (p-descriptor-sets 'VkDescriptorSet count)
+      (loop for ds in descriptor-sets
+	 do
+	   (setf (mem-aref p-descriptor-sets 'VkDescriptorSet) (h ds)))
+      (vkCmdBindDescriptorSets (h command-buffer)
+			       (ecase bind-point
+				 (:graphics VK_PIPELINE_BIND_POINT_GRAPHICS)
+				 (:compute VK_PIPELINE_BIND_POINT_COMPUTE))
+			       (h pipeline-layout)
+			       0 count p-descriptor-sets 0 +nullptr+))))
+
+(defun cmd-bind-index-buffer (command-buffer index-buffer &optional (offset 0) (integer-type :unsigned-short))
+  (vkCmdBindIndexBuffer (h command-buffer) (h index-buffer) offset (ecase integer-type
+								     (:unsigned-short VK_INDEX_TYPE_UINT16)
+								     (:unsigned-int32 VK_INDEX_TYPE_UINT32))))
+
+(defun cmd-draw-indexed (command-buffer command)
+  (vkCmdDrawIndexed (h command-buffer)
+		    (igp::draw-indexed-cmd-index-count command)
+		    1
+		    (igp::draw-indexed-cmd-first-index command)
+		    (igp::draw-indexed-cmd-vertex-offset command)
+		    0))
+
+(defun end-command-buffer (command-buffer)
+  (check-vk-result (vkEndCommandBuffer (h command-buffer))))
+
+(defun queue-submit (queue command-buffer)
+  (with-foreign-objects ((p-command-buffer 'VkCommandBuffer))
+    (setf (mem-aref p-command-buffer 'VkCommandBuffer) (h command-buffer))
+    (with-vk-struct (p-end-info VkSubmitInfo)
+      (with-foreign-slots ((vk::commandBufferCount vk::pCommandBuffers)
+			   p-end-info (:struct VkSubmitInfo))
+	(setf vk::commandBufferCount 1
+	      vk::pCommandBuffers p-command-buffer)
+
+	(check-vk-result (vkQueueSubmit (h queue) 1 p-end-info VK_NULL_HANDLE))))))
+
+(defun device-wait-idle (device)
+  (check-vk-result (vkDeviceWaitIdle (h device))))
+
+(defun reset-command-pool (device command-pool)
+  (check-vk-result
+   (vkResetCommandPool (h device) (h command-pool) 0)))
+  
 (defun main (app &rest args &key (w 1280) (h 720))
   (declare (ignore args))
-  (let (#+NIL(start-time (get-internal-real-time)))
 
-    (setup-vulkan app :width w :height h)
-
-    (let* ((device (first (logical-devices app)))
-	   (index (queue-family-index (render-surface (main-window app))))
-	   (queue (find-queue device index))
-	   (command-pool (find-command-pool device index))
-	   (command-buffer (elt (command-buffers command-pool) 0)))
-
-
-      (let ((imgui (make-instance 'imgui)))
-	(imgui-init imgui (main-window app)
-		    :allocator (allocator app)
-		    :device (first (logical-devices app))
-		    :render-pass (render-pass (main-window app))
-		    :pipeline-cache (pipeline-cache app)
-		    :descriptor-pool (descriptor-pool app)
-		    :frame-count (number-of-images (swapchain (main-window app))))
-	(setf (imgui-module app) imgui))
+  (setup-vulkan app :width w :height h)
+  (setf (slot-value app 'scene) (make-instance 'igp::scene :app app))
+    
+  (let* ((scene (slot-value app 'scene))
+	 (device (default-logical-device app))
+	 (index (queue-family-index (render-surface (main-window app))))
+	 (queue (find-queue device index))
+	 (command-pool (find-command-pool device index))
+	 (command-buffer (elt (command-buffers command-pool) 0))
+	 (allocator (allocator app))
+	 (main-window (main-window app))
+	 (render-pass (render-pass main-window))
+	 (pipeline-cache (pipeline-cache app))
+	 (descriptor-pool (descriptor-pool app))
+	 (swapchain (swapchain main-window)))
       
-      (let ((module (make-instance '3d-demo-module))
-	    (args (list :allocator (allocator app)
-			:device (first (logical-devices app))
-			:render-pass (render-pass (main-window app))
-			:window (main-window app)
-			:pipeline-cache (pipeline-cache app)
-			:descriptor-pool (descriptor-pool app))))
-	(setf (3d-demo-module app) module)
-	(apply #'3d-demo-init module :vertex-data *vertex-data* :vertex-data-size *vertex-data-size*
-	       :index-data *index-data* :index-data-size *index-data-size*
-	       :index-count (length *indices*) args)
-	(let ((annotation-module (make-instance '3d-demo-annotation-module)))
-	  (setf (3d-demo-annotation-module app) annotation-module)
-	  (apply #'3d-demo-init annotation-module :parent module
-		 :vertex-data *axes-coord-data*
-		 :vertex-data-size *axes-coord-data-size*
-		 :index-data *axes-index-data* :index-data-size *axes-index-data-size*
-		 :index-count (length *axes-indices*) args)))
+    (let ((imgui (make-instance 'imgui)))
+      (imgui-init imgui (main-window app)
+		  :allocator allocator
+		  :device device
+		  :render-pass render-pass
+		  :pipeline-cache pipeline-cache
+		  :descriptor-pool descriptor-pool
+		  :frame-count (number-of-images swapchain))
+      (setf (imgui-module app) imgui))
       
-      (ig::igStyleColorsClassic (ig::igGetStyle))
-      (check-vk-result
-       (vkResetCommandPool (h device) (h command-pool) 0))
+    (let* ((standard-renderer-initargs
+	    (list :scene scene
+		  :allocator allocator
+		  :device device
+		  :render-pass render-pass
+		  :window main-window
+		  :pipeline-cache pipeline-cache
+		  :descriptor-pool descriptor-pool))
+	   (face-renderer (apply #'make-instance 'face-renderer
+				 standard-renderer-initargs))
+	   (edge-renderer (apply #'make-instance 'edge-renderer
+				 standard-renderer-initargs))
+	   (annotation-renderer (apply #'make-instance 'annotation-renderer
+				       :vertex-data *axes-coord-data*
+				       :vertex-data-size *axes-coord-data-size*
+				       :index-data *axes-index-data*
+				       :index-data-size *axes-index-data-size*
+				       :index-count (length *axes-indices*)
+				       standard-renderer-initargs)))
+      (setf (face-renderer app) face-renderer)
+      (setf (edge-renderer app) edge-renderer)
+      (setf (annotation-renderer app) annotation-renderer))
 
-      (with-vk-struct (p-begin-info VkCommandBufferBeginInfo)
-	(with-foreign-slots ((vk::flags)
-			     p-begin-info (:struct VkCommandBufferBeginInfo))
-	  (setf vk::flags (logior vk::flags VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT))
+    (reset-command-pool device command-pool)
 
-	  (check-vk-result
-	   (vkBeginCommandBuffer (h command-buffer) p-begin-info))))
+    (begin-command-buffer command-buffer)
 
-      (imgui-create-fonts-texture (imgui-module app) command-buffer)
+    (imgui-create-fonts-texture (imgui-module app) command-buffer)
 
-      (with-foreign-objects ((p-command-buffer 'VkCommandBuffer))
-	(setf (mem-aref p-command-buffer 'VkCommandBuffer) (h command-buffer))
-	(with-vk-struct (p-end-info VkSubmitInfo)
-	  (with-foreign-slots ((vk::commandBufferCount vk::pCommandBuffers)
-			       p-end-info (:struct VkSubmitInfo))
-	    (setf vk::commandBufferCount 1
-		  vk::pCommandBuffers p-command-buffer)
-	    (check-vk-result (vkEndCommandBuffer (h command-buffer)))
-	    (check-vk-result (vkQueueSubmit (h queue) 1 p-end-info VK_NULL_HANDLE)))))
+    (end-command-buffer command-buffer)
+    
+    (queue-submit queue command-buffer)
 
-      (check-vk-result (vkDeviceWaitIdle (h device)))
-      (imgui-invalidate-font-upload-objects (imgui-module app))
+    (device-wait-idle device)
 
-      (let ((last-time (get-internal-real-time))
-	    (frame-counter 0)
-	    (show-demo-window 1)
-	    (show-another-window 0))
+    (imgui-invalidate-font-upload-objects (imgui-module app))
 
-	(loop while (zerop (glfwWindowShouldClose (h (main-window app))))
-	   with temp with dt
-	   
-	   do (glfwPollEvents)
-	     (when (shutting-down-p app)
-	       (return))
-	     (imgui-new-frame (imgui-module app))
-
-	     (incf frame-counter)
-	     (igText "Hello, wworld!")
-
-	     (with-foreign-object (p-f :float)
-	       (setf (mem-aref p-f :float) (zoom (camera (3d-demo-module app))))
-	     
-	       (igSliderFloat "zoom" p-f 0.1f0 10.0f0 "%f" 1.0f0)
-
-	       (setf (zoom (camera (3d-demo-module app))) (mem-aref p-f :float)))
-
-	     (with-foreign-object (p-clear-color :float 4)
-	       (setf (mem-aref p-clear-color :float 0) 0.45f0
-		     (mem-aref p-clear-color :float 1) 0.55f0
-		     (mem-aref p-clear-color :float 2) 0.60f0
-		     (mem-aref p-clear-color :float 3) 1.00f0)
-		 
-	       (igColorEdit3 "clear color" p-clear-color 0)
-
-	       (setf (elt (clear-value app) 0) (mem-aref  p-clear-color :float 0)
-		     (elt (clear-value app) 1) (mem-aref  p-clear-color :float 1)
-		     (elt (clear-value app) 2) (mem-aref  p-clear-color :float 2)
-		     (elt (clear-value app) 3) (mem-aref  p-clear-color :float 3)))
-		 
-	     (with-foreign-object (p-camera-pos :float 3)
-	       (setf (mem-aref p-camera-pos :float 0) (camera-x (camera (3d-demo-module app)))
-		     (mem-aref p-camera-pos :float 1) (camera-y (camera (3d-demo-module app)))
-		     (mem-aref p-camera-pos :float 2) (camera-z (camera (3d-demo-module app))))
-		   
-	       (igInputFloat3 "camera position" p-camera-pos "" 0)
-
-	       (setf (camera-x (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 0)
-		     (camera-y (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 1)
-		     (camera-z (camera (3d-demo-module app))) (mem-aref p-camera-pos :float 2)))
-	     ;; todo move all this to 3d-demo-module, use a generic function or something.
-	     (let ((ortho (if (ortho-p (camera (3d-demo-module app))) 1 0)))
-	       
-	       (with-foreign-object (p-vec '(:struct ig::ImVec2))
-		 (with-foreign-slots ((ig::x ig::y) p-vec (:struct ig::ImVec2))
-		   (setf ig::x 100.0f0 ig::y 20.0f0)
-				    
-		   (when (not (zerop (igButton "Perspective" p-vec)))
-		     (setf (ortho-p (camera (3d-demo-module app))) (if (zerop (logxor ortho 1)) nil t))))))
-
-	     (with-foreign-object (p-vec '(:struct ig::ImVec2))
-	       (with-foreign-slots ((ig::x ig::y) p-vec (:struct ig::ImVec2))
-		 (setf ig::x 100.0f0 ig::y 20.0f0)
-				    
-		 (when (not (zerop (igButton "Demo Window" p-vec)))
-		   (setq show-demo-window (logxor show-demo-window 1)))))
-
-	     (with-foreign-object (p-vec '(:struct ig::ImVec2))
-	       (with-foreign-slots ((ig::x ig::y) p-vec (:struct ig::ImVec2))
-		 (setf ig::x 120.0f0 ig::y 20.0f0)
-		 (when (not (zerop (igButton "Another Window" p-vec)))
-		   (setq show-another-window (logxor show-another-window 1)))))
-
-	     (setq temp (get-internal-real-time)
-		   dt (- temp last-time))
-	     (igText "%s ms/frame (%s FPS)"
-		     :string (format nil "~A" dt)
-		     :string (format nil "~A" (if (zerop dt)
-						  0
-						  (round (/ frame-counter (/ dt 1000.0f0)))))
-		     #+NIL
-		     (/ 1000.0f0 (foreign-slot-value (igGeIOt) '(:struct ig::ImGuiIO) 'ig::Framerate))
-		     #+NIL
-		     (foreign-slot-value (igGetIO) '(:struct ig::ImGuiIO) 'ig::Framerate)
-		     )
-
-	     (setq frame-counter 0
-		   last-time temp)
-	
-	     (with-foreign-objects ((p-show-demo-window :int)
-				    (p-show-another-window :int))
-	       (setf (mem-aref p-show-demo-window :int) show-demo-window
-		     (mem-aref p-show-another-window :int) show-another-window)
-	     
-	       (when (not (zerop show-another-window))
-	       
-		 (igBegin "Another Window" p-show-another-window 0)
-
-		 (setq show-another-window (mem-aref p-show-another-window :int))
-		 (igText "Hello from another window!")
-
-		 (igEnd))
-
-	       (when (not (zerop show-demo-window))
-		 (with-foreign-objects ((p-vec1 '(:struct ig::ImVec2))
-					(p-vec2 '(:struct ig::ImVec2)))
-		   (with-foreign-slots ((ig::x ig::y) p-vec1 (:struct ig::ImVec2))
-		     (setf ig::x 650.0f0 ig::y 20.0f0))
-		   (with-foreign-slots ((ig::x ig::y) p-vec2 (:struct ig::ImVec2))
-		     (setf ig::x 0.0f0 ig::y 0.0f0))
-		   (igSetNextWindowPos p-vec1 ImGuiCond_FirstUseEver p-vec2))
-
-		 (igShowDemoWindow p-show-demo-window)
-		 (setq show-demo-window (mem-aref p-show-demo-window :int)))
-
-	       (frame-begin app queue)
-
-	       ;; draw stuff here
-	       (multiple-value-bind (w h) (get-framebuffer-size (main-window app))
-		 (3d-demo-render (3d-demo-annotation-module app)
-				 (elt (command-buffers command-pool)
-				      (current-frame app))
-				 w h :annotation-pipeline-p t)
-		 (3d-demo-render (3d-demo-module app)
-				 (elt (command-buffers command-pool)
-				      (current-frame app))
-				 w h))
-			       
-	       (imgui-render (imgui-module app)
-			     (elt (command-buffers command-pool) (current-frame app))
-			     (current-frame app))
-
-	       (frame-end app queue)
-
-	       (frame-present app queue)
-	       ))))))
+    (catch 'exit
+      (loop while (zerop (glfwWindowShouldClose (h main-window)))
+	 do (glfwPollEvents)
+	   (process-ui app)
+	 #+NIL(when (shutting-down-p app)
+	   (return))
+	 (frame-begin app queue)
+	 (render-graphics app queue command-pool)
+	 (frame-end app queue)
+	 (frame-present app queue)))))
 
 (defun frame-begin (app queue)
   (let* ((queue-family-index (queue-family-index queue))
@@ -4564,6 +4708,7 @@
 			   (:struct VkRenderPassBeginInfo))
 
 	(with-foreign-object (p-clear-values '(:union VkClearValue) 2)
+	  (igText (format nil "~S" (clear-value app)))
 	  (setf (mem-aref (mem-aptr p-clear-values '(:union VkClearValue) 0) :float 0) (elt (clear-value app) 0)
 		(mem-aref (mem-aptr p-clear-values '(:union VkClearValue) 0) :float 1) (elt (clear-value app) 1)
 		(mem-aref (mem-aptr p-clear-values '(:union VkClearValue) 0) :float 2) (elt (clear-value app) 2)
@@ -4607,7 +4752,7 @@
   (values))
 
 (defun frame-end (app queue)
-  (let* ((device (first (logical-devices app)))
+  (let* ((device (default-logical-device app))
 	 (wait-stage VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
 	 (fence (elt (fences app) (current-frame app)))
 	 (current-command-buffer (elt (command-buffers

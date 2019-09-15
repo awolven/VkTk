@@ -26,18 +26,24 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 layout(binding = 0) uniform UniformBufferObject {
   mat4 model;
   mat4 view;
+  mat4 proj;
+  mat4 clip;
 } ubo;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
 
 layout(location = 0) out vec3 fragColor;
+layout(location = 1) out vec4 viewPosition;
 
 out gl_PerVertex {
   vec4 gl_Position;
 };
 
 void main() {
-  gl_Position = ubo.model * vec4(inPosition, 1.0);
+
+  viewPosition = ubo.view * ubo.model * vec4(inPosition, 1.0);
+  gl_Position = ubo.clip * ubo.proj * viewPosition;
+    
   fragColor = inColor;
 }

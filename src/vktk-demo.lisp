@@ -16,108 +16,120 @@
 	 (main app))))
     app))
 
-(defclass vktk-module ()
-  ((allocator :accessor allocator)
-   (device :accessor device)
-   (render-pass :accessor render-pass)
-   (pipeline-cache :accessor pipeline-cache)
-   (descriptor-pool :accessor descriptor-pool)))
+#+NOTYET
+(defvar *libshaderc*
+  (cffi:load-foreign-library "c:/Users/awolven/Documents/Visual Studio 2015/projects/shaderc_wrap/x64/Debug/shaderc_wrap.dll"))
 
-(defclass 3d-demo-module-mixin ()
-  ((descriptor-set-layout :accessor descriptor-set-layout)
+(cffi:defcfun ("compile_to_spv" compile_to_spv) :int
+  (kind :int)
+  (program :string)
+  (bytes :pointer)
+  (length :pointer))
+
+(defstruct spirv
+  (code)
+  (length))
+
+(defun compile-to-spirv (program &key (kind :vertex-shader))
+  (let ((enum-kind (ecase kind
+		     (:vertex-shader 0)
+		     (:fragment-shader 1))))
+    (with-foreign-objects ((pp-bytes :pointer)
+			   (p-length :int64))
+      (when (zerop (compile_to_spv enum-kind program pp-bytes p-length))
+	(make-spirv :code (cffi:mem-aref pp-bytes :pointer)
+		    :length (cffi:mem-aref p-length :int64))))))
+
+(defvar *selection-mode* :face)
+
+(defclass viewport ()
+  ((left :initform 100)
+   (top :initform 100)
+   (width :initform 1024)
+   (height :initform 768)))
+
+(defclass renderer-mixin ()
+  ((application :reader application :initarg :app)
+   (window :accessor window :initarg :window)
+   (scene :reader scene :initarg :scene)
+   (allocator :accessor allocator :initarg :allocator)
+   (device :accessor device :initarg :device)
+   (render-pass :accessor render-pass :initarg :render-pass)
+   (pipeline-cache :accessor pipeline-cache :initarg :pipeline-cache)
+   (descriptor-pool :accessor descriptor-pool :initarg :descriptor-pool)
+   (descriptor-set-layout :accessor descriptor-set-layout)
    (descriptor-set :accessor descriptor-set)
    (pipeline-layout :accessor pipeline-layout)
    (pipeline :accessor pipeline)
-
-   (vertex-shader :accessor vertex-shader)
-   (fragment-shader :accessor fragment-shader)
-
    (uniform-buffer-vs :accessor uniform-buffer-vs)
-   
-   (vertex-buffer :accessor vertex-buffer :initform nil)
-   (index-buffer :accessor index-buffer :initform nil)
+   (draw-index-args :accessor draw-index-args :initform nil)))
 
-   (vertex-data :accessor vertex-data)
-   (vertex-data-size :accessor vertex-data-size)
-   (index-data :accessor index-data)
-   (index-data-size :accessor index-data-size)
-   (index-count :accessor index-count)))
+(defmethod main-window ((renderer renderer-mixin))
+  (main-window (slot-value renderer 'scene)))
 
-(defclass 3d-demo-module (vktk-module 3d-demo-module-mixin)
-  ((window :accessor window)
-   
-   (camera :initform (make-instance 'camera) :reader camera)
-   (start-time :reader start-time :initform (get-internal-real-time))
+(defmethod vertex-shader-module ((device sgpu-device) (renderer renderer-mixin))
+  (if (slot-value renderer 'vertex-shader)
+      (slot-value renderer 'vertex-shader)
+      (prog1 (setf (slot-value renderer 'vertex-shader)
+		   (create-shader-module-from-file device (vertex-shader-file-name renderer)))
+	(setf (slot-value renderer 'descriptor-set-layout) (create-descriptor-set-layout (dsl-bindings renderer))
+	      (slot-value renderer 'pipeline-layout) (create-pipeline-layout device (list (slot-value renderer 'descriptor-set-layout)))))))
 
-   ;;(vertex-shader :accessor vertex-shader)
-   (geometry-shader :accessor geometry-shader)
-   ;;(fragment-shader :accessor fragment-shader)
+(defmethod fragment-shader-module ((device sgpu-device) (renderer renderer-mixin))
+  (if (slot-value renderer 'fragment-shader)
+      (slot-value renderer 'fragment-shader)
+      (setf (slot-value renderer 'fragment-shader)
+	    (create-shader-module-from-file device (fragment-shader-file-name renderer)))))
 
-   ;;(uniform-buffer-vs :accessor uniform-buffer-vs)
-   (uniform-buffer-gs :accessor uniform-buffer-gs)
+(defclass face-renderer (renderer-mixin)
+  ())
 
-   ;;(vertex-buffer :accessor vertex-buffer :initform nil)
-   ;;(index-buffer :accessor index-buffer :initform nil)
-   ))
+(defmethod pipeline-topology ((renderer face-renderer))
+  VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
 
-(defclass 3d-demo-annotation-module (vktk-module 3d-demo-module-mixin)
-  ((window :accessor window)
-   (parent-module :initform nil :initarg :parent-module :accessor parent-module)))
+(defmethod dsl-bindings ((renderer face-renderer))
+  (list (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)))  
 
-(defmethod camera ((module 3d-demo-annotation-module))
-  (camera (parent-module module)))
+(defmethod vertex-shader-file-name ((renderer face-renderer))
+  (asdf/system:system-relative-pathname :vktk "shaders/vert.spv"))
 
-(defclass camera ()
-  ((ortho-p :initform t :accessor ortho-p)
-   (zoom :initform 1.0f0 :accessor zoom)
-   (x-loc :initform 1.0f0 :accessor camera-x)
-   (y-loc :initform 1.0f0 :accessor camera-y)
-   (z-loc :initform 1.0f0 :accessor camera-z)
-   (eye-x :initform 0.0f0 :accessor eye-x)
-   (eye-y :initform 0.0f0 :accessor eye-y)
-   (eye-z :initform 0.0f0 :accessor eye-z)))
+(defmethod fragment-shader-file-name ((renderer face-renderer))
+  (asdf/system:system-relative-pathname :vktk "shaders/frag.spv"))
 
-(defun 3d-demo-init (module &key
-			      parent
-			      device
-			      (allocator +null-allocator+)
-			      window
-			      render-pass
-			      pipeline-cache
-			      descriptor-pool
-			      vertex-data
-			      vertex-data-size
-			      index-data
-			      index-data-size
-			      index-count)
-  
-  (setf (allocator module) allocator
-	(device module) device
-	(render-pass module) render-pass
-	(pipeline-cache module) pipeline-cache
-	(descriptor-pool module) descriptor-pool
-	(window module) window)
+(defclass edge-renderer (renderer-mixin)
+  ())
 
-  (when parent
-    (setf (parent-module module) parent))
+(defmethod pipeline-topology ((renderer edge-renderer))
+  VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
 
-  ;; todo: make these slots compute vertex-buffer etc dynamically.
-  (setf (vertex-data module)
-	vertex-data
-	(vertex-data-size module)
-	vertex-data-size
-	(index-data module) index-data
-	(index-data-size module)
-	index-data-size
-	(index-count module) index-count)
-  
-  (create-device-objects module)
-  
+(defmethod dsl-bindings ((renderer edge-renderer))
+  (list (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)))
+
+(defmethod vertex-shader-file-name ((renderer edge-renderer))
+  (asdf/system:system-relative-pathname :vktk "shaders/lines.vert.spv"))
+
+(defmethod fragment-shader-file-name ((renderer edge-renderer))
+  (asdf/system:system-relative-pathname :vktk "shaders/lines.frag.spv"))
+
+
+(defclass annotation-renderer (renderer-mixin)
+  ())
+
+(defmethod pipeline-topology ((renderer annotation-renderer))
+  VK_PRIMITIVE_TOPOLOGY_LINE_LIST)
+
+(defmethod vertex-shader-file-name ((renderer annotation-renderer))
+  (asdf/system:system-relative-pathname :vktk "shaders/lines.vert.spv"))
+
+(defmethod fragment-shader-file-name ((renderer annotation-renderer))
+  (asdf/system:system-relative-pathname :vktk "shaders/lines.frag.spv"))
+
+(defmethod initialize-instance :after ((renderer renderer-mixin) &rest initargs
+				       &key &allow-other-keys)
+  (declare (ignore initargs))
+  (create-device-objects renderer)
   (values))
-
-(defun 3d-demo-annotation-init (module &rest args &key parent)
-  (apply #'3d-demo-init module :parent parent args))
-			   
+   
 (defcstruct vec2
   (a :float)
   (b :float))
@@ -131,90 +143,167 @@
   (position (:struct vec3))
   (color (:struct vec3)))
 
-(defmethod create-device-objects ((module 3d-demo-annotation-module))
-  (3d-demo-create-device-objects module :use-geometry-shader nil :topology VK_PRIMITIVE_TOPOLOGY_LINE_LIST))
+(defmethod create-device-objects ((renderer annotation-renderer))
+  (with-slots (device) renderer
+    (multiple-value-bind (width height) (get-framebuffer-size (window renderer))
+      (let ((vtx-shader (create-shader-module-from-file device (vertex-shader-file-name renderer)))
+	    (frg-shader (create-shader-module-from-file device (fragment-shader-file-name renderer))))
+	(setf (descriptor-set-layout renderer)
+	      (create-descriptor-set-layout
+	       device
+	       :bindings (list (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)))
+	      (pipeline-layout renderer)
+	      (create-pipeline-layout device (list (descriptor-set-layout renderer)))
+	      (pipeline renderer)
+	      (create-graphics-pipeline
+	       device (pipeline-cache renderer) (pipeline-layout renderer)
+	       (render-pass renderer) 1 width height vtx-shader frg-shader
+	       #+windows :line-width #+windows 2.00f0
+	       :vertex-type '(:struct 3DVertex)
+	       :vertex-input-attribute-descriptions
+	       (list (make-instance 'vertex-input-attribute-description
+				    :location 0
+				    :format VK_FORMAT_R32G32B32_SFLOAT
+				    :offset (foreign-slot-offset '(:struct 3DVertex) 'position))
+		     (make-instance 'vertex-input-attribute-description
+				    :location 1
+				    :format VK_FORMAT_R32G32B32_SFLOAT
+				    :offset (foreign-slot-offset '(:struct 3DVertex) 'color)))
+	       :topology (pipeline-topology renderer)
+	       :min-sample-shading 1.0f0
+	       :depth-test-enable VK_TRUE
+	       :depth-write-enable VK_TRUE
+	       :depth-compare-op VK_COMPARE_OP_LESS
+	       :logic-op VK_LOGIC_OP_COPY
+	       :blend-enable VK_FALSE
+	       :depth-clamp-enable VK_FALSE
+	       :src-alpha-blend-factor VK_BLEND_FACTOR_ONE))
 
-(defmethod create-device-objects ((module 3d-demo-module))
-  (3d-demo-create-device-objects module))
+	(destroy-shader-module vtx-shader)
+	(destroy-shader-module frg-shader)
+	  
+	(setf (uniform-buffer-vs renderer)
+	      (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
+	  
+	(setf (descriptor-set renderer)
+	      (create-descriptor-set
+	       device
+	       (list (descriptor-set-layout renderer))
+	       (descriptor-pool renderer)
+	       :descriptor-buffer-info
+	       (list (make-instance 'descriptor-uniform-buffer-info
+				    :buffer (uniform-buffer-vs renderer)
+				    :range (foreign-type-size '(:struct 3DDemoVSUBO)))))))
+      (values))))
+
+(defmethod create-device-objects ((renderer face-renderer))
+  (with-slots (device) renderer
+    (multiple-value-bind (width height) (get-framebuffer-size (window renderer))
+	(let ((vtx-shader (create-shader-module-from-file device (vertex-shader-file-name renderer)))
+	      (frg-shader (create-shader-module-from-file device (fragment-shader-file-name renderer))))
+	  (setf (descriptor-set-layout renderer)
+		(create-descriptor-set-layout
+		 device
+		 :bindings (list (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)))
+		(pipeline-layout renderer)
+		(create-pipeline-layout device (list (descriptor-set-layout renderer)))
+		(pipeline renderer)
+		(create-graphics-pipeline device (pipeline-cache renderer) (pipeline-layout renderer)
+		       (render-pass renderer) 1 width height vtx-shader frg-shader
+		       #+windows :line-width #+windows 2.00f0
+		       :vertex-type '(:struct 3DVertex)
+		       :vertex-input-attribute-descriptions
+		       (list (make-instance 'vertex-input-attribute-description
+					    :location 0
+					    :format VK_FORMAT_R32G32B32_SFLOAT
+					    :offset (foreign-slot-offset '(:struct 3DVertex) 'position))
+			     (make-instance 'vertex-input-attribute-description
+					    :location 1
+					    :format VK_FORMAT_R32G32B32_SFLOAT
+					    :offset (foreign-slot-offset '(:struct 3DVertex) 'color)))
+		       :topology (pipeline-topology renderer)
+		       :min-sample-shading 1.0f0
+		       :depth-test-enable VK_TRUE
+		       :depth-write-enable VK_TRUE
+		       :depth-compare-op VK_COMPARE_OP_LESS
+		       :logic-op VK_LOGIC_OP_COPY
+		       :blend-enable VK_FALSE
+		       :depth-clamp-enable VK_FALSE
+		       :src-alpha-blend-factor VK_BLEND_FACTOR_ONE))
+
+	  (destroy-shader-module vtx-shader)
+	  (destroy-shader-module frg-shader)
+	  
+	  (setf (uniform-buffer-vs renderer)
+		(create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
+	  
+	  (setf (descriptor-set renderer)
+		(create-descriptor-set
+		 device
+		 (list (descriptor-set-layout renderer))
+		 (descriptor-pool renderer)
+		 :descriptor-buffer-info
+		 (list (make-instance 'descriptor-uniform-buffer-info
+				      :buffer (uniform-buffer-vs renderer)
+				      :range (foreign-type-size '(:struct 3DDemoVSUBO)))))))
+	(values))))
+
+(defmethod create-device-objects ((renderer edge-renderer))
+  (with-slots (device) renderer
+    (multiple-value-bind (width height) (get-framebuffer-size (window renderer))
+      (let ((vtx-shader (create-shader-module-from-file device (vertex-shader-file-name renderer)))
+	    (frg-shader (create-shader-module-from-file device (fragment-shader-file-name renderer))))
+	(setf (descriptor-set-layout renderer)
+	      (create-descriptor-set-layout
+	       device
+	       :bindings (list (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)))
+	      (pipeline-layout renderer)
+	      (create-pipeline-layout device (list (descriptor-set-layout renderer)))
+	      (pipeline renderer)
+	      (create-graphics-pipeline
+	       device (pipeline-cache renderer) (pipeline-layout renderer)
+	       (render-pass renderer) 1 width height vtx-shader frg-shader
+	       #+windows :line-width #+windows 2.00f0
+	       :vertex-type '(:struct 3DVertex)
+	       :vertex-input-attribute-descriptions
+	       (list (make-instance 'vertex-input-attribute-description
+				    :location 0
+				    :format VK_FORMAT_R32G32B32_SFLOAT
+				    :offset (foreign-slot-offset '(:struct 3DVertex) 'position))
+		     (make-instance 'vertex-input-attribute-description
+				    :location 1
+				    :format VK_FORMAT_R32G32B32_SFLOAT
+				    :offset (foreign-slot-offset '(:struct 3DVertex) 'color)))
+	       :topology (pipeline-topology renderer)
+	       :min-sample-shading 1.0f0
+	       :depth-test-enable VK_TRUE
+	       :depth-write-enable VK_TRUE
+	       :depth-compare-op VK_COMPARE_OP_LESS
+	       :logic-op VK_LOGIC_OP_COPY
+	       :blend-enable VK_FALSE
+	       :depth-clamp-enable VK_FALSE
+	       :src-alpha-blend-factor VK_BLEND_FACTOR_ONE))
+
+	(destroy-shader-module vtx-shader)
+	(destroy-shader-module frg-shader)
+
+	(setf (uniform-buffer-vs renderer)
+	      (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
+	  
+	(setf (descriptor-set renderer)
+	      (create-descriptor-set
+	       device
+	       (list (descriptor-set-layout renderer))
+	       (descriptor-pool renderer)
+	       :descriptor-buffer-info
+	       (list (make-instance 'descriptor-uniform-buffer-info
+				    :buffer (uniform-buffer-vs renderer)
+				    :range (foreign-type-size '(:struct 3DDemoVSUBO)))))))
+      (values))))
   
-(defun 3d-demo-create-device-objects (module &key (use-geometry-shader t)
-					       (topology VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST))
-  (with-slots (device) module
-    (let ((geometry-shader-p (and use-geometry-shader (has-geometry-shader-p (physical-device device)))))
-      (multiple-value-bind (width height) (get-framebuffer-size (window module))
-	(let ((vtx-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/vert.spv")))
-	      (frg-shader (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/frag.spv")))
-	      (geo-shader (when geometry-shader-p
-			    (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/selection.geom.spv")))))
-	  (setf (descriptor-set-layout module) (create-descriptor-set-layout device
-									     :bindings (list* (make-instance 'uniform-buffer-for-vertex-shader-dsl-binding)
-											      (when geometry-shader-p
-												(list (make-instance 'uniform-buffer-for-geometry-shader-dsl-binding)))))
-		(pipeline-layout module) (create-pipeline-layout device (list (descriptor-set-layout module)))
-		(pipeline module) (apply #'create-graphics-pipeline (device module) (pipeline-cache module) (pipeline-layout module)
-					 (render-pass module) 1 width height vtx-shader frg-shader
-					 #+windows :line-width #+windows 3.0f0
-					 :vertex-type '(:struct 3DVertex)
-					 :vertex-input-attribute-descriptions
-					 (list (make-instance 'vertex-input-attribute-description
-							      :location 0
-							      :format VK_FORMAT_R32G32B32_SFLOAT
-							      :offset (foreign-slot-offset '(:struct 3DVertex) 'position))
-					       (make-instance 'vertex-input-attribute-description
-							      :location 1
-							      :format VK_FORMAT_R32G32B32_SFLOAT
-							      :offset (foreign-slot-offset '(:struct 3DVertex) 'color)))
-					 :topology topology
-					 :min-sample-shading 1.0f0
-					 :depth-test-enable VK_TRUE
-					 :depth-write-enable VK_TRUE
-					 :depth-compare-op VK_COMPARE_OP_LESS
-					 :logic-op VK_LOGIC_OP_COPY
-					 :blend-enable VK_FALSE
-					 :depth-clamp-enable VK_FALSE
-					 :src-alpha-blend-factor VK_BLEND_FACTOR_ONE
-					 (when geometry-shader-p
-					   (list :geometry-shader-module geo-shader))))
-	  (setf (vertex-shader module) vtx-shader
-
-		(fragment-shader module) frg-shader)
-
-	  (when geometry-shader-p (setf (geometry-shader module) geo-shader))
-
-	  (setf (uniform-buffer-vs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoVSUBO))))
-	  (when geometry-shader-p
-	    (setf (uniform-buffer-gs module) (create-uniform-buffer device (foreign-type-size '(:struct 3DDemoGSUBO)))))
-	  (setf (descriptor-set module) (create-descriptor-set device (list (descriptor-set-layout module))
-							     
-							       (descriptor-pool module)
-							       :descriptor-buffer-info
-							       (list* (make-instance 'uniform-descriptor-buffer-info
-										     :uniform-buffer (uniform-buffer-vs module)
-										     :range (foreign-type-size '(:struct 3DDemoVSUBO)))
-								      (when geometry-shader-p
-									(list
-									 (make-instance 'uniform-descriptor-buffer-info
-											:uniform-buffer (uniform-buffer-gs module)
-											:range (foreign-type-size '(:struct 3DDemoGSUBO)))))))))
-	(values)))))
-
-(defmethod shutdown-3d-demo ((module 3d-demo-module))
-  (let* ((window (window module))
+(defmethod destroy-device-objects ((renderer face-renderer))
+  (let* ((window (window renderer))
 	 (swapchain (swapchain window)))
-
-    (when (vertex-shader module)
-      (destroy-shader-module (vertex-shader module))
-      (setf (vertex-shader module) nil))
-
-    (when (fragment-shader module)
-      (destroy-shader-module (fragment-shader module))
-      (setf (fragment-shader module) nil))
-
-    ;; fixme: geometry shader unbound
-    (when (has-geometry-shader-p (physical-device (device swapchain)))
-      (when (geometry-shader module)
-	(destroy-shader-module (geometry-shader module))
-	(setf (geometry-shader module) nil)))
 
     (when (depth-image-view swapchain)
       (destroy-image-view (depth-image-view swapchain))
@@ -232,113 +321,104 @@
        do (destroy-framebuffer framebuffer)
        finally (setf (framebuffers swapchain) nil))
     
-    (when (pipeline module)
-      (destroy-pipeline (pipeline module))
-      (setf (pipeline module) nil))
+    (when (pipeline renderer)
+      (destroy-pipeline (pipeline renderer))
+      (setf (pipeline renderer) nil))
     
-    (when (pipeline-layout module)
-      (destroy-pipeline-layout (pipeline-layout module))
-      (setf (pipeline-layout module) nil))
+    (when (pipeline-layout renderer)
+      (destroy-pipeline-layout (pipeline-layout renderer))
+      (setf (pipeline-layout renderer) nil))
 
     #+NIL
-    (when (descriptor-set module)
-      (free-descriptor-sets (list (descriptor-set module)) (descriptor-pool module))
-      (setf (descriptor-set module) nil))
+    (when (descriptor-set renderer)
+      (free-descriptor-sets (list (descriptor-set renderer)) (descriptor-pool renderer))
+      (setf (descriptor-set renderer) nil))
     
-    (when (descriptor-set-layout module)
-      (destroy-descriptor-set-layout (descriptor-set-layout module))
-      (setf (descriptor-set-layout module) nil))
-    
-    (when (vertex-buffer module)
-      (destroy-buffer (vertex-buffer module))
-      (setf (vertex-buffer module) nil))
-    
-    (when (index-buffer module)
-      (destroy-buffer (index-buffer module))
-      (setf (index-buffer module) nil))
+    (when (descriptor-set-layout renderer)
+      (destroy-descriptor-set-layout (descriptor-set-layout renderer))
+      (setf (descriptor-set-layout renderer) nil))
 
-    (when (has-geometry-shader-p (physical-device (device swapchain)))
-      (when (uniform-buffer-gs module)
-	(destroy-buffer (uniform-buffer-gs module))
-	(setf (uniform-buffer-gs module) nil)))
-
-    (when (uniform-buffer-vs module)
-      (destroy-buffer (uniform-buffer-vs module))
-      (setf (uniform-buffer-vs module) nil))
+    (when (uniform-buffer-vs renderer)
+      (destroy-buffer (uniform-buffer-vs renderer))
+      (setf (uniform-buffer-vs renderer) nil))
 
     #+NOTYET
     (progn
-    (when (vertex-data module)
-      (foreign-free (vertex-data module))
-      (setf (vertex-data module) nil))
+    (when (vertex-data renderer)
+      (foreign-free (vertex-data renderer))
+      (setf (vertex-data renderer) nil))
 
-    (setf (vertex-data-size module) nil)
+    (setf (vertex-data-size renderer) nil)
 
-    (when (index-data module)
-      (foreign-free (index-data module))
-      (setf (index-data module) nil))
+    (when (index-data renderer)
+      (foreign-free (index-data renderer))
+      (setf (index-data renderer) nil))
 
-    (setf (index-data-size module) nil)    
+    (setf (index-data-size renderer) nil)    
     )
     (values)))
 
-(defmethod shutdown-3d-demo ((module 3d-demo-annotation-module))
-  (let* (#+NIL(window (window module))
+(defmethod destroy-device-objects ((renderer annotation-renderer))
+  (let* (#+NIL(window (window renderer))
 	      #+NIL(swapchain (swapchain window)))
 
-    (when (vertex-shader module)
-      (destroy-shader-module (vertex-shader module))
-      (setf (vertex-shader module) nil))
-
-    (when (fragment-shader module)
-      (destroy-shader-module (fragment-shader module))
-      (setf (fragment-shader module) nil))
+    (when (pipeline renderer)
+      (destroy-pipeline (pipeline renderer))
+      (setf (pipeline renderer) nil))
     
-    (when (pipeline module)
-      (destroy-pipeline (pipeline module))
-      (setf (pipeline module) nil))
-    
-    (when (pipeline-layout module)
-      (destroy-pipeline-layout (pipeline-layout module))
-      (setf (pipeline-layout module) nil))
+    (when (pipeline-layout renderer)
+      (destroy-pipeline-layout (pipeline-layout renderer))
+      (setf (pipeline-layout renderer) nil))
 
     #+NIL
-    (when (descriptor-set module)
-      (free-descriptor-sets (list (descriptor-set module)) (descriptor-pool module))
-      (setf (descriptor-set module) nil))
+    (when (descriptor-set renderer)
+      (free-descriptor-sets (list (descriptor-set renderer)) (descriptor-pool renderer))
+      (setf (descriptor-set renderer) nil))
     
-    (when (descriptor-set-layout module)
-      (destroy-descriptor-set-layout (descriptor-set-layout module))
-      (setf (descriptor-set-layout module) nil))
+    (when (descriptor-set-layout renderer)
+      (destroy-descriptor-set-layout (descriptor-set-layout renderer))
+      (setf (descriptor-set-layout renderer) nil))
     
-    (when (vertex-buffer module)
-      (destroy-buffer (vertex-buffer module))
-      (setf (vertex-buffer module) nil))
-    
-    (when (index-buffer module)
-      (destroy-buffer (index-buffer module))
-      (setf (index-buffer module) nil))
-
-    (when (uniform-buffer-vs module)
-      (destroy-buffer (uniform-buffer-vs module))
-      (setf (uniform-buffer-vs module) nil))
+    (when (uniform-buffer-vs renderer)
+      (destroy-buffer (uniform-buffer-vs renderer))
+      (setf (uniform-buffer-vs renderer) nil))
 
     #+NOTYET
     (progn
-      (when (vertex-data module)
-	(foreign-free (vertex-data module))
-	(setf (vertex-data module) nil))
+      (when (vertex-data renderer)
+	(foreign-free (vertex-data renderer))
+	(setf (vertex-data renderer) nil))
       
-      (setf (vertex-data-size module) nil)
+      (setf (vertex-data-size renderer) nil)
       
-      (when (index-data module)
-	(foreign-free (index-data module))
-	(setf (index-data module) nil))
+      (when (index-data renderer)
+	(foreign-free (index-data renderer))
+	(setf (index-data renderer) nil))
       
-      (setf (index-data-size module) nil)
+      (setf (index-data-size renderer) nil)
       )
 
     (values)))
+
+(defmethod destroy-device-objects ((renderer edge-renderer))
+
+  (when (pipeline renderer)
+    (destroy-pipeline (pipeline renderer))
+    (setf (pipeline renderer) nil))
+    
+  (when (pipeline-layout renderer)
+    (destroy-pipeline-layout (pipeline-layout renderer))
+    (setf (pipeline-layout renderer) nil))
+
+  (when (descriptor-set-layout renderer)
+    (destroy-descriptor-set-layout (descriptor-set-layout renderer))
+    (setf (descriptor-set-layout renderer) nil))
+    
+  (when (uniform-buffer-vs renderer)
+    (destroy-buffer (uniform-buffer-vs renderer))
+    (setf (uniform-buffer-vs renderer) nil))
+    
+  (values))
 
 (defparameter *vertices-list*
   (list -0.5f0 -0.5f0 0.5f0 1.0f0 0.0f0 0.0f0
@@ -365,6 +445,8 @@
 
 (defparameter *index-data* (foreign-alloc :unsigned-short :initial-contents *indices*))
 (defparameter *index-data-size* (* (foreign-type-size :unsigned-short) (length *indices*)))
+
+(defvar *draw-index-args* nil)
 
 (defparameter *axes-coord-list*
   (list 0.0f0 0.0f0 0.0f0 1.0f0 0.0f0 0.0f0
@@ -413,7 +495,9 @@
 
 (defcstruct 3DDemoVSUBO
   (model (:struct mat4))
-  (view (:struct mat4)))
+  (view (:struct mat4))
+  (proj (:struct mat4))
+  (clip (:struct mat4)))
 
 (defcstruct 3DDemoGSUBO
   (proj (:struct mat4))
@@ -424,7 +508,7 @@
 	   
   (let* ((forward (vunit (v- eye target)))
 	 (left (vunit (vc up-dir forward)))
-	 (up (vunit (vc forward left)))
+	 (up (vc forward left))
 	 (view-matrix (mat4)))
 
     (setf (mcref view-matrix 0 0) (vx3 left)
@@ -443,31 +527,34 @@
 	  (mcref view-matrix 3 1) 0.0d0
 	  (mcref view-matrix 3 2) 0.0d0
 	  (mcref view-matrix 3 3) 1.0d0)
+
     view-matrix))
 
-(defun compute-picking-ray (window camera projection-matrix view-matrix)
+(defun euclid (vec4)
+  (vec3 (/ (vx vec4) (vw vec4))
+	(/ (vy vec4) (vw vec4))
+	(/ (vz vec4) (vw vec4))))
+
+(defun compute-picking-ray (window camera view-matrix projection-matrix clip-matrix)
   (multiple-value-bind (viewport-width viewport-height) (get-framebuffer-size window)
-    (let ((unprojmat (minv projection-matrix)))
-      (multiple-value-bind (mouse-x mouse-y) (get-cursor-pos window)
-	(let* ((ray-nds (vec3 (- (/ (* 2.0f0 mouse-x) viewport-width) 1.0f0) (- (/ (* 2.0f0 mouse-y) viewport-height) 1.0f0) 1.0f0))
-	       (ray-clip1 (vec4 (vx ray-nds) (vy ray-nds) 0.0f0 1.0f0))
-	       (ray-clip2 (vec4 (vx ray-nds) (vy ray-nds) 1.0f0 1.0f0)))
-	  (let ((ray-eye1 (m* unprojmat ray-clip1))
-		(ray-eye2 (m* unprojmat ray-clip2))
-		(ray-world)
-		(inv-view-matrix (minv view-matrix)))
-	    (setq ray-eye1 (m* inv-view-matrix ray-eye1))
-	    (setq ray-eye2 (m* inv-view-matrix ray-eye2))
-
-	    (setq ray-eye1 (vec3 (/ (vx ray-eye1) (vw ray-eye1)) (/ (vy ray-eye1) (vw ray-eye1)) (/ (vz ray-eye1) (vw ray-eye1))))
-	    (setq ray-eye2 (vec3 (/ (vx ray-eye2) (vw ray-eye2)) (/ (vy ray-eye2) (vw ray-eye2)) (/ (vz ray-eye2) (vw ray-eye2))))
-	    #+NIL(igText "ray-eye1") #+NIL (igText (format nil "~S" ray-eye1))
-	    #+NIL(igText "ray-eye2") #+NIL (igText (format nil "~S" ray-eye2))
-	    (setq ray-world (vunit (v- ray-eye1 ray-eye2)))
-
-	    (if (not (ortho-p camera))
-		(values (vec3 (camera-x camera) (camera-y camera) (camera-z camera)) #+NIL ray-world ray-eye2)
-		(values ray-eye1 (v- (vec3 (camera-x camera) (camera-y camera) (camera-z camera)))))))))))
+    (let ((unclip (minv clip-matrix))
+	  (unproj (minv projection-matrix))
+	  (unview (minv view-matrix)))
+      (let ((p (igp::eye-point camera)))
+	(multiple-value-bind (mouse-x mouse-y) (get-cursor-pos window)
+	  (let* ((mouse-clip (vec4 (- (/ (* 2.0f0 mouse-x) viewport-width) 1.0f0)
+				   (- (/ (* 2.0f0 mouse-y) viewport-height) 1.0f0)
+				   (if (igp::perspective-p camera) 0.3254f0 0.0f0)
+				   1.0f0))
+		 (mouse-world (euclid (m* unview unproj unclip mouse-clip))))
+	    (igText (format nil "mouse-world: ~S" mouse-world))
+	    (let ((ray
+		   (if (igp::perspective-p camera)
+		       (igp::make-ray :origin p :direction (vunit (v- mouse-world p)))
+		       (let ((dir (vunit (v- (slot-value camera 'igp::aim-point) p))))
+			 (igp::make-ray :origin mouse-world :direction dir)))))
+	      (igText (format nil "~S" ray))
+	      ray)))))))
 
 (defun copy-uniform-buffer-memory (device data uniform-buffer-memory size)
   (with-foreign-object (pp-data :pointer)
@@ -475,196 +562,686 @@
     (memcpy (mem-aref pp-data :pointer) data size)
     (vkUnmapMemory (h device) (h uniform-buffer-memory))))
 
-(defun update-3d-demo-gs-uniform-buffer-object (module view-matrix proj-matrix)
-  (with-foreign-object (p-ubo '(:struct 3DDemoGSUBO))
-    (let ((p-p (foreign-slot-pointer p-ubo '(:struct 3DDemoGSUBO) 'proj))
-	  (p-po (foreign-slot-pointer p-ubo '(:struct 3DDemoGSUBO) 'pickOrigin))
-	  (p-pd (foreign-slot-pointer p-ubo '(:struct 3DDemoGSUBO) 'pickingDir)))
-      
-      (multiple-value-bind (pick-origin picking-direction)
-	  (compute-picking-ray (window module) (camera module) proj-matrix view-matrix)
-	
-	(setf (mem-aref p-po :float 0) (coerce (vx pick-origin) 'single-float)
-	      (mem-aref p-po :float 1) (coerce (vy pick-origin) 'single-float)
-	      (mem-aref p-po :float 2) (coerce (vz pick-origin) 'single-float)
-	      (mem-aref p-po :float 3) 1.0f0)
-	  
-	(setf (mem-aref p-pd :float 0) (coerce (vx picking-direction) 'single-float)
-	      (mem-aref p-pd :float 1) (coerce (vy picking-direction) 'single-float)
-	      (mem-aref p-pd :float 2) (coerce (vz picking-direction) 'single-float)
-	      (mem-aref p-pd :float 3) 0.0f0))
-      
-	(let ((pv-mat (m* proj-matrix view-matrix)))
-      (loop for i from 0 below 4
-	 do (loop for j from 0 below 4
-	       do (setf (mem-aref p-p :float (+ i (* j 4))) (coerce (mcref pv-mat i j) 'single-float))))))
-    
-    (copy-uniform-buffer-memory (device module)
-				p-ubo (allocated-memory (uniform-buffer-gs module))
-				(foreign-type-size '(:struct 3DDemoGSUBO))))
-  
-  nil)
+(defun update-vertex-shader-uniform-buffer-object (module model-matrix view-matrix proj-matrix clip-matrix)
 
-(defun update-3d-demo-vs-uniform-buffer-object (module matrix)
-			    
-      (with-foreign-object (p-ubo '(:struct 3DDemoVSUBO))
+  (with-foreign-object (p-ubo '(:struct 3DDemoVSUBO))
 	(let ((p-m (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'model))
-	      #+NIL(p-v (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'view)))
+	      (p-v (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'view))
+	      (p-p (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'proj))
+	      (p-c (foreign-slot-pointer p-ubo '(:struct 3DDemoVSUBO) 'clip)))
 
 	  (loop for i from 0 below 4
 	     do (loop for j from 0 below 4
-		   do (setf (mem-aref p-m :float (+ i (* j 4))) (coerce (mcref matrix i j) 'single-float))))
+		   do (setf (mem-aref p-m :float (+ i (* j 4))) (coerce (mcref model-matrix i j) 'single-float))))
 
-	  #+NIL
 	  (loop for i from 0 below 4
 	     do (loop for j from 0 below 4
 		   do (setf (mem-aref p-v :float (+ i (* j 4))) (coerce (mcref view-matrix i j) 'single-float))))
+
+	  (loop for i from 0 below 4
+	     do (loop for j from 0 below 4
+		   do (setf (mem-aref p-p :float (+ i (* j 4))) (coerce (mcref proj-matrix i j) 'single-float))))
+
+
+	  (loop for i from 0 below 4
+	     do (loop for j from 0 below 4
+		   do (setf (mem-aref p-c :float (+ i (* j 4))) (coerce (mcref clip-matrix i j) 'single-float))))
 	  
 	  (copy-uniform-buffer-memory (device module)
 				      p-ubo (allocated-memory (uniform-buffer-vs module))
 				      (foreign-type-size '(:struct 3DDemoVSUBO)))))
       (values))
 
-(defun convert-projection-matrix-to-vulkan (src)
-  (let ((dest (mcopy4 src)))
-    (setf (mcref dest 1 1) (- (mcref dest 1 1))
-	  (mcref dest 2 0) (/ (+ (mcref dest 2 0) (mcref dest 3 0)) 2)
-	  (mcref dest 2 1) (/ (+ (mcref dest 2 1) (mcref dest 3 1)) 2)
-	  (mcref dest 2 2) (/ (+ (mcref dest 2 2) (mcref dest 3 2)) 2)
-	  (mcref dest 2 3) (/ (+ (mcref dest 2 3) (mcref dest 3 3)) 2))
-    dest))
 
-(defun perspective-2 (width height)
-  (let* ((m (mat4))
-	 (f (coerce (/ 1.0d0 (tan (/ pi 4))) 'single-float)))
-    (setf (mcref m 0 0) (/ f (/ width height))
-	  (mcref m 0 1) 0.0f0
-	  (mcref m 0 2) 0.0f0
-	  (mcref m 0 3) 0.0f0
+(defparameter +clip-matrix+
+  (mat 1 0 0 0
+       0 -1 0 0
+       0 0 1/2 0
+       0 0 1/2 1))
 
-	  (mcref m 1 0) 0.0f0
-	  (mcref m 1 1) (- f)
-	  (mcref m 1 2) 0.0f0
-	  (mcref m 1 3) 0.0f0
+(defun 3d-demo-select (queue renderer model-matrix view-matrix projection-matrix)
+  (let ((scene (slot-value renderer 'scene)))
+    
+    (let* ((ray (compute-picking-ray (slot-value renderer 'window)
+				     (slot-value (slot-value renderer 'scene) 'igp::camera)
+				     view-matrix projection-matrix +clip-matrix+))
+	   (box-intersecting (igp::ray-intersects-bvh ray (first (slot-value scene 'igp::standins)) model-matrix)))
+      
+      (when box-intersecting
+	(cond ((eq *selection-mode* :face)
+	       (let* ((toplevel-standin (first (slot-value scene 'igp::standins))))
+		 (igp::unhighlight-toplevel-standin queue toplevel-standin)
+		 (let ((selected (caar
+				  (sort (remove-if #'null
+						   (mapcar #'(lambda (face)
+							       (let ((tmin (igp::ray-intersects-face-p ray face model-matrix)))
+								 (when tmin
+								   (list face
+									 tmin))))
+							   box-intersecting))
+					#'< :key #'cadr))))
+		   (when selected
+		     (igp::highlight-standin queue selected toplevel-standin)
+		     (igText (format nil "~S" (slot-value selected 'igp::random-id))))
+		   
+		   ))))
+	
+	(igText "SELECTED!")))))
 
-	  (mcref m 2 0) 0.0f0
-	  (mcref m 2 1) 0.0f0
-	  (mcref m 2 2) (/ -5 (- 5 -5.0f0))
-	  (mcref m 2 3) -1.0f0
+(let ((last-time (get-internal-real-time))
+      (frame-counter 0)
+      (show-demo-window t)
+      (show-another-window nil)
+      (temp)
+      (dt))
 
-	  (mcref m 3 0) 0.0f0
-	  (mcref m 3 1) 0.0f0
-	  (mcref m 3 2) (/ (* 5 -5.0f0) (- 5 -5.0f0))
-	  (mcref m 3 3) 0.0f0)
-    m))
+  (defmethod process-ui (app)
 
-(defun 3d-demo-render (module command-buffer fb-width fb-height &key (annotation-pipeline-p nil))
-  (with-slots (device) module
-    (unless (vertex-buffer module)
-      ;;(setf (vertex-buffer module) nil)
-      (setf (vertex-buffer module) (create-vertex-buffer device (vertex-data module) (vertex-data-size module))))
+    (imgui-new-frame (imgui-module app))
 
-    (unless (index-buffer module)
-      #+NIL
-      (vkDestroyBuffer (h device) (h (index-buffer module)) (h (allocator module)))
-      #+NIL
-      (vkFreeMemory (h device) (h (allocated-memory (index-buffer module))) (h (allocator module)))
-      ;;(setf (index-buffer module) nil)
-      (setf (index-buffer module) (create-index-buffer device (index-data module) (index-data-size module))))
+    (let* ((scene (slot-value app 'scene))
+	   (camera (slot-value scene 'igp::camera)))
 
-    (let ((projection-matrix
-	   (if (ortho-p (camera module))
-	       (mortho (* (- 2) (zoom (camera module)) (/ fb-width fb-height))
-		       (*    2  (zoom (camera module)) (/ fb-width fb-height))
-		       (* (- 2) (zoom (camera module)))
-		       (*    2  (zoom (camera module)))
-		       -10 10)
-	       (mperspective (* 75 (zoom (camera module))) (/ fb-width fb-height) 0.001 10000))))
+      (ig:igBeginMainMenuBar)
+      (when (ig:begin-menu "File")
+	(ig:menu-item "New")
+	(ig:menu-item "Open")
+	(when (ig:menu-item "Exit")
+	  (shutdown-application app))
+	(ig:end-menu))
+      (when (ig:begin-menu "Edit")
+	(ig:menu-item "Create")
+	(ig:menu-item "Move")
+	(ig:menu-item "Delete")
+	(ig:end-menu))
+      (when (ig:begin-menu "View")
+	(when (ig:menu-item "Reset Camera")
+	  (igp::reset-camera camera))
+	(ig:end-menu))	  
+      (ig:igEndMainMenuBar)
 
-      ;;(when (ortho-p (camera module))
-      (setq projection-matrix (convert-projection-matrix-to-vulkan projection-matrix));;)
+      (incf frame-counter)
 
-      (vkCmdBindPipeline (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline module)))
+      (multiple-value-bind (width height) (get-framebuffer-size (main-window app))
+	(ig:set-next-window-pos 0 0 :condition :always)
+	(ig:set-next-window-size width height)
+	(ig:begin "background"
+		  :no-background t
+		  :no-title-bar t
+		  :no-resize t
+		  :no-move t
+		  :no-scrollbar t
+		  :no-scroll-with-mouse t
+		  :no-collapse t
+		  :no-saved-settings t
+		  :no-mouse-inputs t
+		  :no-focus-on-appearing t
+		  :no-bring-to-front-on-focus t
+		  :no-nav-inputs t
+		  :no-nav-focus t
+		  :no-decoration t
+		  :no-inputs t)
 
-      (with-slots (device window) module
-	(let ((model-matrix)
-	      (camera (camera module)))
-	  (unless annotation-pipeline-p
-	    (let* ((current-time (get-internal-real-time))
-		   (elapsed-time (- current-time (start-time module))))
-	      (setq model-matrix
+	(vktk::set-cursor-screen-pos 100 50)
+	(ig:text "TEST")
+	(ig:end)
+
+	(ig:set-next-window-pos (- width 120) 19 :condition :always)
+	(ig:set-next-window-size 120 (- height 38))
+	(ig:begin "right-docker"
+		  :no-title-bar t
+		  :no-resize t
+		  :no-move t
+		  :no-scrollbar t
+		  :no-scroll-with-mouse t
+		  :no-saved-settings t
+		  ;;:no-mouse-inputs t
+		  :no-focus-on-appearing t
+		  :no-bring-to-front-on-focus t
+		  :no-nav-inputs t
+		  :no-nav-focus t
+		  :no-decoration t
+		  ;;:no-inputs t
+		  )
+	(ig:text "selection mode")
+	(when (ig:radio-button "compsolid" (eq *selection-mode* :compsolid))
+	  (setq *selection-mode* :compsolid))
+	(when (ig:radio-button "compound" (eq *selection-mode* :compound))
+	  (setq *selection-mode* :compound))
+	(when (ig:radio-button "solid" (eq *selection-mode* :solid))
+	  (setq *selection-mode* :solid))
+	(when (ig:radio-button "shell" (eq *selection-mode* :shell))
+	  (setq *selection-mode* :shell))	
+	(when (ig:radio-button "face" (eq *selection-mode* :face))
+	  (setq *selection-mode* :face))
+	(when (ig:radio-button "wire" (eq *selection-mode* :wire))
+	  (setq *selection-mode* :wire))
+	(when (ig:radio-button "edge" (eq *selection-mode* :edge))
+	  (setq *selection-mode* :edge))
+	(when (ig:radio-button "vertex" (eq *selection-mode* :vertex))
+	  (setq *selection-mode* :vertex))
+
+	(ig:new-line)
+	(ig:text "view projection")
+	(when (ig:radio-button "perspective" (igp::perspective-p camera))
+	  (setf (slot-value camera 'igp::type) :perspective))
+	(when (ig:radio-button "orthographic" (igp::ortho-p camera))
+	  (setf (slot-value camera 'igp::type) :ortho))
+	(igp::update-projection-matrix camera)
+
+	(ig:new-line)
+	(with-foreign-object (p-f :float 3)
+	  (let ((ap (slot-value camera 'igp::aim-point)))
+	    (setf (mem-aref p-f :float 0) (vx ap)
+		  (mem-aref p-f :float 1) (vy ap)
+		  (mem-aref p-f :float 2) (vz ap))
+	    
+	    (ig:igInputFloat3 "aim point" p-f "%f %f %f" 0)
+
+	    (setf (slot-value camera 'igp::aim-point)
+		  (vec3 (mem-aref p-f :float 0) (mem-aref p-f :float 1) (mem-aref p-f :float 2)))
+	    (igp::update-view-matrix camera)))
+	(ig:end)
+
+	(ig:set-next-window-pos 0 (- height 20) :condition :always)
+	(ig:set-next-window-size width 20)
+
+	(ig:begin "bottom-docker"
+		  :no-title-bar t
+		  :no-resize t)
+	(if (elt (igp::camera-mode scene) 2)
+	    (progn
+	      (vktk::set-cursor-screen-pos 5 (- height 15))
+	      (ig:text "move to rotate camera")
+	      (vktk::set-cursor-screen-pos (- (/ width 2) 40) (- height 15))
+	      (ig:text "M: accept")
+	      (vktk::set-cursor-screen-pos (- width 150) (- height 15))
+	      (ig:text "[Ctrl] + move to pan"))
+	    (progn
+	      (vktk::set-cursor-screen-pos 5 (- height 15))
+	      (ig:text "L: select")
+	      (vktk::set-cursor-screen-pos (- (/ width 2) 40) (- height 15))
+	      (ig:text "M: press: camera mode, scroll: zoom")))
+	(ig:end))      
+		 
+      (text "Hello, wworld!")
+
+      (text "camera up: ~S" (igp::up-vector camera))
+      
+      (color-edit "clear color" (clear-value app))
+		 
+      (text "~S" (clear-value app))
+		 
+      (text "camera position: ~S" (igp::eye-point camera))
+
+      (text "camera right: ~S" (vc (v- (slot-value camera 'igp::aim-point) (igp::eye-point camera)) (igp::up-vector camera)))
+		 
+      (let* ((ortho-p (igp::ortho-p camera)))
+	       
+	(when (button (if ortho-p "Set Perspective" "Set Orthographic") :dx 120.0f0 :dy 20.0f0)
+	  (setf (slot-value camera 'igp::type) (if ortho-p :perspective :ortho))
+	  (igp::update-projection-matrix camera)))
+
+      (when (button "Reset Camera" :dx 120.0f0 :dy 20.0f0)
+	(igp::reset-camera camera))
+
+      (when (button "Demo Window" :dx 100.0f0 :dy 20.0f0)
+	(if show-demo-window
+	    (setq show-demo-window nil)
+	    (setq show-demo-window t)))
+      
+      (when (button "Another Window" :dx 120.0f0 :dy 20.0f0)
+	(if show-another-window
+	    (setq show-another-window nil)
+	    (setq show-another-window t)))
+      
+      (setq temp (get-internal-real-time)
+	    dt (- temp last-time))
+      
+      (text "~s ms/frame (~s FPS)" dt
+	    (if (zerop dt)
+		0
+		(round (/ frame-counter (/ dt 1000.0f0)))))
+      
+      (setq frame-counter 0
+	    last-time temp)
+      
+      (when show-another-window
+	
+	(multiple-value-bind (ignore open)
+	    (begin "Another Window" :open show-another-window)
+	  (declare (ignore ignore))
+	  
+	  (setq show-another-window open)
+	
+	  (text "Hello from another window!")
+	
+	  (end)))
+      
+      (when show-demo-window
+	(set-next-window-pos 650.0f0 20.0f0 :condition :first-use-ever)
+	
+	(setq show-demo-window (show-demo-window show-demo-window)))
+
+      (igp::maybe-move-camera camera))))
+
+
+(defmethod 3d-demo-render (queue (renderer face-renderer) command-buffer fb-width fb-height
+			   &optional (model-matrix (meye 4)))
+
+  (let ((scene (slot-value renderer 'scene)))
+    (with-slots (device) renderer
+      (let* ((camera (slot-value scene 'igp::camera))
+	     (view-matrix (slot-value camera 'igp::view-matrix))
+	     (projection-matrix (slot-value camera 'igp::projection-matrix)))
+	(with-slots (window) renderer
+	  (let* ((current-time (get-internal-real-time))
+		   (elapsed-time (- current-time (igp::start-time (slot-value renderer 'scene)))))
+
+
+	    #+NIL
+	      (setq model-matrix 
 		    (m* (mrotation (vec3 0.0 0.0 1.0)
 				   (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
-			(mtranslation (vec3 1.0 0.0 0.0))))))
-	  (let ((view-matrix
-		 (look-at2 (vec3 (camera-x camera) (camera-y camera) (camera-z camera))
-			   (vec3 0.0 0.0 0.0)
-			   (vec3 0.0 0.0 1.0))))
-	    
-	    (update-3d-demo-vs-uniform-buffer-object module
-						     (if annotation-pipeline-p
-							 (m* projection-matrix view-matrix)
-							 (if (has-geometry-shader-p (physical-device device))
-							     model-matrix
-							     (m* projection-matrix (m* view-matrix model-matrix)))))
-	  
-	    (unless annotation-pipeline-p
-	      (when (has-geometry-shader-p (physical-device device))
-		(update-3d-demo-gs-uniform-buffer-object module
-							 view-matrix
-							 projection-matrix)))))
+			(mtranslation (vec3 100.0 0.0 0.0)))))
 
-      (with-foreign-objects ((p-vertex-buffers 'VkBuffer)
-			     (p-offsets 'VkDeviceSize)
-			     (p-descriptor-sets 'VkDescriptorSet))
-	(setf (mem-aref p-vertex-buffers 'VkBuffer) (h (vertex-buffer module))
-	      (mem-aref p-offsets 'VkDeviceSize) 0
-	      (mem-aref p-descriptor-sets 'VkDescriptorSet) (h (descriptor-set module)))
+	  (3d-demo-select queue renderer model-matrix view-matrix projection-matrix)
 
-	(vkCmdBindVertexBuffers (h command-buffer) 0 1 p-vertex-buffers p-offsets)
+	  (vkCmdBindPipeline (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline renderer)))
 
-	(vkCmdBindIndexBuffer (h command-buffer) (h (index-buffer module)) 0 VK_INDEX_TYPE_UINT16)
+	  (update-vertex-shader-uniform-buffer-object renderer model-matrix view-matrix projection-matrix +clip-matrix+))
+	
+	(with-vk-struct (p-viewport VkViewport)
+	  (with-foreign-slots ((vk::x
+				vk::y
+				vk::width
+				vk::height
+				vk::minDepth
+				vk::maxDepth)
+			       p-viewport
+			       (:struct VkViewport))
+	    (setf vk::x 0.0f0
+		  vk::y 0.0f0
+		  vk::width (coerce fb-width 'single-float)
+		  vk::height (coerce fb-height 'single-float)
+		  vk::minDepth 0.0f0
+		  vk::maxDepth 1.0f0)
+	    (vkCmdSetViewport (h command-buffer) 0 1 p-viewport)))
 
-	(vkCmdBindDescriptorSets (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline-layout module))
-				 0 1 p-descriptor-sets 0 +nullptr+))
-
-      (with-vk-struct (p-viewport VkViewport)
-	(with-foreign-slots ((vk::x
-			      vk::y
-			      vk::width
-			      vk::height
-			      vk::minDepth
-			      vk::maxDepth)
-			     p-viewport
-			     (:struct VkViewport))
-	  (setf vk::x 0.0f0
-		vk::y 0.0f0
-		vk::width (coerce fb-width 'single-float)
-		vk::height (coerce fb-height 'single-float)
-		vk::minDepth 0.0f0
-		vk::maxDepth 1.0f0)
-	  (vkCmdSetViewport (h command-buffer) 0 1 p-viewport)))
-
-      (with-vk-struct (p-scissor VkRect2D)
-	(let ((p-offset
-	       (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset))
-	      (p-extent
-	       (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)))
+	  (with-vk-struct (p-scissor VkRect2D)
+	    (let ((p-offset
+		   (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset))
+		  (p-extent
+		   (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)))
 			       
-	  (with-foreign-slots ((vk::x vk::y) p-offset (:struct VkOffset2D))
-	    (with-foreign-slots ((vk::width vk::height) p-extent (:struct VkExtent2D))
+	      (with-foreign-slots ((vk::x vk::y) p-offset (:struct VkOffset2D))
+		(with-foreign-slots ((vk::width vk::height) p-extent (:struct VkExtent2D))
 				   
-	      (setf vk::x 0
-		    vk::y 0
-		    vk::width fb-width
-		    vk::height fb-height)
+		  (setf vk::x 0
+			vk::y 0
+			vk::width fb-width
+			vk::height fb-height)
 				   
-	      (vkCmdSetScissor (h command-buffer) 0 1 p-scissor))))))
+		  (vkCmdSetScissor (h command-buffer) 0 1 p-scissor))))))
 
-      (vkCmdDrawIndexed (h command-buffer) (index-count module) 1 0 0 0)
+	(loop for object in (slot-value (slot-value renderer 'scene) 'igp::standins)
+	   do (let ((standin object))
+		(unless (igp::face-vertex-buffer standin)
+		  (let ((vertex-array (igp::face-vertex-array standin)))
+		    (setf (igp::face-vertex-buffer standin)
+			  (sb-sys:with-pinned-objects (vertex-array)
+			    (vktk:create-vertex-buffer device
+						       (sb-sys:vector-sap vertex-array)
+						       (* (length (igp::face-vertex-array standin))
+							  (foreign-type-size :float)))))))
+		(unless (igp::face-index-buffer standin)
+		  (let ((index-array (igp::face-index-array standin)))
+		    (setf (igp::face-index-buffer standin)
+			  (sb-sys:with-pinned-objects (index-array)
+			    (vktk:create-index-buffer device
+						      (sb-sys:vector-sap index-array)
+						      (* (length (igp::face-index-array standin))
+							 (foreign-type-size :unsigned-short)))))))
 
-      (values))))
+		(cmd-bind-vertex-buffers command-buffer (list (igp::face-vertex-buffer standin)))
 
+		(cmd-bind-descriptor-sets command-buffer (pipeline-layout renderer) (list (descriptor-set renderer)))
+		(cmd-bind-index-buffer command-buffer (igp::face-index-buffer standin))
+		
+		(labels ((render-indexed (standin)
+			   (loop for cmd across (igp::face-commands standin)
+			      do (cmd-draw-indexed command-buffer cmd))))
+		  
+		  (render-indexed standin)))))
+    
+    model-matrix))
+
+(defmethod 3d-demo-render (queue (renderer edge-renderer) command-buffer fb-width fb-height
+			   &optional (model-matrix (meye 4)))
+  (let ((scene (slot-value renderer 'scene)))
+    (with-slots (device) renderer
+      (let* ((camera (slot-value scene 'igp::camera))
+	     (view-matrix (slot-value camera 'igp::view-matrix))
+	     (projection-matrix (slot-value camera 'igp::projection-matrix)))
+	(with-slots (window) renderer
+
+	  (vkCmdBindPipeline (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline renderer)))
+
+	  (update-vertex-shader-uniform-buffer-object renderer model-matrix view-matrix projection-matrix +clip-matrix+))
+	
+	(with-vk-struct (p-viewport VkViewport)
+	  (with-foreign-slots ((vk::x
+				vk::y
+				vk::width
+				vk::height
+				vk::minDepth
+				vk::maxDepth)
+			       p-viewport
+			       (:struct VkViewport))
+	    (setf vk::x 0.0f0
+		  vk::y 0.0f0
+		  vk::width (coerce fb-width 'single-float)
+		  vk::height (coerce fb-height 'single-float)
+		  vk::minDepth 0.0f0
+		  vk::maxDepth 1.0f0)
+	    (vkCmdSetViewport (h command-buffer) 0 1 p-viewport)))
+
+	  (with-vk-struct (p-scissor VkRect2D)
+	    (let ((p-offset
+		   (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset))
+		  (p-extent
+		   (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)))
+			       
+	      (with-foreign-slots ((vk::x vk::y) p-offset (:struct VkOffset2D))
+		(with-foreign-slots ((vk::width vk::height) p-extent (:struct VkExtent2D))
+				   
+		  (setf vk::x 0
+			vk::y 0
+			vk::width fb-width
+			vk::height fb-height)
+				   
+		  (vkCmdSetScissor (h command-buffer) 0 1 p-scissor))))))
+
+	(loop for object in (slot-value (slot-value renderer 'scene) 'igp::standins)
+	   do (let ((standin object))
+		(unless (igp::edge-vertex-buffer standin)
+		  (let ((vertex-array (igp::edge-vertex-array standin)))
+		    (setf (igp::edge-vertex-buffer standin)
+			  (sb-sys:with-pinned-objects (vertex-array)
+			    (vktk:create-vertex-buffer device (sb-sys:vector-sap vertex-array) (* (length (igp::edge-vertex-array standin)) (foreign-type-size :float)))))))
+		(unless (igp::edge-index-buffer standin)
+		  (let ((index-array (igp::edge-index-array standin)))
+		    (setf (igp::edge-index-buffer standin)
+			  (sb-sys:with-pinned-objects (index-array)
+			    (vktk:create-index-buffer device (sb-sys:vector-sap index-array) (* (length (igp::edge-index-array standin)) (foreign-type-size :unsigned-short)))))))
+
+		(cmd-bind-vertex-buffers command-buffer (list (igp::edge-vertex-buffer standin)))
+
+		(cmd-bind-descriptor-sets command-buffer (pipeline-layout renderer) (list (descriptor-set renderer)))
+
+		(cmd-bind-index-buffer command-buffer (igp::edge-index-buffer standin))
+		
+		(labels ((render-indexed (standin)
+			   (loop for cmd across (igp::edge-commands standin)
+			      do (cmd-draw-indexed command-buffer cmd))))
+		  (render-indexed standin)
+		))))
+    model-matrix))
+
+
+(defmethod 3d-demo-render (queue (renderer annotation-renderer) command-buffer fb-width fb-height
+			   &optional (model-matrix (meye 4)))
+
+  (let ((scene (slot-value renderer 'scene)))
+    (with-slots (device) renderer
+      (let* ((camera (slot-value scene 'igp::camera))
+	     (view-matrix (slot-value camera 'igp::view-matrix))
+	     (projection-matrix (slot-value camera 'igp::annotation-projection-matrix)))
+	
+	(with-slots (window) renderer
+	  (let ((camera-distance (slot-value camera 'igp::distance)))
+	    
+	    (nmscale model-matrix (vec3 camera-distance camera-distance camera-distance)))
+	  
+	  
+	  (vkCmdBindPipeline (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline renderer)))	  
+	  
+	  (update-vertex-shader-uniform-buffer-object renderer model-matrix view-matrix projection-matrix +clip-matrix+)
+	  )
+	
+	(with-vk-struct (p-viewport VkViewport)
+	  (with-foreign-slots ((vk::x
+				vk::y
+				vk::width
+				vk::height
+				vk::minDepth
+				vk::maxDepth)
+			       p-viewport
+			       (:struct VkViewport))
+	    (setf vk::x 0.0f0
+		  vk::y 0.0f0
+		  vk::width (coerce fb-width 'single-float)
+		  vk::height (coerce fb-height 'single-float)
+		  vk::minDepth 0.0f0
+		  vk::maxDepth 1.0f0)
+	    (vkCmdSetViewport (h command-buffer) 0 1 p-viewport)))
+	
+	(with-vk-struct (p-scissor VkRect2D)
+	  (let ((p-offset
+		 (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset))
+		(p-extent
+		 (foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)))
+	    
+	    (with-foreign-slots ((vk::x vk::y) p-offset (:struct VkOffset2D))
+	      (with-foreign-slots ((vk::width vk::height) p-extent (:struct VkExtent2D))
+		
+		(setf vk::x 0
+		      vk::y 0
+		      vk::width fb-width
+		      vk::height fb-height)
+		
+		(vkCmdSetScissor (h command-buffer) 0 1 p-scissor))))))
+
+      (let ((annotation (slot-value (slot-value renderer 'scene) 'igp::annotation)))
+
+	    (let ((index-array (igp::line-index-array annotation)))
+	      (let ((vertex-array (igp::line-vertex-array annotation)))
+
+		(unless (igp::vertex-buffer annotation)
+		  
+		  (setf (igp::vertex-buffer annotation)
+			(sb-sys:with-pinned-objects
+			 (vertex-array)
+			 (create-vertex-buffer device (sb-sys:vector-sap vertex-array)
+					       (* (length (igp::line-vertex-array annotation))
+						  (foreign-type-size :float))))))
+		(unless (igp::index-buffer annotation)
+		  (setf (igp::index-buffer annotation)
+			(sb-sys:with-pinned-objects
+			 (index-array)
+			 (create-index-buffer device (sb-sys:vector-sap index-array)
+					      (* (length (igp::line-index-array annotation))
+						 (foreign-type-size :unsigned-short))))))
+
+		(with-foreign-objects ((p-vertex-buffers 'VkBuffer)
+				       (p-offsets 'VkDeviceSize)
+				       (p-descriptor-sets 'VkDescriptorSet))
+		  
+		  (setf (mem-aref p-vertex-buffers 'VkBuffer) (h (igp::vertex-buffer annotation))
+			(mem-aref p-offsets 'VkDeviceSize) 0
+			(mem-aref p-descriptor-sets 'VkDescriptorSet) (h (descriptor-set renderer)))
+		  
+		  (vkCmdBindVertexBuffers (h command-buffer) 0 1 p-vertex-buffers p-offsets)
+		  
+		  (vkCmdBindDescriptorSets (h command-buffer) VK_PIPELINE_BIND_POINT_GRAPHICS
+					   (h (pipeline-layout renderer))
+					   0 1 p-descriptor-sets 0 +nullptr+)
+		  
+		  (vkCmdBindIndexBuffer (h command-buffer) (h (igp::index-buffer annotation))
+					0 VK_INDEX_TYPE_UINT16)
+		  
+		  (vkCmdDrawIndexed (h command-buffer) (length index-array) 1 0 0 0))))))
+    (values)))
+
+(defmethod render-graphics (app queue command-pool)
+  ;; draw stuff here
+  (let ((main-window (main-window app)))
+    (multiple-value-bind (w h) (get-framebuffer-size main-window)
+      (3d-demo-render queue (annotation-renderer app)
+		      (elt (command-buffers command-pool)
+			   (current-frame app))
+		      w h)
+      (let ((model-matrix (3d-demo-render queue (face-renderer app)
+					  (elt (command-buffers command-pool)
+					       (current-frame app))
+					  w h)))
+	(declare (ignorable model-matrix))
+	(3d-demo-render queue
+			(edge-renderer app)
+			(elt (command-buffers command-pool)
+			     (current-frame app))
+			w h model-matrix))
+      (imgui-render (imgui-module app)
+		    (elt (command-buffers command-pool) (current-frame app))
+		    (current-frame app)))))
+
+		    
+(defcstruct xform-uniform
+  (matrix (:struct mat4))
+  (nverts :uint32))
+
+	
+(defun compute-transformation (device matrix vertex-array)
+  (assert (zerop (mod (length vertex-array) 3)))
+  (let ((output-array)
+	(nverts (/ (length vertex-array) 3))
+	(dsl)
+	(pipeline-layout)
+	(shader-module)
+	(pipeline)
+	(command-pool)
+	(command-buffer)
+	(ds)
+	(uniform-buffer)
+	(storage-buffer)
+	(storage-buffer-memory))
+
+    (unwind-protect
+	 (multiple-value-bind (queue family-index)
+	     (compute-queue device)
+	   
+	   (setq dsl (create-descriptor-set-layout
+		      device
+		      :bindings
+		      (list (make-instance 'sample-uniform-buffer-for-compute-shader-dsl-binding)
+			    (make-instance 'sample-input-storage-buffer-for-compute-shader-dsl-binding)))
+		 pipeline-layout (create-pipeline-layout device (list dsl))
+		 shader-module (create-shader-module-from-file device (concatenate 'string *assets-dir* "shaders/comp.spv"))
+		 pipeline (create-compute-pipeline device pipeline-layout shader-module)
+		 command-pool (second (assoc family-index (command-pools device)))
+		 command-buffer (elt (command-buffers command-pool) 0))
+
+	   (time
+	    (unwind-protect
+		 (let* ((size (* (load-time-value (foreign-type-size :float)) (length vertex-array))))
+	   
+		   (setq storage-buffer (create-buffer-1 device size VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
+			 storage-buffer-memory (allocate-buffer-memory
+						device storage-buffer
+						(logior VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+							VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)))
+	    
+		   (bind-buffer-memory device storage-buffer storage-buffer-memory)
+		   (setf (allocated-memory storage-buffer) storage-buffer-memory)
+
+		   (with-foreign-object (pp-data :pointer)
+		     (vkMapMemory (h device) (h storage-buffer-memory) 0 size 0 pp-data)
+		     (sb-sys:with-pinned-objects
+		      (vertex-array)
+		      (memcpy (mem-aref pp-data :pointer) (sb-sys:vector-sap vertex-array) size))
+		     (vkUnmapMemory (h device) (h storage-buffer-memory)))
+				
+		   (let* ((uniform-range (* (load-time-value (foreign-type-size :float)) 16)))
+	     
+		     (setq uniform-buffer (create-uniform-buffer device uniform-range))
+
+		     (with-foreign-object (p-uniform '(:struct xform-uniform))
+		       (let ((p-matrix (foreign-slot-pointer p-uniform '(:struct xform-uniform) 'matrix)))
+			 
+			 (loop for i from 0 below 4
+			    do (loop for j from 0 below 4
+				  do (setf (mem-aref p-matrix :float (+ (* j 4) i)) (mcref4 matrix i j))
+				  finally (setf (foreign-slot-value p-uniform '(:struct xform-uniform) 'nverts) nverts))))
+
+		       (copy-uniform-buffer-memory device p-uniform
+						   (allocated-memory uniform-buffer) uniform-range))
+	    
+		     (setq ds (create-descriptor-set device (list dsl)
+						     (descriptor-pool device)
+						     :descriptor-buffer-info
+						     (list (make-instance 'descriptor-uniform-buffer-info
+									  :buffer uniform-buffer
+									  :range uniform-range)
+							   (make-instance 'descriptor-storage-buffer-info
+									  :buffer storage-buffer
+									  :range size))))
+		
+
+		     (begin-command-buffer command-buffer)
+	   
+		     (vkCmdBindPipeline (h command-buffer) VK_PIPELINE_BIND_POINT_COMPUTE (h pipeline))
+	   
+		     (cmd-bind-descriptor-sets command-buffer pipeline-layout (list ds) :compute)
+	     
+		     (vkCmdDispatch (h command-buffer) nverts 1 1)
+	     
+		     (vkEndCommandBuffer (h command-buffer))
+	     
+		     (with-vk-struct (p-submit-info VkSubmitInfo)
+		       (with-foreign-slots ((vk::commandBufferCount
+					     vk::pCommandBuffers)
+					    p-submit-info
+					    (:struct VkSubmitInfo))
+		 
+			 (with-foreign-object (p-command-buffer 'VkCommandBuffer)
+			   (setf (mem-aref p-command-buffer 'VkCommandBuffer) (h command-buffer))
+		   
+			   (setf vk::commandBufferCount 1
+				 vk::pCommandBuffers p-command-buffer)
+		   
+			   (vkQueueSubmit (h queue) 1 p-submit-info VK_NULL_HANDLE)
+		       
+			   (setq output-array
+				 (make-array (length vertex-array) :element-type 'single-float))
+		       
+			   (vkQueueWaitIdle (h queue))
+
+			   (with-foreign-object (pp-data :pointer)
+			     (vkMapMemory (h device) (h (allocated-memory storage-buffer)) 0 size 0 pp-data)
+			     (sb-sys:with-pinned-objects
+			      (output-array)
+			      (memcpy (sb-sys:vector-sap output-array) (mem-aref pp-data :pointer) size))
+			     (vkUnmapMemory (h device) (h (allocated-memory storage-buffer)))))))))
+	      
+	      #+NIL(when ds (free-descriptor-sets (list ds) (descriptor-pool device))) ;; just return to pool
+	      (when storage-buffer
+		(destroy-buffer storage-buffer))
+	      (when uniform-buffer
+		(destroy-buffer uniform-buffer)))))
       
-		    
-		    
+      (when pipeline (destroy-pipeline pipeline))
+      (when shader-module (destroy-shader-module shader-module))
+      (when pipeline-layout (destroy-pipeline-layout pipeline-layout))
+      (when dsl (destroy-descriptor-set-layout dsl)))
+    output-array))
+
+#+NIL
+(vktk::compute-transformation *d* (3d-matrices:nmrotate (3d-matrices::meye 4) (3d-vectors::vec3 0 0 1) 42) vktk::*test-verts*)
+
+(defcstruct ray-intersects-triangles-uniform
+  (matrix (:struct mat4))
+  (origin (:struct vec3))
+  (dir (:struct vec3))
+  (ntri :uint32))
+
+#+NIL(defun compute-ray-triangle-intersection (ray matrix vertices))

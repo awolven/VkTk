@@ -104,8 +104,9 @@
 	(ImGuiWindowFlags_NoScrollWithMouse #.(cl:ash 1 4))
 	(ImGuiWindowFlags_NoCollapse #.(cl:ash 1 5))
 	(ImGuiWindowFlags_AlwaysAutoResize #.(cl:ash 1 6))
+	(ImGuiWindowFlags_NoBackground #.(cl:ash 1 7))
 	(ImGuiWindowFlags_NoSavedSettings #.(cl:ash 1 8))
-	(ImGuiWindowFlags_NoInputs #.(cl:ash 1 9))
+	(ImGuiWindowFlags_NoMouseInputs #.(cl:ash 1 9))
 	(ImGuiWindowFlags_MenuBar #.(cl:ash 1 10))
 	(ImGuiWindowFlags_HorizontalScrollbar #.(cl:ash 1 11))
 	(ImGuiWindowFlags_NoFocusOnAppearing #.(cl:ash 1 12))
@@ -113,8 +114,27 @@
 	(ImGuiWindowFlags_AlwaysVerticalScrollbar #.(cl:ash 1 14))
 	(ImGuiWindowFlags_AlwaysHorizontalScrollbar #.(cl:ash 1 15))
 	(ImGuiWindowFlags_AlwaysUseWindowPadding #.(cl:ash 1 16))
-	(ImGuiWindowFlags_ResizeFromAnySide #.(cl:ash 1 17)))
-
+	;;(ImGuiWindowFlags_ResizeFromAnySide #.(cl:ash 1 17))
+	(ImGuiWindowFlags_NoNavInputs #.(cl:ash 1 18))
+	(ImGuiWindowFlags_NoNavFocus #.(cl:ash 1 19))
+	(ImGuiWindowFlags_UnsavedDocument #.(cl:ash 1 20))
+	(ImGuiWindowFlags_NoNav #.(cl:logior (cl:ash 1 18)
+					     (cl:ash 1 19)))
+	(ImGuiWindowFlags_NoDecoration #.(cl:logior (cl:ash 1 0)
+						    (cl:ash 1 1)
+						    (cl:ash 1 3)
+						    (cl:ash 1 5)))
+	(ImGuiWindowFlags_NoInputs #.(cl:logior (cl:ash 1 9)
+						(cl:ash 1 18)
+						(cl:ash 1 19)))
+	(ImGuiWindowFlags_NavFlattened #.(cl:ash 1 23))
+	(ImGuiWindowFlags_ChildWindow #.(cl:ash 1 24))
+	(ImGuiWindowFlags_Tooltip #.(cl:ash 1 25))
+	(ImGuiWindowFlags_Popup #.(cl:ash 1 26))
+	(ImGuiWindowFlags_Modal #.(cl:ash 1 27))
+	(ImGuiWindowFlags_ChildMenu #.(cl:ash 1 28)))
+	
+						
 (cffi:defcenum ImGuiInputTextFlags_
 	(ImGuiInputTextFlags_CharsDecimal #.(cl:ash 1 0))
 	(ImGuiInputTextFlags_CharsHexadecimal #.(cl:ash 1 1))
@@ -146,6 +166,7 @@
 	(ImGuiTreeNodeFlags_Leaf #.(cl:ash 1 8))
 	(ImGuiTreeNodeFlags_Bullet #.(cl:ash 1 9))
 	(ImGuiTreeNodeFlags_FramePadding #.(cl:ash 1 10))
+	(ImGuiTreeNodeFlags_NavLeftJumpsBackHere #.(cl:ash 1 13))
 	(ImGuiTreeNodeFlags_CollapsingHeader #.(cl:logior (cl:ash 1 1) (cl:ash 1 4))))
 
 (cffi:defcenum ImGuiSelectableFlags_
@@ -201,6 +222,7 @@
 	ImGuiKey_Space
 	ImGuiKey_Enter
 	ImGuiKey_Escape
+	ImGuiKey_KeyPadEnter
 	ImGuiKey_A
 	ImGuiKey_C
 	ImGuiKey_V
@@ -228,6 +250,7 @@
     ImGuiNavInput_TweakSlow
     ImGuiNavInput_TweakFast
     ImGuiNavInput_KeyMenu_
+    ImGuiNavInput_KeyTab_
     ImGuiNavInput_KeyLeft_
     ImGuiNavInput_KeyRight_
     ImGuiNavInput_KeyUp_
@@ -310,17 +333,18 @@
 	(ImGuiColorEditFlags_NoTooltip #.(cl:ash 1 6))
 	(ImGuiColorEditFlags_NoLabel #.(cl:ash 1 7))
 	(ImGuiColorEditFlags_NoSidePreview #.(cl:ash 1 8))
-	(ImGuiColorEditFlags_AlphaBar #.(cl:ash 1 9))
-	(ImGuiColorEditFlags_AlphaPreview #.(cl:ash 1 10))
-	(ImGuiColorEditFlags_AlphaPreviewHalf #.(cl:ash 1 11))
-	(ImGuiColorEditFlags_HDR #.(cl:ash 1 12))
-	(ImGuiColorEditFlags_RGB #.(cl:ash 1 13))
-	(ImGuiColorEditFlags_HSV #.(cl:ash 1 14))
-	(ImGuiColorEditFlags_HEX #.(cl:ash 1 15))
-	(ImGuiColorEditFlags_Uint8 #.(cl:ash 1 16))
-	(ImGuiColorEditFlags_Float #.(cl:ash 1 17))
-	(ImGuiColorEditFlags_PickerHueBar #.(cl:ash 1 18))
-	(ImGuiColorEditFlags_PickerHueWheel #.(cl:ash 1 19)))
+	(ImGuiColorEditFlags_NoDragDrop #.(cl:ash 1 9))
+	(ImGuiColorEditFlags_AlphaBar #.(cl:ash 1 16))
+	(ImGuiColorEditFlags_AlphaPreview #.(cl:ash 1 17))
+	(ImGuiColorEditFlags_AlphaPreviewHalf #.(cl:ash 1 18))
+	(ImGuiColorEditFlags_HDR #.(cl:ash 1 19))
+	(ImGuiColorEditFlags_RGB #.(cl:ash 1 20))
+	(ImGuiColorEditFlags_HSV #.(cl:ash 1 21))
+	(ImGuiColorEditFlags_HEX #.(cl:ash 1 22))
+	(ImGuiColorEditFlags_Uint8 #.(cl:ash 1 23))
+	(ImGuiColorEditFlags_Float #.(cl:ash 1 24))
+	(ImGuiColorEditFlags_PickerHueBar #.(cl:ash 1 25))
+	(ImGuiColorEditFlags_PickerHueWheel #.(cl:ash 1 26)))
 
 (cffi:defcenum ImGuiMouseCursor_
 	(ImGuiMouseCursor_None #.-1)
@@ -624,6 +648,8 @@
 	(ElemCount :unsigned-int)
 	(ClipRect (:struct ImVec4))
 	(TextureId :pointer)
+	(VtxOffset :unsigned-int)
+	(IdxOffset :unsigned-int)
 	(UserCallback :pointer)
 	(UserCallbackData :pointer))
 
@@ -823,7 +849,7 @@
 (cffi:defcfun ("igSetCurrentContext" igSetCurrentContext) :void
   (ctx :pointer))
 
-(cffi:defcfun ("igDebugCheckVersionAndDataLayout" igDebugCheckVersionAndDataLayout) :pointer
+(cffi:defcfun ("igDebugCheckVersionAndDataLayout" igDebugCheckVersionAndDataLayout) :bool
   (version_str :string)
   (sz_io :pointer)
   (sz_style :pointer)
@@ -855,7 +881,7 @@
 (cffi:defcfun ("igShowStyleEditor" igShowStyleEditor) :void
   (ref :pointer))
 
-(cffi:defcfun ("igShowStyleSelector" igShowStyleSelector) :pointer
+(cffi:defcfun ("igShowStyleSelector" igShowStyleSelector) :bool
   (label :string))
 
 (cffi:defcfun ("igShowFontSelector" igShowFontSelector) :void
@@ -874,7 +900,7 @@
 (cffi:defcfun ("igStyleColorsLight" igStyleColorsLight) :void
   (dst :pointer))
 
-(cffi:defcfun ("igBegin" igBegin) :pointer
+(cffi:defcfun ("igBegin" igBegin) :bool
   (name :string)
   (p_open :pointer)
   (flags :int))
@@ -883,22 +909,22 @@
 
 
 
-(cffi:defcfun ("igBeginChildID" igBeginChildID) :pointer
+(cffi:defcfun ("igBeginChildID" igBeginChildID) :bool
   (id :pointer)
   (size :pointer)
-  (border :pointer)
+  (border :bool)
   (flags :int))
 
 (cffi:defcfun ("igEndChild" igEndChild) :void)
 
-(cffi:defcfun ("igIsWindowAppearing" igIsWindowAppearing) :pointer)
+(cffi:defcfun ("igIsWindowAppearing" igIsWindowAppearing) :bool)
 
-(cffi:defcfun ("igIsWindowCollapsed" igIsWindowCollapsed) :pointer)
+(cffi:defcfun ("igIsWindowCollapsed" igIsWindowCollapsed) :bool)
 
-(cffi:defcfun ("igIsWindowFocused" igIsWindowFocused) :pointer
+(cffi:defcfun ("igIsWindowFocused" igIsWindowFocused) :bool
   (flags :int))
 
-(cffi:defcfun ("igIsWindowHovered" igIsWindowHovered) :pointer
+(cffi:defcfun ("igIsWindowHovered" igIsWindowHovered) :bool
   (flags :int))
 
 (cffi:defcfun ("igGetWindowDrawList" igGetWindowDrawList) :pointer)
@@ -920,7 +946,7 @@
 
 
 (cffi:defcfun ("igSetNextWindowCollapsed" igSetNextWindowCollapsed) :void
-  (collapsed :pointer)
+  (collapsed :bool)
   (cond :pointer))
 
 (cffi:defcfun ("igSetNextWindowFocus" igSetNextWindowFocus) :void)
@@ -931,7 +957,7 @@
 
 
 (cffi:defcfun ("igSetWindowCollapsedBool" igSetWindowCollapsedBool) :void
-  (collapsed :pointer)
+  (collapsed :bool)
   (cond :pointer))
 
 (cffi:defcfun ("igSetWindowFocus" igSetWindowFocus) :void)
@@ -943,7 +969,7 @@
 
 (cffi:defcfun ("igSetWindowCollapsedStr" igSetWindowCollapsedStr) :void
   (name :string)
-  (collapsed :pointer)
+  (collapsed :bool)
   (cond :pointer))
 
 (cffi:defcfun ("igSetWindowFocusStr" igSetWindowFocusStr) :void
@@ -1024,12 +1050,12 @@
 (cffi:defcfun ("igPopTextWrapPos" igPopTextWrapPos) :void)
 
 (cffi:defcfun ("igPushAllowKeyboardFocus" igPushAllowKeyboardFocus) :void
-  (allow_keyboard_focus :pointer))
+  (allow_keyboard_focus :bool))
 
 (cffi:defcfun ("igPopAllowKeyboardFocus" igPopAllowKeyboardFocus) :void)
 
 (cffi:defcfun ("igPushButtonRepeat" igPushButtonRepeat) :void
-  (repeat :pointer))
+  (repeat :bool))
 
 (cffi:defcfun ("igPopButtonRepeat" igPopButtonRepeat) :void)
 
@@ -1159,12 +1185,12 @@
 
 
 
-(cffi:defcfun ("igSmallButton" igSmallButton) :pointer
+(cffi:defcfun ("igSmallButton" igSmallButton) :bool
   (label :string))
 
 
 
-(cffi:defcfun ("igArrowButton" igArrowButton) :pointer
+(cffi:defcfun ("igArrowButton" igArrowButton) :bool
   (str_id :string)
   (dir :pointer))
 
@@ -1172,20 +1198,20 @@
 
 
 
-(cffi:defcfun ("igCheckbox" igCheckbox) :pointer
+(cffi:defcfun ("igCheckbox" igCheckbox) :bool
   (label :string)
   (v :pointer))
 
-(cffi:defcfun ("igCheckboxFlags" igCheckboxFlags) :pointer
+(cffi:defcfun ("igCheckboxFlags" igCheckboxFlags) :bool
   (label :string)
-  (flags :int)
+  (flags :pointer)
   (flags_value :unsigned-int))
 
-(cffi:defcfun ("igRadioButtonBool" igRadioButtonBool) :pointer
+(cffi:defcfun ("igRadioButtonBool" igRadioButtonBool) :bool
   (label :string)
-  (active :pointer))
+  (active :bool))
 
-(cffi:defcfun ("igRadioButtonIntPtr" igRadioButtonIntPtr) :pointer
+(cffi:defcfun ("igRadioButtonIntPtr" igRadioButtonIntPtr) :bool
   (label :string)
   (v :pointer)
   (v_button :int))
@@ -1197,27 +1223,27 @@
 
 (cffi:defcfun ("igBullet" igBullet) :void)
 
-(cffi:defcfun ("igBeginCombo" igBeginCombo) :pointer
+(cffi:defcfun ("igBeginCombo" igBeginCombo) :bool
   (label :string)
   (preview_value :string)
   (flags :int))
 
 (cffi:defcfun ("igEndCombo" igEndCombo) :void)
 
-(cffi:defcfun ("igCombo" igCombo) :pointer
+(cffi:defcfun ("igCombo" igCombo) :bool
   (label :string)
   (current_item :pointer)
   (items :pointer)
   (items_count :int)
   (popup_max_height_in_items :int))
 
-(cffi:defcfun ("igComboStr" igComboStr) :pointer
+(cffi:defcfun ("igComboStr" igComboStr) :bool
   (label :string)
   (current_item :pointer)
   (items_separated_by_zeros :string)
   (popup_max_height_in_items :int))
 
-(cffi:defcfun ("igComboFnPtr" igComboFnPtr) :pointer
+(cffi:defcfun ("igComboFnPtr" igComboFnPtr) :bool
   (label :string)
   (current_item :pointer)
   (items_getter :pointer)
@@ -1225,7 +1251,7 @@
   (items_count :int)
   (popup_max_height_in_items :int))
 
-(cffi:defcfun ("igDragFloat" igDragFloat) :pointer
+(cffi:defcfun ("igDragFloat" igDragFloat) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1234,7 +1260,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igDragFloat2" igDragFloat2) :pointer
+(cffi:defcfun ("igDragFloat2" igDragFloat2) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1243,7 +1269,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igDragFloat3" igDragFloat3) :pointer
+(cffi:defcfun ("igDragFloat3" igDragFloat3) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1252,7 +1278,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igDragFloat4" igDragFloat4) :pointer
+(cffi:defcfun ("igDragFloat4" igDragFloat4) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1261,7 +1287,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igDragFloatRange2" igDragFloatRange2) :pointer
+(cffi:defcfun ("igDragFloatRange2" igDragFloatRange2) :bool
   (label :string)
   (v_current_min :pointer)
   (v_current_max :pointer)
@@ -1272,7 +1298,7 @@
   (format_max :string)
   (power :float))
 
-(cffi:defcfun ("igDragInt" igDragInt) :pointer
+(cffi:defcfun ("igDragInt" igDragInt) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1280,7 +1306,7 @@
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igDragInt2" igDragInt2) :pointer
+(cffi:defcfun ("igDragInt2" igDragInt2) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1288,7 +1314,7 @@
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igDragInt3" igDragInt3) :pointer
+(cffi:defcfun ("igDragInt3" igDragInt3) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1296,7 +1322,7 @@
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igDragInt4" igDragInt4) :pointer
+(cffi:defcfun ("igDragInt4" igDragInt4) :bool
   (label :string)
   (v :pointer)
   (v_speed :float)
@@ -1304,7 +1330,7 @@
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igDragIntRange2" igDragIntRange2) :pointer
+(cffi:defcfun ("igDragIntRange2" igDragIntRange2) :bool
   (label :string)
   (v_current_min :pointer)
   (v_current_max :pointer)
@@ -1314,7 +1340,7 @@
   (format :string)
   (format_max :string))
 
-(cffi:defcfun ("igDragScalar" igDragScalar) :pointer
+(cffi:defcfun ("igDragScalar" igDragScalar) :bool
   (label :string)
   (data_type :pointer)
   (v :pointer)
@@ -1324,7 +1350,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igDragScalarN" igDragScalarN) :pointer
+(cffi:defcfun ("igDragScalarN" igDragScalarN) :bool
   (label :string)
   (data_type :pointer)
   (v :pointer)
@@ -1335,7 +1361,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igSliderFloat" igSliderFloat) :pointer
+(cffi:defcfun ("igSliderFloat" igSliderFloat) :bool
   (label :string)
   (v :pointer)
   (v_min :float)
@@ -1343,7 +1369,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igSliderFloat2" igSliderFloat2) :pointer
+(cffi:defcfun ("igSliderFloat2" igSliderFloat2) :bool
   (label :string)
   (v :pointer)
   (v_min :float)
@@ -1351,7 +1377,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igSliderFloat3" igSliderFloat3) :pointer
+(cffi:defcfun ("igSliderFloat3" igSliderFloat3) :bool
   (label :string)
   (v :pointer)
   (v_min :float)
@@ -1359,7 +1385,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igSliderFloat4" igSliderFloat4) :pointer
+(cffi:defcfun ("igSliderFloat4" igSliderFloat4) :bool
   (label :string)
   (v :pointer)
   (v_min :float)
@@ -1367,42 +1393,42 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igSliderAngle" igSliderAngle) :pointer
+(cffi:defcfun ("igSliderAngle" igSliderAngle) :bool
   (label :string)
   (v_rad :pointer)
   (v_degrees_min :float)
   (v_degrees_max :float)
   (format :string))
 
-(cffi:defcfun ("igSliderInt" igSliderInt) :pointer
+(cffi:defcfun ("igSliderInt" igSliderInt) :bool
   (label :string)
   (v :pointer)
   (v_min :int)
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igSliderInt2" igSliderInt2) :pointer
+(cffi:defcfun ("igSliderInt2" igSliderInt2) :bool
   (label :string)
   (v :pointer)
   (v_min :int)
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igSliderInt3" igSliderInt3) :pointer
+(cffi:defcfun ("igSliderInt3" igSliderInt3) :bool
   (label :string)
   (v :pointer)
   (v_min :int)
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igSliderInt4" igSliderInt4) :pointer
+(cffi:defcfun ("igSliderInt4" igSliderInt4) :bool
   (label :string)
   (v :pointer)
   (v_min :int)
   (v_max :int)
   (format :string))
 
-(cffi:defcfun ("igSliderScalar" igSliderScalar) :pointer
+(cffi:defcfun ("igSliderScalar" igSliderScalar) :bool
   (label :string)
   (data_type :pointer)
   (v :pointer)
@@ -1411,7 +1437,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igSliderScalarN" igSliderScalarN) :pointer
+(cffi:defcfun ("igSliderScalarN" igSliderScalarN) :bool
   (label :string)
   (data_type :pointer)
   (v :pointer)
@@ -1421,7 +1447,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igVSliderScalar" igVSliderScalar) :pointer
+(cffi:defcfun ("igVSliderScalar" igVSliderScalar) :bool
   (label :string)
   (size :pointer)
   (data_type :pointer)
@@ -1431,7 +1457,7 @@
   (format :string)
   (power :float))
 
-(cffi:defcfun ("igInputText" igInputText) :pointer
+(cffi:defcfun ("igInputText" igInputText) :bool
   (label :string)
   (buf :string)
   (buf_size :pointer)
@@ -1439,7 +1465,7 @@
   (callback :pointer)
   (user_data :pointer))
 
-(cffi:defcfun ("igInputFloat" igInputFloat) :pointer
+(cffi:defcfun ("igInputFloat" igInputFloat) :bool
   (label :string)
   (v :pointer)
   (step :float)
@@ -1447,47 +1473,47 @@
   (format :string)
   (flags :int))
 
-(cffi:defcfun ("igInputFloat2" igInputFloat2) :pointer
+(cffi:defcfun ("igInputFloat2" igInputFloat2) :bool
   (label :string)
   (v :pointer)
   (format :string)
   (flags :int))
 
-(cffi:defcfun ("igInputFloat3" igInputFloat3) :pointer
+(cffi:defcfun ("igInputFloat3" igInputFloat3) :bool
   (label :string)
   (v :pointer)
   (format :string)
   (flags :int))
 
-(cffi:defcfun ("igInputFloat4" igInputFloat4) :pointer
+(cffi:defcfun ("igInputFloat4" igInputFloat4) :bool
   (label :string)
   (v :pointer)
   (format :string)
   (flags :int))
 
-(cffi:defcfun ("igInputInt" igInputInt) :pointer
+(cffi:defcfun ("igInputInt" igInputInt) :bool
   (label :string)
   (v :pointer)
   (step :int)
   (step_fast :int)
   (flags :int))
 
-(cffi:defcfun ("igInputInt2" igInputInt2) :pointer
+(cffi:defcfun ("igInputInt2" igInputInt2) :bool
   (label :string)
   (v :pointer)
   (flags :int))
 
-(cffi:defcfun ("igInputInt3" igInputInt3) :pointer
+(cffi:defcfun ("igInputInt3" igInputInt3) :bool
   (label :string)
   (v :pointer)
   (flags :int))
 
-(cffi:defcfun ("igInputInt4" igInputInt4) :pointer
+(cffi:defcfun ("igInputInt4" igInputInt4) :bool
   (label :string)
   (v :pointer)
   (flags :int))
 
-(cffi:defcfun ("igInputDouble" igInputDouble) :pointer
+(cffi:defcfun ("igInputDouble" igInputDouble) :bool
   (label :string)
   (v :pointer)
   (step :double)
@@ -1495,7 +1521,7 @@
   (format :string)
   (flags :int))
 
-(cffi:defcfun ("igInputScalar" igInputScalar) :pointer
+(cffi:defcfun ("igInputScalar" igInputScalar) :bool
   (label :string)
   (data_type :pointer)
   (v :pointer)
@@ -1504,7 +1530,7 @@
   (format :string)
   (flags :int))
 
-(cffi:defcfun ("igInputScalarN" igInputScalarN) :pointer
+(cffi:defcfun ("igInputScalarN" igInputScalarN) :bool
   (label :string)
   (data_type :pointer)
   (v :pointer)
@@ -1514,22 +1540,22 @@
   (format :string)
   (flags :int))
 
-(cffi:defcfun ("igColorEdit3" igColorEdit3) :pointer
+(cffi:defcfun ("igColorEdit3" igColorEdit3) :bool
   (label :string)
   (col :pointer)
   (flags :int))
 
-(cffi:defcfun ("igColorEdit4" igColorEdit4) :pointer
+(cffi:defcfun ("igColorEdit4" igColorEdit4) :bool
   (label :string)
   (col :pointer)
   (flags :int))
 
-(cffi:defcfun ("igColorPicker3" igColorPicker3) :pointer
+(cffi:defcfun ("igColorPicker3" igColorPicker3) :bool
   (label :string)
   (col :pointer)
   (flags :int))
 
-(cffi:defcfun ("igColorPicker4" igColorPicker4) :pointer
+(cffi:defcfun ("igColorPicker4" igColorPicker4) :bool
   (label :string)
   (col :pointer)
   (flags :int)
@@ -1540,52 +1566,52 @@
 (cffi:defcfun ("igSetColorEditOptions" igSetColorEditOptions) :void
   (flags :int))
 
-(cffi:defcfun ("igTreeNodeStr" igTreeNodeStr) :pointer
+(cffi:defcfun ("igTreeNodeStr" igTreeNodeStr) :bool
   (label :string))
 
-(cffi:defcfun ("igTreeNodeStrStr" igTreeNodeStrStr) :pointer
+(cffi:defcfun ("igTreeNodeStrStr" igTreeNodeStrStr) :bool
   (str_id :string)
   (fmt :string)
   cl::&rest)
 
-(cffi:defcfun ("igTreeNodePtr" igTreeNodePtr) :pointer
+(cffi:defcfun ("igTreeNodePtr" igTreeNodePtr) :bool
   (ptr_id :pointer)
   (fmt :string)
   cl::&rest)
 
-(cffi:defcfun ("igTreeNodeVStr" igTreeNodeVStr) :pointer
+(cffi:defcfun ("igTreeNodeVStr" igTreeNodeVStr) :bool
   (str_id :string)
   (fmt :string)
   (args :pointer))
 
-(cffi:defcfun ("igTreeNodeVPtr" igTreeNodeVPtr) :pointer
+(cffi:defcfun ("igTreeNodeVPtr" igTreeNodeVPtr) :bool
   (ptr_id :pointer)
   (fmt :string)
   (args :pointer))
 
-(cffi:defcfun ("igTreeNodeExStr" igTreeNodeExStr) :pointer
+(cffi:defcfun ("igTreeNodeExStr" igTreeNodeExStr) :bool
   (label :string)
   (flags :int))
 
-(cffi:defcfun ("igTreeNodeExStrStr" igTreeNodeExStrStr) :pointer
+(cffi:defcfun ("igTreeNodeExStrStr" igTreeNodeExStrStr) :bool
   (str_id :string)
   (flags :int)
   (fmt :string)
   cl::&rest)
 
-(cffi:defcfun ("igTreeNodeExPtr" igTreeNodeExPtr) :pointer
+(cffi:defcfun ("igTreeNodeExPtr" igTreeNodeExPtr) :bool
   (ptr_id :pointer)
   (flags :int)
   (fmt :string)
   cl::&rest)
 
-(cffi:defcfun ("igTreeNodeExVStr" igTreeNodeExVStr) :pointer
+(cffi:defcfun ("igTreeNodeExVStr" igTreeNodeExVStr) :bool
   (str_id :string)
   (flags :int)
   (fmt :string)
   (args :pointer))
 
-(cffi:defcfun ("igTreeNodeExVPtr" igTreeNodeExVPtr) :pointer
+(cffi:defcfun ("igTreeNodeExVPtr" igTreeNodeExVPtr) :bool
   (ptr_id :pointer)
   (flags :int)
   (fmt :string)
@@ -1604,14 +1630,14 @@
 (cffi:defcfun ("igGetTreeNodeToLabelSpacing" igGetTreeNodeToLabelSpacing) :float)
 
 (cffi:defcfun ("igSetNextTreeNodeOpen" igSetNextTreeNodeOpen) :void
-  (is_open :pointer)
+  (is_open :bool)
   (cond :pointer))
 
-(cffi:defcfun ("igCollapsingHeader" igCollapsingHeader) :pointer
+(cffi:defcfun ("igCollapsingHeader" igCollapsingHeader) :bool
   (label :string)
   (flags :int))
 
-(cffi:defcfun ("igCollapsingHeaderBoolPtr" igCollapsingHeaderBoolPtr) :pointer
+(cffi:defcfun ("igCollapsingHeaderBoolPtr" igCollapsingHeaderBoolPtr) :bool
   (label :string)
   (p_open :pointer)
   (flags :int))
@@ -1620,14 +1646,14 @@
 
 
 
-(cffi:defcfun ("igListBoxStr_arr" igListBoxStr_arr) :pointer
+(cffi:defcfun ("igListBoxStr_arr" igListBoxStr_arr) :bool
   (label :string)
   (current_item :pointer)
   (items :pointer)
   (items_count :int)
   (height_in_items :int))
 
-(cffi:defcfun ("igListBoxFnPtr" igListBoxFnPtr) :pointer
+(cffi:defcfun ("igListBoxFnPtr" igListBoxFnPtr) :bool
   (label :string)
   (current_item :pointer)
   (items_getter :pointer)
@@ -1637,7 +1663,7 @@
 
 
 
-(cffi:defcfun ("igListBoxHeaderInt" igListBoxHeaderInt) :pointer
+(cffi:defcfun ("igListBoxHeaderInt" igListBoxHeaderInt) :bool
   (label :string)
   (items_count :int)
   (height_in_items :int))
@@ -1648,7 +1674,7 @@
 
 (cffi:defcfun ("igValueBool" igValueBool) :void
   (prefix :string)
-  (b :pointer))
+  (b :bool))
 
 (cffi:defcfun ("igValueInt" igValueInt) :void
   (prefix :string)
@@ -1663,31 +1689,31 @@
   (v :float)
   (float_format :string))
 
-(cffi:defcfun ("igBeginMainMenuBar" igBeginMainMenuBar) :pointer)
+(cffi:defcfun ("igBeginMainMenuBar" igBeginMainMenuBar) :bool)
 
 (cffi:defcfun ("igEndMainMenuBar" igEndMainMenuBar) :void)
 
-(cffi:defcfun ("igBeginMenuBar" igBeginMenuBar) :pointer)
+(cffi:defcfun ("igBeginMenuBar" igBeginMenuBar) :bool)
 
 (cffi:defcfun ("igEndMenuBar" igEndMenuBar) :void)
 
-(cffi:defcfun ("igBeginMenu" igBeginMenu) :pointer
+(cffi:defcfun ("igBeginMenu" igBeginMenu) :bool
   (label :string)
-  (enabled :pointer))
+  (enabled :bool))
 
 (cffi:defcfun ("igEndMenu" igEndMenu) :void)
 
-(cffi:defcfun ("igMenuItemBool" igMenuItemBool) :pointer
+(cffi:defcfun ("igMenuItemBool" igMenuItemBool) :bool
   (label :string)
   (shortcut :string)
-  (selected :pointer)
-  (enabled :pointer))
+  (selected :bool)
+  (enabled :bool))
 
-(cffi:defcfun ("igMenuItemBoolPtr" igMenuItemBoolPtr) :pointer
+(cffi:defcfun ("igMenuItemBoolPtr" igMenuItemBoolPtr) :bool
   (label :string)
   (shortcut :string)
   (p_selected :pointer)
-  (enabled :pointer))
+  (enabled :bool))
 
 (cffi:defcfun ("igBeginTooltip" igBeginTooltip) :void)
 
@@ -1704,35 +1730,35 @@
 (cffi:defcfun ("igOpenPopup" igOpenPopup) :void
   (str_id :string))
 
-(cffi:defcfun ("igBeginPopup" igBeginPopup) :pointer
+(cffi:defcfun ("igBeginPopup" igBeginPopup) :bool
   (str_id :string)
   (flags :int))
 
-(cffi:defcfun ("igBeginPopupContextItem" igBeginPopupContextItem) :pointer
+(cffi:defcfun ("igBeginPopupContextItem" igBeginPopupContextItem) :bool
   (str_id :string)
   (mouse_button :int))
 
-(cffi:defcfun ("igBeginPopupContextWindow" igBeginPopupContextWindow) :pointer
+(cffi:defcfun ("igBeginPopupContextWindow" igBeginPopupContextWindow) :bool
   (str_id :string)
   (mouse_button :int)
   (also_over_items :pointer))
 
-(cffi:defcfun ("igBeginPopupContextVoid" igBeginPopupContextVoid) :pointer
+(cffi:defcfun ("igBeginPopupContextVoid" igBeginPopupContextVoid) :bool
   (str_id :string)
   (mouse_button :int))
 
-(cffi:defcfun ("igBeginPopupModal" igBeginPopupModal) :pointer
+(cffi:defcfun ("igBeginPopupModal" igBeginPopupModal) :bool
   (name :string)
   (p_open :pointer)
   (flags :int))
 
 (cffi:defcfun ("igEndPopup" igEndPopup) :void)
 
-(cffi:defcfun ("igOpenPopupOnItemClick" igOpenPopupOnItemClick) :pointer
+(cffi:defcfun ("igOpenPopupOnItemClick" igOpenPopupOnItemClick) :bool
   (str_id :string)
   (mouse_button :int))
 
-(cffi:defcfun ("igIsPopupOpen" igIsPopupOpen) :pointer
+(cffi:defcfun ("igIsPopupOpen" igIsPopupOpen) :bool
   (str_id :string))
 
 (cffi:defcfun ("igCloseCurrentPopup" igCloseCurrentPopup) :void)
@@ -1740,7 +1766,7 @@
 (cffi:defcfun ("igColumns" igColumns) :void
   (count :int)
   (id :string)
-  (border :pointer))
+  (border :bool))
 
 (cffi:defcfun ("igNextColumn" igNextColumn) :void)
 
@@ -1762,13 +1788,13 @@
 
 (cffi:defcfun ("igGetColumnsCount" igGetColumnsCount) :int)
 
-(cffi:defcfun ("igBeginTabBar" igBeginTabBar) :pointer
+(cffi:defcfun ("igBeginTabBar" igBeginTabBar) :bool
   (str_id :string)
   (flags :int))
 
 (cffi:defcfun ("igEndTabBar" igEndTabBar) :void)
 
-(cffi:defcfun ("igBeginTabItem" igBeginTabItem) :pointer
+(cffi:defcfun ("igBeginTabItem" igBeginTabItem) :bool
   (label :string)
   (p_open :pointer)
   (flags :int))
@@ -1792,10 +1818,10 @@
 
 (cffi:defcfun ("igLogButtons" igLogButtons) :void)
 
-(cffi:defcfun ("igBeginDragDropSource" igBeginDragDropSource) :pointer
+(cffi:defcfun ("igBeginDragDropSource" igBeginDragDropSource) :bool
   (flags :int))
 
-(cffi:defcfun ("igSetDragDropPayload" igSetDragDropPayload) :pointer
+(cffi:defcfun ("igSetDragDropPayload" igSetDragDropPayload) :bool
   (type :string)
   (data :pointer)
   (size :pointer)
@@ -1803,7 +1829,7 @@
 
 (cffi:defcfun ("igEndDragDropSource" igEndDragDropSource) :void)
 
-(cffi:defcfun ("igBeginDragDropTarget" igBeginDragDropTarget) :pointer)
+(cffi:defcfun ("igBeginDragDropTarget" igBeginDragDropTarget) :bool)
 
 (cffi:defcfun ("igAcceptDragDropPayload" igAcceptDragDropPayload) :pointer
   (type :string)
@@ -1822,38 +1848,38 @@
 (cffi:defcfun ("igSetKeyboardFocusHere" igSetKeyboardFocusHere) :void
   (offset :int))
 
-(cffi:defcfun ("igIsItemHovered" igIsItemHovered) :pointer
+(cffi:defcfun ("igIsItemHovered" igIsItemHovered) :bool
   (flags :int))
 
-(cffi:defcfun ("igIsItemActive" igIsItemActive) :pointer)
+(cffi:defcfun ("igIsItemActive" igIsItemActive) :bool)
 
-(cffi:defcfun ("igIsItemFocused" igIsItemFocused) :pointer)
+(cffi:defcfun ("igIsItemFocused" igIsItemFocused) :bool)
 
-(cffi:defcfun ("igIsItemClicked" igIsItemClicked) :pointer
+(cffi:defcfun ("igIsItemClicked" igIsItemClicked) :bool
   (mouse_button :int))
 
-(cffi:defcfun ("igIsItemVisible" igIsItemVisible) :pointer)
+(cffi:defcfun ("igIsItemVisible" igIsItemVisible) :bool)
 
-(cffi:defcfun ("igIsItemEdited" igIsItemEdited) :pointer)
+(cffi:defcfun ("igIsItemEdited" igIsItemEdited) :bool)
 
-(cffi:defcfun ("igIsItemActivated" igIsItemActivated) :pointer)
+(cffi:defcfun ("igIsItemActivated" igIsItemActivated) :bool)
 
-(cffi:defcfun ("igIsItemDeactivated" igIsItemDeactivated) :pointer)
+(cffi:defcfun ("igIsItemDeactivated" igIsItemDeactivated) :bool)
 
-(cffi:defcfun ("igIsItemDeactivatedAfterEdit" igIsItemDeactivatedAfterEdit) :pointer)
+(cffi:defcfun ("igIsItemDeactivatedAfterEdit" igIsItemDeactivatedAfterEdit) :bool)
 
-(cffi:defcfun ("igIsAnyItemHovered" igIsAnyItemHovered) :pointer)
+(cffi:defcfun ("igIsAnyItemHovered" igIsAnyItemHovered) :bool)
 
-(cffi:defcfun ("igIsAnyItemActive" igIsAnyItemActive) :pointer)
+(cffi:defcfun ("igIsAnyItemActive" igIsAnyItemActive) :bool)
 
-(cffi:defcfun ("igIsAnyItemFocused" igIsAnyItemFocused) :pointer)
+(cffi:defcfun ("igIsAnyItemFocused" igIsAnyItemFocused) :bool)
 
 
 (cffi:defcfun ("igSetItemAllowOverlap" igSetItemAllowOverlap) :void)
 
 
 
-(cffi:defcfun ("igIsRectVisibleVec2" igIsRectVisibleVec2) :pointer
+(cffi:defcfun ("igIsRectVisibleVec2" igIsRectVisibleVec2) :bool
   (rect_min :pointer)
   (rect_max :pointer))
 
@@ -1892,14 +1918,14 @@
 (cffi:defcfun ("igGetKeyIndex" igGetKeyIndex) :int
   (imgui_key :pointer))
 
-(cffi:defcfun ("igIsKeyDown" igIsKeyDown) :pointer
+(cffi:defcfun ("igIsKeyDown" igIsKeyDown) :bool
   (user_key_index :int))
 
-(cffi:defcfun ("igIsKeyPressed" igIsKeyPressed) :pointer
+(cffi:defcfun ("igIsKeyPressed" igIsKeyPressed) :bool
   (user_key_index :int)
-  (repeat :pointer))
+  (repeat :bool))
 
-(cffi:defcfun ("igIsKeyReleased" igIsKeyReleased) :pointer
+(cffi:defcfun ("igIsKeyReleased" igIsKeyReleased) :bool
   (user_key_index :int))
 
 (cffi:defcfun ("igGetKeyPressedAmount" igGetKeyPressedAmount) :int
@@ -1907,28 +1933,28 @@
   (repeat_delay :float)
   (rate :float))
 
-(cffi:defcfun ("igIsMouseDown" igIsMouseDown) :pointer
+(cffi:defcfun ("igIsMouseDown" igIsMouseDown) :bool
   (button :int))
 
-(cffi:defcfun ("igIsAnyMouseDown" igIsAnyMouseDown) :pointer)
+(cffi:defcfun ("igIsAnyMouseDown" igIsAnyMouseDown) :bool)
 
-(cffi:defcfun ("igIsMouseClicked" igIsMouseClicked) :pointer
+(cffi:defcfun ("igIsMouseClicked" igIsMouseClicked) :bool
   (button :int)
-  (repeat :pointer))
+  (repeat :bool))
 
-(cffi:defcfun ("igIsMouseDoubleClicked" igIsMouseDoubleClicked) :pointer
+(cffi:defcfun ("igIsMouseDoubleClicked" igIsMouseDoubleClicked) :bool
   (button :int))
 
-(cffi:defcfun ("igIsMouseReleased" igIsMouseReleased) :pointer
+(cffi:defcfun ("igIsMouseReleased" igIsMouseReleased) :bool
   (button :int))
 
-(cffi:defcfun ("igIsMouseDragging" igIsMouseDragging) :pointer
+(cffi:defcfun ("igIsMouseDragging" igIsMouseDragging) :bool
   (button :int)
   (lock_threshold :float))
 
 
 
-(cffi:defcfun ("igIsMousePosValid" igIsMousePosValid) :pointer
+(cffi:defcfun ("igIsMousePosValid" igIsMousePosValid) :bool
   (mouse_pos :pointer))
 
 
@@ -1943,10 +1969,10 @@
   (type :pointer))
 
 (cffi:defcfun ("igCaptureKeyboardFromApp" igCaptureKeyboardFromApp) :void
-  (want_capture_keyboard_value :pointer))
+  (want_capture_keyboard_value :bool))
 
 (cffi:defcfun ("igCaptureMouseFromApp" igCaptureMouseFromApp) :void
-  (want_capture_mouse_value :pointer))
+  (want_capture_mouse_value :bool))
 
 (cffi:defcfun ("igGetClipboardText" igGetClipboardText) :string)
 
@@ -2720,7 +2746,7 @@
   (pOut :pointer)
   (text :string)
   (text_end :string)
-  (hide_text_after_double_hash :pointer)
+  (hide_text_after_double_hash :bool)
   (wrap_width :float))
 
 
@@ -4553,7 +4579,7 @@
 (cffi:defcfun ("_igBeginChild" igBeginChild) :int
   (str_id :string)
   (size :pointer)
-  (border :int)
+  (border :bool)
   (extra_flags :int))
 
 (cffi:defcfun ("_igSetNextWindowPos" igSetNextWindowPos) :void
@@ -4615,74 +4641,74 @@
   (larg2 :string)
   (larg3 :pointer))
 
-(cffi:defcfun ("_igButton" igButton) :int
+(cffi:defcfun ("_igButton" igButton) :bool
   (label :string)
   (size :pointer))
 
-(cffi:defcfun ("_igInvisibleButton" igInvisibleButton) :int
+(cffi:defcfun ("_igInvisibleButton" igInvisibleButton) :bool
   (str_id :string)
   (size :pointer))
 
 (cffi:defcfun ("_igImage" igImage) :void
-  (larg1 :pointer)
-  (larg2 :pointer)
-  (larg3 :pointer)
-  (larg4 :pointer)
-  (larg5 :pointer)
-  (larg6 :pointer))
+  (user-texture-id :pointer)
+  (size :pointer)
+  (uv0 :pointer)
+  (uv1 :pointer)
+  (tint-col :pointer)
+  (border-col :pointer))
 
 (cffi:defcfun ("_igImageButton" igImageButton) :int
-  (larg1 :pointer)
-  (larg2 :pointer)
-  (larg3 :pointer)
-  (larg4 :pointer)
-  (larg5 :int)
-  (larg6 :pointer)
-  (larg7 :pointer))
+  (user-texture-id :pointer)
+  (size :pointer)
+  (uv0 :pointer)
+  (uv1 :pointer)
+  (frame-padding :int)
+  (bg-col :pointer)
+  (tint-col :pointer))
 
 (cffi:defcfun ("_igPlotLines" igPlotLines) :void
-  (larg1 :string)
-  (larg2 :pointer)
-  (larg3 :int)
-  (larg4 :int)
-  (larg5 :string)
-  (larg6 :float)
-  (larg7 :float)
-  (larg8 :pointer)
-  (larg9 :int))
+  (label :string)
+  (values :pointer)
+  (values-count :int)
+  (values-offset :int)
+  (overlay-text :string)
+  (scale-min :float)
+  (scale-max :float)
+  (graph-size :pointer)
+  (stride :int))
 
 (cffi:defcfun ("_igPlotLinesFnPtr" igPlotLinesFnPtr) :void
-  (larg1 :string)
-  (larg2 :pointer)
-  (larg3 :pointer)
-  (larg4 :int)
-  (larg5 :int)
-  (larg6 :string)
-  (larg7 :float)
-  (larg8 :float)
-  (larg9 :pointer))
+  (label :string)
+  (values-getter-callback :pointer)
+  (data :pointer)
+  (values-count :int)
+  (values-offset :int)
+  (overlay-text :string)
+  (scale-min :float)
+  (scale-max :float)
+  (graph-size :pointer))
 
 (cffi:defcfun ("_igPlotHistogramFloatPtr" igPlotHistogramFloatPtr) :void
-  (larg1 :string)
-  (larg2 :pointer)
-  (larg3 :int)
-  (larg4 :int)
-  (larg5 :string)
-  (larg6 :float)
-  (larg7 :float)
-  (larg8 :pointer)
-  (larg9 :int))
+  (label :string)
+  (values :pointer)
+  (values-count :int)
+  (values-offset :int)
+  (overlay-text :string)
+  (scale-min :float)
+  (scale-max :float)
+  (graph-size :pointer)
+  (stride :int))
 
 (cffi:defcfun ("_igPlotHistogramFnPtr" igPlotHistogramFnPtr) :void
-  (larg1 :string)
-  (larg2 :pointer)
-  (larg3 :pointer)
-  (larg4 :int)
-  (larg5 :int)
-  (larg6 :string)
-  (larg7 :float)
-  (larg8 :float)
-  (larg9 :pointer))
+  (label :string)
+  (values-getter-callback :pointer)
+  (data :pointer)
+  (values-count :int)
+  (values-offset :int)
+  (overlay-text :string)
+  (scale-min :float)
+  (scale-max :float)
+  (graph-size :pointer))
 
 (cffi:defcfun ("_igInputTextMultiline" igInputTextMultiline) :int
   (label :string)
@@ -4740,7 +4766,7 @@
 (cffi:defcfun ("_igIsRectVisible" igIsRectVisible) :int
   (size :pointer))
 
-(cffi:defcfun ("_igBeginChildFrame" igBeginChildFrame) :int
+(cffi:defcfun ("_igBeginChildFrame" igBeginChildFrame) :bool
   (id :pointer)
   (size :pointer)
   (flags :int))

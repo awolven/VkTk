@@ -25,7 +25,10 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 layout (triangles) in;
 layout (triangle_strip, max_vertices = 3) out;
 layout (location = 0) in vec3 fragColorIn[];
+//layout (location = 1) in vec3 colorIn[];
+
 layout (location = 0) out vec3 fragColorOut;
+//layout (location = 1) out vec3 viewPositionOut;
 
 layout(set = 0, binding = 1) uniform UniformBufferObject {
   mat4 proj;
@@ -36,8 +39,10 @@ layout(set = 0, binding = 1) uniform UniformBufferObject {
 void vertex_out(int i, bool highlight) {
   gl_Position = ubo.proj * gl_in[i].gl_Position;
   if (highlight) {
+    //    viewPositionOut = viewPositionIn[i];
     fragColorOut = vec3(0.0, 0.0, 1.0);
   } else {
+    //    viewPositionOut = viewPositionIn[i];
     fragColorOut = fragColorIn[i];
   }
   EmitVertex();
@@ -52,6 +57,8 @@ void vertices_out(bool highlight) {
 
 void main()
 {
+  vec3 xTangent[3];
+  vec3 yTangent[3];
 
   vec3 edge1, edge2;
   vec3 input0, input1, input2;
