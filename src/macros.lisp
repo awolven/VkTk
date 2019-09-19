@@ -90,3 +90,52 @@
 
 (defmacro api-version (major minor patch)
   `(logior (ash ,major 22) (ash ,minor 12) ,patch))
+
+(defmacro with-viewport ((var &key width height
+			      (x 0.0f0)
+			      (y 0.0f0)
+			      (min-depth 0.0f0)
+			      (max-depth 1.0f0))
+			 &body body)
+  `(with-vk-struct (,var VkViewport)
+     (with-foreign-slots ((vk::x
+			   vk::y
+			   vk::width
+			   vk::height
+			   vk::minDepth
+			   vk::maxDepth)
+			  ,var
+			  (:struct VkViewport))
+       (setf vk::x (coerce ,x 'single-float)
+	     vk::y (coerce ,y 'single-float)
+	     vk::width (coerce ,width 'single-float)
+	     vk::height (coerce ,height 'single-float)
+	     vk::minDepth (coerce ,min-depth 'single-float)
+	     vk::maxDepth (coerce ,max-depth 'single-float))
+       ,@body)))
+
+(defmacro with-scissor ((var &key width height
+			     (x 0) (y 0))
+			&body body)
+  (let ((p-offset-sym (gensym "P-OFFSET-"))
+	(p-extent-sym (gensym "P-EXTENT-"))
+	(width-sym (gensym "WIDTH-"))
+	(height-sym (gensym "HEIGHT-"))
+	(x-sym (gensym "X-"))
+	(y-sym (gensym "Y-")))
+    `(let ((,x-sym ,x)
+	   (,y-sym ,y)
+	   (,width-sym ,width)
+	   (,height-sym ,height))
+       (with-vk-struct (,var VkRect2D)
+	 (let ((,p-offset-sym
+		(foreign-slot-pointer ,var '(:struct VkRect2D) 'vk::offset))
+	       (,p-extent-sym
+		(foreign-slot-pointer ,var '(:struct VkRect2D) 'vk::extent)))
+	   (with-foreign-slots ((vk::x vk::y) ,p-offset-sym (:struct VkOffset2D))
+	     (with-foreign-slots ((vk::width vk::height) ,p-extent-sym (:struct VkExtent2D))
+	       (setf vk::x (round ,x-sym)
+		     vk::y (round ,y-sym)
+		     vk::width (round ,width-sym)
+		     vk::height (round ,height-sym))
+	       ,@body)))))))

@@ -29,6 +29,7 @@
 	   #:end
 	   #:set-next-window-pos
 	   #:set-next-window-size
+	   #:set-cursor-screen-pos
 	   #:text
 	   #:push-item-width
 	   #:pop-item-width
@@ -112,6 +113,7 @@
 	   #:input-double
 	   #:input-scalar
 	   #:input-scalar-n
+	   #:color-edit
 	   #:color-edit3
 	   #:color-edit4
 	   #:color-picker3

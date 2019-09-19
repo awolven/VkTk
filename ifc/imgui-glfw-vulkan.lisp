@@ -572,6 +572,7 @@
     (setf (pipeline app) nil))
   (values))
 
+#+windows
 (defcfun ("glfwGetWin32Window" glfwGetWin32Window) :pointer
   (window :pointer))
 
@@ -583,24 +584,13 @@
 
 (defcallback imgui-mouse-button-callback :void ((user-data :pointer) (button :int) (action :int) (mods :int))
   (declare (ignorable user-data mods))
-  (let* ((window (find-window user-data))
-	 (imgui (imgui-module (application window))))
-    (when (and (eq action GLFW_PRESS)
-	       (>= button 0)
-	       (< button 3))
-      (setf (elt (mouse-pressed imgui) button) t)
-      (let ((scene (slot-value (face-renderer (application window)) 'scene))) ;; fixme make scene slot of app
-	(setf (elt (igp::camera-mode scene) button)
-	      (if (elt (igp::camera-mode scene) button)
-		  nil
-		  (append (multiple-value-list (get-cursor-pos window))
-			  (list (slot-value (slot-value scene 'igp::camera) 'igp::elevation)
-				(slot-value (slot-value scene 'igp::camera) 'igp::azimuth))))))))
+  (let* ((window (find-window user-data)))
+    (on-mouse-button window button action))
   (values))
 
 (defcallback imgui-scroll-callback :void ((user-data :pointer) (xoffset :double) (yoffset :double))
   (declare (ignorable user-data xoffset))
-  (vktk::imgui-scroll-event (find-window user-data) yoffset)
+  (imgui-scroll-event (find-window user-data) yoffset)
   (values))
 
 (defcallback imgui-key-callback :void ((user-data :pointer) (key :int) (arg2 :int) (action :int) (mods :int))

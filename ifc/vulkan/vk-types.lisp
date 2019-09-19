@@ -48,6 +48,9 @@ MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
 
 (cl:in-package #:vulkan)
 
+(cl:defconstant VK_TRUE 1)
+(cl:defconstant VK_FALSE 0)
+
 (cl:defparameter *known-extension-names*
   '("VK_KHR_surface"
     "VK_KHR_swapchain"

@@ -24,8 +24,6 @@
 (defvar *debug* #+windows 1 #+darwin nil)
 
 (defconstant +NULL+ 0)
-(defconstant VK_TRUE 1)
-(defconstant VK_FALSE 0)
 (defconstant IMGUI_MAX_POSSIBLE_BACK_BUFFERS 16)
 (defconstant UINT64_MAX #.(1- (expt 2 64)))
 

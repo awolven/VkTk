@@ -31,11 +31,16 @@
 
 (defparameter *home-dir* #+darwin "/Users/awolven" #+windows "C:/Users/awolven")
 
-(defparameter *vktk-dir* (concatenate 'string *home-dir* "/vktk"))
+(defparameter *vktk-dir* (asdf/system:system-relative-pathname :vktk ""))
 
 (defparameter *vulkan-sdk-path*
   #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.106.0/macOS")
-  #+windows "C:/VulkanSDK/1.1.97.0")
+  #+windows "C:/VulkanSDK/1.1.121.0")
+
+(defparameter *libshaderc-path*
+  #+windows (concatenate
+	     'string *home-dir*
+	     "/Documents/Visual Studio 2015/projects/shaderc_wrap/x64/Debug/shaderc_wrap.dll"))
 )
 
 #+darwin
@@ -50,15 +55,15 @@
 
 (my-define-foreign-library vulkan-loader
   (:darwin "libvulkan.1.dylib")
-  (:windows (concatenate 'string *vulkan-sdk-path* "/Source/lib/vulkan-1.dll")))
+  (:windows "vulkan-1.dll"))
 
 (my-define-foreign-library cimgui
-  (:darwin (concatenate 'string *vktk-dir* "/ifc/lib/cimgui.dylib"))
-  (:windows (concatenate 'string *vktk-dir* "/ifc/lib/cimgui.dll")))
+  (:darwin (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dylib"))
+  (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dll")))
 
 (my-define-foreign-library glfw3
-  (:darwin (concatenate 'string *vktk-dir* "/ifc/lib/libglfw.3.4.dylib"))
-  (:windows (concatenate 'string *vktk-dir* "/ifc/lib/glfw3.dll")))
+  (:darwin (asdf/system:system-relative-pathname :vktk "ifc/lib/libglfw.3.4.dylib"))
+  (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/glfw3.dll")))
 
 (cffi:use-foreign-library vulkan-loader)
 (cffi:use-foreign-library cimgui)

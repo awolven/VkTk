@@ -27,7 +27,13 @@
   (:import-from :sb-ext #:quit #:exit)
 
   (:export #:*debug*
-	   #:run-demo
+	   #:cmd-bind-pipeline
+	   #:cmd-set-viewport
+	   #:cmd-set-scissor
+	   #:cmd-bind-vertex-buffers
+	   #:cmd-bind-descriptor-sets
+	   #:cmd-bind-index-buffer
+	   #:cmd-draw-indexed
 	   #:with-vk-struct
 	   #:h
 	   #:device
@@ -55,6 +61,7 @@
 	   #:depth-image
 	   #:framebuffers
 	   #:application
+	   #:vulkan-application-mixin
 	   #:main-window
 	   #:render-surface
 	   #:render-pass
@@ -62,6 +69,7 @@
 	   #:create-window
 	   #:destroy-window
 	   #:window-should-close-p
+	   #:shutdown-application
 	   #:window-title
 	   #:get-window-pos
 	   #:set-window-pos
@@ -314,12 +322,15 @@
 	   #:transfer-queue-family-p
 	   #:sparse-binding-queue-family-p
 	   #:create-logical-device
+	   #:destroy-device-objects
 	   #:create-swapchain
 	   #:get-swapchain-images-khr
 	   #:create-image-view
 	   #:create-depth-image-view
 	   #:create-image-views
 	   #:initialize-swapchain
+	   #:frame-resources
+	   #:frame-command-buffer
 	   #:render-pass
 	   #:color-attachment
 	   #:depth-attachment
@@ -379,9 +390,12 @@
 	   #:create-graphics-pipeline
 	   #:command-pool
 	   #:create-command-pool
+	   #:reset-command-pool
 	   #:find-command-pool
 	   #:recreate-swapchain
 	   #:destroy-command-pool
+	   #:destroy-buffer
+	   #:destroy-descriptor-set-layout
 	   #:destroy-framebuffers
 	   #:destroy-shader-module
 	   #:destroy-image-view
@@ -400,17 +414,21 @@
 	   #:create-buffer-1
 	   #:find-memory-type
 	   #:allocate-buffer-memory
+	   #:allocated-memory
 	   #:bind-buffer-memory
 	   #:copy-buffer
 	   #:memcpy
 	   #:create-buffer
 	   #:find-queue
+	   #:queue-submit
+	   #:device-wait-idle
 	   #:create-vertex-buffer
 	   #:create-index-buffer
 	   #:uniform-buffer
 	   #:create-uniform-buffer
 	   #:create-image
 	   #:create-depth-image
+	   #:descriptor-pools
 	   #:create-descriptor-pool
 	   #:create-descriptor-pool-1
 	   #:descriptor-set
@@ -419,11 +437,55 @@
 	   #:command-buffer
 	   #:fence
 	   #:semaphore
+	   #:render-complete-semaphore
+	   #:present-complete-semaphore
 	   #:create-command-buffer
+	   #:begin-command-buffer
 	   #:begin-single-time-commands
 	   #:end-single-time-commands
+	   #:end-command-buffer
 	   #:has-stencil-component-p
 	   #:transition-image-layout
 	   #:mat4
 	   #:pick-graphics-gpu
+
+	   #:make-draw-indexed-cmd
+	   #:draw-indexed-cmd-index-count
+	   #:draw-indexed-cmd-first-index
+	   #:draw-indexed-cmd-vertex-offset
+
+	   #:frame-begin
+	   #:clear-value
+	   #:frame-end
+	   #:frame-present
+
+	   #:render-graphics
+
+	   #:on-mouse-button
+
+	   #:setup-vulkan
+	   #:default-logical-device
+	   #:command-buffers
+
+	   #:imgui
+	   #:imgui-init
+	   #:imgui-module
+	   #:imgui-new-frame
+	   #:imgui-create-fonts-texture
+	   #:imgui-invalidate-font-upload-objects
+	   #:imgui-render
+	   #:imgui-shutdown
+	   #:imgui-scroll-event
+	   #:mouse-wheel
+	   #:on-mouse-button
+	   #:mouse-pressed
+
+	   #:vertex-input-attribute-description
+	   #:uniform-buffer-for-vertex-shader-dsl-binding
+	   #:vertex-uniform-buffer-info
+	   #:descriptor-uniform-buffer-info
+	   #:copy-uniform-buffer-memory
+
+	   #:queue-wait-idle
+	   #:device-wait-idle
 	   ))

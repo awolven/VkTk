@@ -52,6 +52,8 @@ MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
   (:export
     #:with-vk-struct
     #:zero-struct
+    #:VK_TRUE
+    #:VK_FALSE
    
    #:*s-type-table*
    #:Display
