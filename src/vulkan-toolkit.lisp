@@ -3408,7 +3408,7 @@
 	(with-slots (device) swapchain
 	  (let ((command-pool (find-command-pool device (queue-family-index (render-surface window)))))
 	    (with-slots (allocator) device
-	      (vkDeviceWaitIdle (h device))
+	      (device-wait-idle device)
 
 	      (destroy-image-view (depth-image-view swapchain))
 	      (setf (depth-image-view swapchain) nil)
@@ -3537,7 +3537,7 @@
 	 (device (device swapchain))
 	 (queue-family-index (queue-family-index (render-surface window))))
 
-    (vkDeviceWaitIdle (h device))
+    (device-wait-idle device)
 
     (destroy-swapchain swapchain)
     
@@ -3560,6 +3560,7 @@
     (vkDestroySurfaceKHR (h (instance (render-surface window))) (h (render-surface window)) (h (allocator (instance (render-surface window)))))
     (glfwDestroyWindow (h window))
     (destroy-vulkan-instance (instance device))
+    (glfwPollEvents) ;; bug in glfw3.3 on macosx mojave.
     (glfwTerminate)
     (values)))
 
@@ -4286,7 +4287,7 @@
 	  (when index (return (values gpu index))))
      finally (error "Could not find a gpu with window system integration support.")))
 
-(defun setup-vulkan (app &key (width 1280) (height 720) (compute-queue-count 1))
+(defun setup-vulkan (app &key (width 1280) (height 720) (compute-queue-count #+windows 1 #+darwin 0))
   (let ((vulkan-instance (or *vulkan-instance*
 			     (create-instance :application-name "VkTk Demo" #+darwin :layer-names #+darwin nil))))
     

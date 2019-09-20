@@ -31,17 +31,17 @@
 
 (defparameter *home-dir* #+darwin "/Users/awolven" #+windows "C:/Users/awolven")
 
-(defparameter *vktk-dir* (asdf/system:system-relative-pathname :vktk ""))
+(defparameter *vktk-dir* (namestring (asdf/system:system-relative-pathname :vktk "")))
 
 (defparameter *vulkan-sdk-path*
-  #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.106.0/macOS")
+  #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.121.0/macOS")
   #+windows "C:/VulkanSDK/1.1.121.0")
 
 (defparameter *libshaderc-path*
   #+windows (concatenate
 	     'string *home-dir*
-	     "/Documents/Visual Studio 2015/projects/shaderc_wrap/x64/Debug/shaderc_wrap.dll"))
-)
+	     "/Documents/Visual Studio 2015/projects/shaderc_wrap/x64/Debug/shaderc_wrap.dll")
+  #+darwin (namestring (asdf/system:system-relative-pathname :vktk "ifc/shaderc/shaderc_wrap.dylib"))))
 
 #+darwin
 (progn
@@ -56,6 +56,10 @@
 (my-define-foreign-library vulkan-loader
   (:darwin "libvulkan.1.dylib")
   (:windows "vulkan-1.dll"))
+
+(my-define-foreign-library shaderc
+  (:darwin "libshaderc_shared.dylib"))
+			  
 
 (my-define-foreign-library cimgui
   (:darwin (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dylib"))

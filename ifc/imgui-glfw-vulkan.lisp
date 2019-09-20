@@ -312,16 +312,17 @@
 				  vk::maxDepth)
 				 p-viewport
 				 (:struct VkViewport))
-	      (let* ((p-display-size (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::DisplaySize))
+	      (let* ((p-display-size (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplaySize))
+		     (p-display-pos (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplayPos))
+		     (display-pos-x (foreign-slot-value p-display-pos '(:struct ig::ImVec2) 'ig::x))
+		     (display-pos-y (foreign-slot-value p-display-pos '(:struct ig::ImVec2) 'ig::y))
 		     (display-size-x (foreign-slot-value p-display-size '(:struct ig::ImVec2) 'ig::x))
 		     (display-size-y (foreign-slot-value p-display-size '(:struct ig::ImVec2) 'ig::y)))
 
 		(setf vk::x 0.0f0
 		      vk::y 0.0f0
-		      vk::width (* display-size-x #+darwin 2.0f0 #+windows 1.0f0)
-		      
-		      vk::height (* display-size-y #+darwin 2.0f0 #+windows 1.0f0)
-				    
+		      vk::width (* #+darwin 2.0f0 #+windows 1.0f0 display-size-x)
+		      vk::height (* #+darwin 2.0f0 #+windows 1.0f0 display-size-y)
 		      vk::minDepth 0.0f0
 		      vk::maxDepth 1.0f0)
 		(vkCmdSetViewport (h command-buffer) 0 1 p-viewport)
@@ -334,8 +335,8 @@
 			(/ 2.0f0 display-size-y))
 
 		  (with-foreign-object (p-translate :float 2)
-		    (setf (mem-aref p-translate :float 0) -1.0f0
-			  (mem-aref p-translate :float 1) -1.0f0)
+		    (setf (mem-aref p-translate :float 0) (- -1.0f0 (* display-pos-x (mem-aref p-scale :float 0)))
+			  (mem-aref p-translate :float 1) (- -1.0f0 (* display-pos-y (mem-aref p-scale :float 0))))
 
 		    (vkCmdPushConstants (h command-buffer) (h pipeline-layout)
 					VK_SHADER_STAGE_VERTEX_BIT
