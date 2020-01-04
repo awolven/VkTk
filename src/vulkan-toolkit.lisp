@@ -3777,7 +3777,7 @@
 						  :allocator allocator))
 	   (queue-family-index (get-any-queue-family-index-with-transfer-support (physical-device device)))
 	   (queue (find-queue device queue-family-index))
-	   (command-pool (find-command-pool device (queue-family-index queue))))
+	   (command-pool (find-command-pool device queue-family-index)))
       (bind-buffer-memory device buffer buffer-memory)
       (copy-buffer device command-pool queue staging-buffer buffer size)
       (vkDestroyBuffer (h device) (h staging-buffer) (h allocator))
@@ -4406,7 +4406,8 @@
 (defstruct draw-indexed-cmd
   (index-count)
   (first-index)
-  (vertex-offset))
+  (vertex-offset)
+  (color))
 
 (defun cmd-draw-indexed (command-buffer command)
   (vkCmdDrawIndexed (h command-buffer)

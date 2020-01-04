@@ -60,11 +60,14 @@
 
 (defclass application (vulkan-application-mixin)
   ((scene :initarg :scene)
+   (editor :initform (make-instance 'editor) :reader editor)
    (pipeline-cache :initform +null-pipeline-cache+ :initarg :pipeline-cache :reader pipeline-cache)
    (allocation-callbacks :initform +null-allocator+ :initarg :allocator :reader allocator)
    (face-renderer :accessor face-renderer)
    (edge-renderer :accessor edge-renderer)
-   (annotation-renderer :accessor annotation-renderer)))
+   (annotation-renderer :accessor annotation-renderer)
+   (colored-line-strip-renderer :accessor colored-line-strip-renderer)
+   (colored-point-vertex-renderer :accessor colored-point-vertex-renderer)))
 
 (defgeneric process-ui (app))
 
@@ -80,7 +83,8 @@
     (imgui-new-frame (imgui-module app))
 
     (let* ((scene (slot-value app 'scene))
-	   (camera (slot-value scene 'camera)))
+	   (camera (slot-value scene 'camera))
+	   (editor (editor app)))
 
       (ig:igBeginMainMenuBar)
       (when (ig:begin-menu "File")
@@ -103,6 +107,25 @@
       (incf frame-counter)
 
       (multiple-value-bind (width height) (get-window-size (main-window app))
+	(progn
+	  (ig:set-next-window-pos 0 19 :condition :first-use-ever)
+	  (ig:set-next-window-size 140 (round (/ height 2)))
+	  (ig:begin "selection stack")
+	  (ig:push-item-width -1)
+	  (let ((ss-count (length (selection-stack editor)))
+		(ss-strings (mapcar (lambda (object)
+				      (foreign-string-alloc (princ-to-string object)))
+				    (selection-stack editor))))
+	    (with-foreign-object (p :pointer ss-count)
+	      (loop for i from 0 below ss-count
+		 do (setf (cffi:mem-aref p :pointer i) (elt ss-strings i)))
+	      (with-foreign-object (p-selected :int)
+		(when (ig:igListBoxStr_Arr "" p-selected p ss-count 7)
+		  (print (mem-aref p-selected :int))
+		  (finish-output))))
+	    (mapcar #'foreign-string-free ss-strings))
+	  (ig:end))
+	
 	(ig:set-next-window-pos 0 0 :condition :always)
 	(ig:set-next-window-size width height)
 	(ig:begin "background"
@@ -122,7 +145,7 @@
 		  :no-decoration t
 		  :no-inputs t)
 
-	(ig:set-cursor-screen-pos 100 50)
+	(ig:set-cursor-screen-pos 170 50)
 	(ig:text "TEST")
 	(ig:end)
 
@@ -320,7 +343,9 @@
    (lambda ()
      (let ((*debug* debug))
        ;; app must be created in the thread that will run main
-       (main (setq *app* (apply #'make-instance 'application args)))))
+       (setq *app* (apply #'make-instance 'application args))
+       #+NIL(igp::append-circle (slot-value *app* 'igp::editor) (3d-vectors::vec2 10 20) 40 (make-array 4 :element-type 'single-float :initial-element 0.5))
+       (main *app*)))
    :name "graphics")
   #+darwin
   (sb-thread:interrupt-thread
@@ -409,6 +434,9 @@
 			 :buffer (uniform-buffer-vs renderer)
 			 :range (foreign-type-size (uniform-buffer-type renderer)))))
 
+(defmethod make-push-constant-ranges ((renderer renderer-mixin))
+  nil)
+
 (defcstruct vec2
   (a :float)
   (b :float))
@@ -451,6 +479,7 @@
   
 (defun create-standard-renderer-device-objects (renderer
 						&key (bindings (make-descriptor-set-layout-bindings renderer))
+						  (push-constant-ranges (make-push-constant-ranges renderer))
 						  (line-width #+windows 2.0f0 #+darwin 1.0f0)
 						  (vertex-type (pipeline-vertex-type renderer))
 						  (vertex-input-attribute-descriptions
@@ -473,7 +502,8 @@
 	(setf (descriptor-set-layout renderer) (create-descriptor-set-layout device :bindings bindings))
 
 	(setf (pipeline-layout renderer)
-	      (create-pipeline-layout device (list (descriptor-set-layout renderer)))
+	      (create-pipeline-layout device (list (descriptor-set-layout renderer))
+				      :push-constant-ranges push-constant-ranges)
 	      (pipeline renderer)
 	      (create-graphics-pipeline device (pipeline-cache renderer) (pipeline-layout renderer)
 					(render-pass renderer) 1 width height vtx-shader frg-shader
@@ -556,13 +586,13 @@
 				     (if (perspective-p camera) 0.3254f0 0.0f0)
 				     1.0f0))
 		   (mouse-world (euclid (m* unview unproj unclip mouse-clip))))
-	      (ig:igText (format nil "mouse-world: ~S" mouse-world))
+	      ;;(ig:igText (format nil "mouse-world: ~S" mouse-world))
 	      (let ((ray
 		     (if (perspective-p camera)
 			 (make-ray :origin p :direction (vunit (v- mouse-world p)))
 			 (let ((dir (vunit (v- (slot-value camera 'aim-point) p))))
 			   (make-ray :origin mouse-world :direction dir)))))
-		(ig:igText (format nil "~S" ray))
+		;;(ig:igText (format nil "~S" ray))
 		ray)))))))
 
 (defmethod uniform-buffer-type ((renderer renderer-mixin))
@@ -608,26 +638,85 @@
 				     (slot-value (slot-value renderer 'scene) 'camera)
 				     view-matrix projection-matrix +clip-matrix+))
 	   (box-intersecting (ray-intersects-bvh ray (first (slot-value scene 'standins)) model-matrix)))
+      (let* ((app (slot-value renderer 'application))
+	     (editor (slot-value app 'editor))
+	     (dynamic-database (dynamic-database editor)))
+	(setf (line-strip-vertices-fill-pointer dynamic-database) 0)
+	(setf (line-strip-indices-fill-pointer dynamic-database) 0)
+	(setf (fill-pointer (line-strip-commands dynamic-database)) 0)
+
+	(when (ig:button "make line")
+	  (setf (editor-mode editor) (list :create :line)))
+	
+	(if (intersect-bezier-curve-and-ray (oc::make-bezier-curve-3d (list (gp:pnt 0.0 100.0 0.0)
+									  (gp:pnt 50 90 0.0)
+									  (gp:pnt 10.1 20.0 0.0)
+									  (gp:pnt -050 -10.0 0.0))
+								    (list 1 1 1 1))
+					    ray dynamic-database)
+	    (append-geom2d-curve dynamic-database
+				 (oc::make-bezier-curve-2d (list (gp:pnt2d 0.0 100.0)
+								 (gp:pnt2d 50 90)
+								 (gp:pnt2d 10.1 20.0)
+								 (gp:pnt2d -050 -10.0))
+							   (list 1 1 1 1))
+				 (make-array 4 :element-type 'single-float :initial-contents (list 1.0f0 0.0f0 0.0f0 1.0f0))))
+	(append-geom2d-curve dynamic-database
+			     (oc::make-bezier-curve-2d (list (gp:pnt2d 0.0 100.0)
+							     (gp:pnt2d 50 90)
+							     (gp:pnt2d 10.1 20.0)
+							     (gp:pnt2d -050 -10.0))
+						       (list 1 1 1 1))
+			     (make-array 4 :element-type 'single-float :initial-contents (list 1.0f0 1.0f0 1.0f0 1.0f0))))
+	
       
-      (when box-intersecting
-	(cond ((eq *selection-mode* :face)
-	       (let* ((toplevel-standin (first (slot-value scene 'standins))))
-		 (unhighlight-toplevel-standin queue toplevel-standin)
-		 (let ((selected (caar
-				  (sort (remove-if #'null
-						   (mapcar #'(lambda (face)
-							       (let ((tmin (ray-intersects-face-p ray face model-matrix)))
-								 (when tmin
-								   (list face
-									 tmin))))
-							   box-intersecting))
-					#'< :key #'cadr))))
-		   (when selected
-		     (highlight-standin queue selected toplevel-standin)
-		     (ig:igText (format nil "~S" (slot-value selected 'random-id))))))))
-	(ig:igText "SELECTED!")))))
+	    (when box-intersecting
+	      (cond ((eq *selection-mode* :face)
+		     (let* ((toplevel-standin (first (slot-value scene 'standins))))
+		       (unhighlight-toplevel-standin queue toplevel-standin)
+		       (let ((selected (caar
+					(sort (remove-if #'null
+							 (mapcar #'(lambda (face)
+								     (let ((tmin (ray-intersects-face-p ray face model-matrix)))
+								       (when tmin
+									 (list face
+									       tmin))))
+								 box-intersecting))
+					      #'< :key #'cadr))))
+			 (when selected
+			   (highlight-standin queue selected toplevel-standin)
+			   (ig:igText (format nil "~S" (slot-value selected 'random-id))))))))
+	      (ig:igText "SELECTED!")))))
 
 
+(defun format-text-at-world-position (window position matrix
+				      format-string &rest format-args)
+  (multiple-value-bind (width height) (get-window-size window)
+    (let* ((clip (euclid (m* matrix position)))
+	   (ndcx (round (/ (* (+ 1.0 (vx clip)) width) 2.0)))
+	   (ndcy (round (/ (* (+ 1.0 (vy clip)) height) 2.0))))
+      (ig:set-next-window-pos 0 0 :condition :always)
+      (ig:set-next-window-size width height)
+      (ig:begin "background"
+		:no-background t
+		:no-title-bar t
+		:no-resize t
+		:no-move t
+		:no-scrollbar t
+		:no-scroll-with-mouse t
+		:no-collapse t
+		:no-saved-settings t
+		:no-mouse-inputs t
+		:no-focus-on-appearing t
+		:no-bring-to-front-on-focus t
+		:no-nav-inputs t
+		:no-nav-focus t
+		:no-decoration t
+		:no-inputs t)
+       
+      (ig:set-cursor-screen-pos ndcx ndcy)
+      (ig:text (apply #'format nil format-string format-args))
+      (ig:end))))
 
 (defmethod 3d-demo-render (queue (renderer face-renderer) command-buffer fb-width fb-height
 			   &optional (model-matrix (meye 4)))
@@ -644,6 +733,41 @@
 	    (m* (mrotation (vec3 0.0 0.0 1.0)
 			   (rem (* (/ elapsed-time 1000.0d0) #.(/ pi 4.0d0)) #.(* pi 2.0d0)))
 		(mtranslation (vec3 100.0 0.0 0.0)))))
+#+NIL
+    (format-text-at-world-position (window renderer)
+				   (vec4 0 0 0 1)
+				   (m* +clip-matrix+ projection-matrix view-matrix model-matrix)
+				   "hello")
+
+    (let* ((position (vec4 0 0 0 1))
+	   (position-clip (euclid (m* +clip-matrix+ projection-matrix view-matrix model-matrix position)))
+	   (ndc-x (round (/ (* (+ 1.0 (vx position-clip)) fb-width) 2.0)))
+	   (ndc-y (round (/ (* (+ 1.0 (vy position-clip)) fb-height) 2.0)))
+	   (hover-x (+ ndc-x 25))
+	   (hover-y (+ ndc-y 25)))
+
+      (ig:set-next-window-pos 0 0 :condition :always)
+      (ig:set-next-window-size fb-width fb-height)
+      (ig:begin "background"
+		:no-background t
+		:no-title-bar t
+		:no-resize t
+		:no-move t
+		:no-scrollbar t
+		:no-scroll-with-mouse t
+		:no-collapse t
+		:no-saved-settings t
+		:no-mouse-inputs t
+		:no-focus-on-appearing t
+		:no-bring-to-front-on-focus t
+		:no-nav-inputs t
+		:no-nav-focus t
+		:no-decoration t
+		:no-inputs t)
+
+      (ig:set-cursor-screen-pos hover-x hover-y)
+      (ig:text "<~S, ~S>" hover-x hover-y)
+      (ig:end))      
 
     (3d-demo-select queue renderer model-matrix view-matrix projection-matrix)
 
@@ -655,6 +779,7 @@
 
     (cmd-set-scissor command-buffer :width fb-width :height fb-height)
 
+    #+DEBUG
     (loop for standin in (slot-value scene 'standins)
        do (with-slots (device) renderer
 	    (unless (face-vertex-buffer standin)
@@ -785,13 +910,18 @@
   (let ((model-matrix))
     (multiple-value-bind (w h) (get-framebuffer-size window)
     
-    (3d-demo-render queue (annotation-renderer app) command-buffer w h)
-    
-    (setq model-matrix (3d-demo-render queue (face-renderer app) command-buffer w h))
+      (3d-demo-render queue (annotation-renderer app) command-buffer w h)
 
-    (3d-demo-render queue (edge-renderer app) command-buffer w h model-matrix)
+      (setq model-matrix (3d-demo-render queue (face-renderer app) command-buffer w h))
 
-    (imgui-render (imgui-module app) command-buffer current-frame))))
+      (let ((camera (slot-value (slot-value app 'scene) 'camera))
+	    (editor (slot-value app 'editor)))
+	(editor-render-draw-lists editor (colored-line-strip-renderer app) command-buffer current-frame w h (meye 4) (slot-value camera 'view-matrix) (slot-value camera 'projection-matrix))
+	(editor-render-draw-lists editor (colored-point-vertex-renderer app) command-buffer current-frame w h (meye 4) (slot-value camera 'view-matrix) (slot-value camera 'projection-matrix)))
+
+      ;;(3d-demo-render queue (edge-renderer app) command-buffer w h model-matrix)
+
+      (imgui-render (imgui-module app) command-buffer current-frame))))
 
 (defclass camera ()
   ((type :initform :perspective :accessor camera-type :initarg :type)
@@ -1177,12 +1307,21 @@
 					   :index-data *axes-index-data*
 					   :index-data-size *axes-index-data-size*
 					   :index-count (length *axes-indices*)
-					   standard-renderer-initargs)))
+					   standard-renderer-initargs))
+	       (cls-renderer (apply #'make-instance 'colored-line-strip-renderer
+				    :frame-count (number-of-images swapchain) standard-renderer-initargs))
+	       (cpv-renderer (apply #'make-instance 'colored-point-vertex-renderer
+				    :frame-count (number-of-images swapchain) standard-renderer-initargs)))
+
+	  ;; if we pass frame-count directly to the render function we can then move these two renderers to the initform of application. todo.
 	
 	  (setf (imgui-module app) imgui)
 	  (setf (face-renderer app) face-renderer)
 	  (setf (edge-renderer app) edge-renderer)
-	  (setf (annotation-renderer app) annotation-renderer)))))
+	  (setf (annotation-renderer app) annotation-renderer)
+	  (setf (colored-line-strip-renderer app) cls-renderer)
+	  (setf (colored-point-vertex-renderer app) cpv-renderer)
+	  ))))
   (values))
       
 	
@@ -1394,30 +1533,32 @@
   
 
 (defun ray-intersects-bvh (ray standin matrix &optional (leaf-type :face))
-  (when (ray-intersects-box-p ray standin matrix)
-    (flet ((recur ()
-	     (apply #'append
-		    (mapcar #'(lambda (child) (ray-intersects-bvh ray child matrix leaf-type))
-			    (slot-value standin 'child-standins)))))
-      (ecase leaf-type
-	(:face (typecase standin
-		 (shell-standin
-		  (remove-if #'null
-			     (mapcar #'(lambda (face-standin) (ray-intersects-box-p ray face-standin matrix))
-				     (slot-value standin 'child-standins))))
-		 (t (recur))))
-	(:edge (typecase standin
-		 (wire-standin
-		  (remove-if #'null
-			     (mapcar #'(lambda (edge-standin) (ray-intersects-box-p ray edge-standin matrix))
-				     (slot-value standin 'child-standins))))
-		 (t (recur))))))))
+  (let ((bbox (slot-value standin 'bounding-box)))
+    (when (ray-intersects-box-p ray (transform-bounding-box bbox matrix))
+      (flet ((recur ()
+	       (apply #'append
+		      (mapcar #'(lambda (child) (ray-intersects-bvh ray child matrix leaf-type))
+			      (slot-value standin 'child-standins)))))
+	(ecase leaf-type
+	  (:face (typecase standin
+		   (shell-standin
+		    (remove-if #'null
+			       (mapcar #'(lambda (face-standin) (when (ray-intersects-box-p ray (transform-bounding-box (slot-value face-standin 'bounding-box) matrix))
+								   face-standin))
+				       (slot-value standin 'child-standins))))
+		   (t (recur))))
+	  (:edge (typecase standin
+		   (wire-standin
+		    (remove-if #'null
+			       (mapcar #'(lambda (edge-standin) (when (ray-intersects-box-p ray (transform-bounding-box (slot-value edge-standin 'bounding-box) matrix))
+								   edge-standin))
+				       (slot-value standin 'child-standins))))
+		   (t (recur)))))))))
 
 
-(defun ray-intersects-box-p (ray standin &optional (matrix (meye 4)))
-  (let* ((box (transform-bounding-box (slot-value standin 'bounding-box) matrix))
-	 (min (bounding-box-min box))
-	 (max (bounding-box-max box))
+(defun ray-intersects-box-p (ray bbox)
+  (let* ((min (bounding-box-min bbox))
+	 (max (bounding-box-max bbox))
 	 (tmin)
 	 (tmax)
 	 (tymin)
@@ -1472,7 +1613,7 @@
     (when (> tzmax tmax)
       (setq tmax tzmax))
 
-    (return-from ray-intersects-box-p (values standin tmin tmax))))
+    (return-from ray-intersects-box-p (values t tmin tmax))))
     
     
 
@@ -1512,8 +1653,8 @@
       (test-plane (frustum-bottom-plane frustum))
       (return-from frustum-intersects-box-p result))))
 
-(defmethod frustum-contains-point-p ((frustum frustum) (point oc::pnt))
-  (frustum-contains-point-p frustum (vec3 (oc::x point) (oc::y point) (oc::z point))))
+(defmethod frustum-contains-point-p ((frustum frustum) (point gp:pnt))
+  (frustum-contains-point-p frustum (vec3 (oc:x point) (oc:y point) (oc:z point))))
 
 (defmethod frustum-contains-point-p ((frustum frustum) (point vec3))
   (flet ((test-plane (plane)
@@ -1525,11 +1666,11 @@
 	 (test-plane (frustum-top-plane frustum))
 	 (test-plane (frustum-bottom-plane frustum)))))
 
-(defmethod ray-intersects-triangle-p ((ray ray) (p1 oc::pnt) (p2 oc::pnt) (p3 oc::pnt))
+(defmethod ray-intersects-triangle-p ((ray ray) (p1 gp:pnt) (p2 gp:pnt) (p3 gp:pnt))
   (ray-intersects-triangle-p ray
-			     (vec3 (gp::x p1) (gp::y p1) (gp::z p1))
-			     (vec3 (gp::x p2) (gp::y p2) (gp::z p2))
-			     (vec3 (gp::x p3) (gp::y p3) (gp::z p3))))
+			     (vec3 (oc:x p1) (oc:y p1) (oc:z p1))
+			     (vec3 (oc:x p2) (oc:y p2) (oc:z p2))
+			     (vec3 (oc:x p3) (oc:y p3) (oc:z p3))))
 
 ;; Möller–Trumbore intersection algorithm
 (defmethod ray-intersects-triangle-p ((ray ray) (p1 vec3) (p2 vec3) (p3 vec3))
@@ -1659,12 +1800,12 @@
 (defclass vertex-standin (shape-standin-mixin) ())
 
 (defun pnt->vec3 (pnt)
-  (vec3 (coerce (gp::x pnt) 'single-float)
-	(coerce (gp::y pnt) 'single-float)
-	(coerce (gp::z pnt) 'single-float)))
+  (vec3 (coerce (oc:x pnt) 'single-float)
+	(coerce (oc:y pnt) 'single-float)
+	(coerce (oc:z pnt) 'single-float)))
 
 (defun create-standin (topods-shape)
-  (make-instance 'oc::BRepMesh_IncrementalMesh :S topods-shape :D 7.0d-3 :Relative t)
+  (make-instance 'oc::BRep-Mesh-Incremental-Mesh :S topods-shape :D 7.0d-3 :Relative t)
   (let ((toplevel (make-instance 'toplevel-standin)))
     (setf (slot-value toplevel 'child-standins)
 	  (list (create-standin-1 topods-shape nil nil toplevel)))
@@ -1679,26 +1820,26 @@
 
 
 
-(defmethod standin-class-for-topods-shape ((shape oc::TopoDS_CompSolid))
+(defmethod standin-class-for-topods-shape ((shape oc::TopoDS-CompSolid))
   'compsolid-standin)
 
-(defmethod standin-class-for-topods-shape ((shape oc::TopoDS_Compound))
+(defmethod standin-class-for-topods-shape ((shape oc::TopoDS-Compound))
   'compound-standin)
 
-(defmethod standin-class-for-topods-shape ((shape oc::TopoDS_Solid))
+(defmethod standin-class-for-topods-shape ((shape oc::TopoDS-Solid))
   'solid-standin)
 
-(defmethod standin-class-for-topods-shape ((shape oc::TopoDS_Shell))
+(defmethod standin-class-for-topods-shape ((shape oc::TopoDS-Shell))
   'shell-standin)
 
-(defmethod standin-class-for-topods-shape ((shape oc::TopoDS_Wire))
+(defmethod standin-class-for-topods-shape ((shape oc::TopoDS-Wire))
   'wire-standin)
 
 
-(defmethod create-standin-1 ((shape oc::TopoDS_Shape) parent-standin grandparent-standin toplevel-standin)
+(defmethod create-standin-1 ((shape oc::TopoDS-Shape) parent-standin grandparent-standin toplevel-standin)
   (declare (ignore grandparent-standin))
   (let ((standin (make-instance (standin-class-for-topods-shape shape) :source-shape shape))
-	(iterator (make-instance 'oc::TopoDS_Iterator :S shape)))
+	(iterator (make-instance 'oc::TopoDS-Iterator :S shape)))
 									 
     (setf (slot-value standin 'toplevel) toplevel-standin)
     (setf (slot-value standin 'child-standins)
@@ -1716,7 +1857,7 @@
 					      (mapcar #'(lambda (child) (bounding-box-max (slot-value child 'bounding-box))) (slot-value standin 'child-standins))))))
     standin))
 
-(defmethod create-standin-1 ((vertex oc::TopoDS_Vertex) parent-standin
+(defmethod create-standin-1 ((vertex oc::TopoDS-Vertex) parent-standin
 			     grandparent-standin toplevel-standin)
   (declare (ignore grandparent-standin))
   (let ((standin (make-instance 'vertex-standin :source-shape vertex)))
@@ -1725,11 +1866,11 @@
 	  (bounding-box nil (pnt->vec3 (gp::make-pnt :ptr (oc::_wrap_BRep_Tool_Pnt (oc::ff-pointer vertex))))))
     standin))
 
-(defmethod create-standin-1 ((face oc::TopoDS_Face) parent-standin
+(defmethod create-standin-1 ((face oc::TopoDS-Face) parent-standin
 			     grandparent-standin toplevel-standin)
   (declare (ignore grandparent-standin))
   (let* ((standin (make-instance 'face-standin :source-shape face))
-	 (triangulation (allocate-instance (find-class 'oc::Poly_Triangulation)))
+	 (triangulation (allocate-instance (find-class 'oc::Poly-Triangulation)))
 	 (commands (face-commands toplevel-standin))
 	 (vertex-array (polyhedron-nodes toplevel-standin))
 	 (index-array (face-indices toplevel-standin))
@@ -1785,7 +1926,7 @@
 
       (setf (slot-value standin 'child-standins)
 	    (remove-if #'null
-		       (let ((iterator (make-instance 'oc::TopoDS_Iterator :S face)))
+		       (let ((iterator (make-instance 'oc::TopoDS-Iterator :S face)))
 			 (loop while (oc::more-p iterator)
 			    collect (prog1 (create-standin-1
 					    (oc::value iterator) standin parent-standin toplevel-standin)
@@ -1800,13 +1941,22 @@
 	       (>= button 0)
 	       (< button 3))
       (setf (elt (mouse-pressed imgui) button) t)
-      (let ((scene (slot-value (face-renderer (application window)) 'scene))) ;; fixme make scene slot of app
+      (let* ((scene (slot-value (application window) 'scene))
+	     (editor (slot-value (application window) 'editor))
+	     (camera (slot-value scene 'camera)))
+
+	(when (equalp (editor-mode editor) (list :create :line))
+	  
+	  (push (intersect-ray-with-plane
+	(compute-picking-ray window camera (slot-value camera 'view-matrix) (slot-value camera 'projection-matrix) +clip-matrix+)		 
+		 (make-plane :equation (vec4 0 0 1 0)))
+		(selection-stack editor)))
 	(setf (elt (camera-mode scene) button)
 	      (if (elt (camera-mode scene) button)
 		  nil
 		  (append (multiple-value-list (get-cursor-pos window))
-			  (list (slot-value (slot-value scene 'camera) 'elevation)
-				(slot-value (slot-value scene 'camera) 'azimuth)))))
+			  (list (slot-value camera 'elevation)
+				(slot-value camera 'azimuth)))))
 	(print "on mouse button done")
 	(finish-output)))))
 
@@ -1853,7 +2003,7 @@
       (copy-index-arrays)
       (values))))
 
-(defmethod create-standin-1 ((edge oc::TopoDS_Edge) parent-standin
+(defmethod create-standin-1 ((edge oc::TopoDS-Edge) parent-standin
 			     (grandparent-standin face-standin) toplevel-standin)
   (let ((standin (make-instance 'edge-standin :source-shape edge
 				:corresponding-face grandparent-standin)))
@@ -1887,7 +2037,7 @@
 			  collect (aref vertex-array (+ (1- node) face-vertex-offset))))))
 
 	(setf (slot-value standin 'child-standins)
-	      (let ((iterator (make-instance 'oc::TopoDS_Iterator :S edge)))
+	      (let ((iterator (make-instance 'oc::TopoDS-Iterator :S edge)))
 		(loop while (oc::more-p iterator)
 		   collect (prog1 (create-standin-1 (oc::value iterator)
 						    standin parent-standin toplevel-standin)

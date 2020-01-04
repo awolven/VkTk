@@ -7,3 +7,5 @@ set -x
 /cygdrive/c/VulkanSDK/1.1.97.0/Bin32/glslangValidator.exe -V ray-tri.comp -o ray-tri.spv
 /cygdrive/c/VulkanSDK/1.1.97.0/Bin32/glslangValidator.exe -V lines.vert -o lines.vert.spv
 /cygdrive/c/VulkanSDK/1.1.97.0/Bin32/glslangValidator.exe -V lines.frag -o lines.frag.spv
+/cygdrive/c/VulkanSDK/1.1.97.0/Bin32/glslangValidator.exe -V color-lines.vert -o color-lines.vert.spv
+/cygdrive/c/VulkanSDK/1.1.97.0/Bin32/glslangValidator.exe -V color-points.vert -o color-points.vert.spv
