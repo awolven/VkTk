@@ -1,6 +1,8 @@
 (in-package :igp)
 
-
+(defclass line-segment ()
+  ((point1 :initarg :point1)
+   (point2 :initarg :point2)))
 
 (defclass database-frame-resource ()
   ((point-buffer :initform nil :accessor point-buffer)
@@ -89,12 +91,13 @@
 (defclass static-database (dynamic-database-mixin)
   ((entities :initform (make-array 1000 :fill-pointer 0 :adjustable t) :reader database-entities)
    (needs-regen? :initform t :accessor needs-regen?)))
-
+  
 (defclass editor ()
   ((mode :accessor editor-mode :initform nil)
    (selection-stack :accessor selection-stack :initform nil)
    (static-database :initform (make-instance 'static-database) :reader static-database)
-   (dynamic-database :initform (make-instance 'dynamic-database) :reader dynamic-database)))
+   (dynamic-database :initform (make-instance 'dynamic-database) :reader dynamic-database)
+   (command-stream :initform (make-instance 'command-stream) :reader command-stream)))
 
 ;; need foreign memory for point vertices
 ;; need fill pointer for point vertices
@@ -282,11 +285,14 @@
     (setq number (if (minusp number) most-negative-single-float most-positive-single-float)))
   (coerce number 'single-float))
 
-(defun add-entity (static-database entity)
-  (vector-push-extend entity (database-entities static-database))
-  (typecase entity
-    (oc::geom2d-curve (append-geom2d-curve static-database entity))
-    (oc::geom-curve (append-geom-curve static-database entity))))
+(defun add-entity (editor entity)
+  (let ((static-database (slot-value editor 'static-database)))
+    (vector-push-extend entity (database-entities static-database))
+    (typecase entity
+      (oc::geom2d-curve (append-geom2d-curve static-database entity))
+      (oc::geom-curve (append-geom-curve static-database entity))
+      (line-segment (vector-push-extend entity (database-entities static-database))
+		    (regen editor)))))
 
 (defun remove-entity (static-database entity)
   (let ((entities (database-entities static-database)))
@@ -296,14 +302,17 @@
 	    (setf (needs-regen? static-database) t)
 	    (return t)))))
 
-(defun regen (static-database)
-  (setf (point-vertices-fill-pointer static-database) 0
-	(line-strip-vertices-fill-pointer static-database) 0)
-  (compact-entities static-database)
-  (loop for entity across (database-entities static-database)
-     do (typecase entity
-	  (oc::geom2d-curve (append-geom2d-curve static-database entity))))
-  t)
+(defun regen (editor)
+  (let* ((static-database (slot-value editor 'static-database)))
+    (setf (line-strip-vertices-fill-pointer static-database) 0)
+    (setf (line-strip-indices-fill-pointer static-database) 0)
+    (setf (fill-pointer (line-strip-commands static-database)) 0)
+    ;;  (compact-entities static-database)
+    (loop for entity across (database-entities static-database)
+       do (typecase entity
+	    (oc::geom2d-curve (append-geom2d-curve static-database entity))
+	    (line-segment (append-line static-database (slot-value entity 'point1) (slot-value entity 'point2)))))
+    t))
 
 (defun compact-entities (static-database)
   (compact-entities-1 (database-entities static-database)))
@@ -366,6 +375,7 @@
     frame-resource))
 
 (defmethod maybe-init-buffers ((database static-database) frame-resource device)
+  #+NOTYET
   (when (needs-regen? database)
     (regen database)
     (setf (needs-regen? database) nil))
@@ -508,7 +518,7 @@
   (with-slots (device frame-count) renderer
     (let* ((static-database (static-database editor))
 	   (dynamic-database (dynamic-database editor))
-	   (static-db-frame-resource (maybe-init-frame-resource static-database device frame-count frame-index))
+	   (static-db-frame-resource (maybe-init-frame-resource static-database	device frame-count frame-index))
 	   (dynamic-db-frame-resource (maybe-init-frame-resource dynamic-database device frame-count frame-index)))
       (vk:vkCmdBindPipeline (h command-buffer) vk:VK_PIPELINE_BIND_POINT_GRAPHICS (h (pipeline renderer)))
       (update-vertex-shader-uniform-buffer renderer model-matrix view-matrix projection-matrix +clip-matrix+)
@@ -724,7 +734,7 @@
 ;; operation
 ;; regen: fill vertex, index buffers and cmds with data to draw everything in database
 ;; regen occurs when an entity is edited or deleted from database
-;; when an append to database takes place, vertex, index buffers and cmds are appended to not regenerated
+;; when an append to database takes place, vertex, index buffers and cmds are appended to not rated
 ;; must know when an entity has changed
 ;; must know when an entity has been deleted
 ;; must know when an entity has been added

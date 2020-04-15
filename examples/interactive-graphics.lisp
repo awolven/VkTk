@@ -1,5 +1,21 @@
 (in-package :igp)
 
+(defcallback multiline-input-text-clear-callback :int ((p-data :pointer))
+  (multiline-input-text-clear p-data))
+
+(defun multiline-input-text-clear (p-data)
+  (let ((flags (foreign-slot-value p-data '(:struct ig::ImGuiInputTextCallbackData) 'ig::EventFlag)))
+    (when (not (zerop (logand flags ig::ImGuiInputTextFlags_CallbackCharFilter)))
+      (print 'ischar)
+      (when (eq (foreign-slot-value p-data '(:struct ig::ImGuiInputTextCallbackData) 'ig::EventChar)
+		ig::ImGuiKey_ENTER)
+	(print 'is-enter)
+	(let ((p-buf (foreign-slot-value p-data '(:struct ig::ImGuiInputTextCallbackData) 'ig::UserData)))
+	  (setf (mem-aref p-buf :char 0) 0)
+	  (return-from multiline-input-text-clear 1)))
+      (return-from multiline-input-text-clear 0))
+    (return-from multiline-input-text-clear 0)))
+
 ;; the matrix below is used to emulate OpenGL for the 3d-matrices library.
 (defparameter +clip-matrix+
   (mat 1 0 0 0
@@ -645,8 +661,14 @@
 	(setf (line-strip-indices-fill-pointer dynamic-database) 0)
 	(setf (fill-pointer (line-strip-commands dynamic-database)) 0)
 
-	(when (ig:button "make line")
-	  (setf (editor-mode editor) (list :create :line)))
+	(when (eq (editor-mode editor) :line-first-point)
+	  (append-line (dynamic-database editor)
+		       (first (selection-stack editor))
+		       (intersect-ray-with-plane
+			(compute-picking-ray (slot-value renderer 'window)
+					     (slot-value (slot-value renderer 'scene) 'camera)
+					     view-matrix projection-matrix +clip-matrix+)		 
+			(make-plane :equation (vec4 0 0 1 0)))))
 	
 	(if (intersect-bezier-curve-and-ray (oc::make-bezier-curve-3d (list (gp:pnt 0.0 100.0 0.0)
 									  (gp:pnt 50 90 0.0)
@@ -741,8 +763,8 @@
 
     (let* ((position (vec4 0 0 0 1))
 	   (position-clip (euclid (m* +clip-matrix+ projection-matrix view-matrix model-matrix position)))
-	   (ndc-x (round (/ (* (+ 1.0 (vx position-clip)) fb-width) 2.0)))
-	   (ndc-y (round (/ (* (+ 1.0 (vy position-clip)) fb-height) 2.0)))
+	   (ndc-x (round (/ (* (+ 1.0 (vx position-clip)) #+darwin 0.5 fb-width) 2.0)))
+	   (ndc-y (round (/ (* (+ 1.0 (vy position-clip)) #+darwin 0.5 fb-height) 2.0)))
 	   (hover-x (+ ndc-x 25))
 	   (hover-y (+ ndc-y 25)))
 
@@ -767,6 +789,68 @@
 
       (ig:set-cursor-screen-pos hover-x hover-y)
       (ig:text "<~S, ~S>" hover-x hover-y)
+
+      (let* ((app (slot-value renderer 'application))
+	     (editor (slot-value app 'editor))
+	     (command-stream (command-stream editor)))
+	(with-foreign-object (p-c :float 4)
+	  (setf (mem-aref p-c :float 0) 0.0f0
+		(mem-aref p-c :float 1) 0.0f0
+		(mem-aref p-c :float 2) 0.0f0
+		(mem-aref p-c :float 3) 1.0f0)
+	  
+	  (let* ((history (slot-value command-stream 'history)))
+	    (loop for i from (length history) downto 1
+	       with y = (- (/ fb-height #+darwin 2 #+windows 1) (* 7 (ig:iggettextlineheight)))
+	       with prev-newline = (length history)
+	       when (minusp y)
+	       do (return)
+	       when (char= (char history (1- i)) #\newline)
+	       do (ig:set-cursor-screen-pos 20 y)
+		 (ig::igtextcolored p-c (subseq (slot-value command-stream 'history) i prev-newline))
+		 (setq prev-newline (1- i))
+		 (decf y (ig:iggettextlineheight)))
+	    
+	    (let ((input-vertical-y (- (/ fb-height #+darwin 2 #+windows 1) 70)))
+	      (ig:set-cursor-screen-pos 4 input-vertical-y)
+	      (setf (mem-aref p-c :float 0) 1.0f0)
+	      (ig::igtextcolored p-c "->")
+	      (ig:set-cursor-screen-pos 5 (1+ input-vertical-y))
+	      (setf (mem-aref p-c :float 1) 1.0f0)
+	      (setf (mem-aref p-c :float 2) 1.0f0)
+	      (ig::igtextcolored p-c "->")
+	      (ig:set-cursor-screen-pos 30 input-vertical-y)
+	      (with-foreign-objects ((p-buf '(:array :char 1024))
+				     (p-buf-size :int)
+				     (p-size '(:struct ig::ImVec2)))
+		(setf (mem-aref p-buf-size :int) 1024
+		      (mem-aref (foreign-slot-pointer p-size '(:struct ig::ImVec2) 'ig::x) :float) 1120.0f0
+		      (mem-aref (foreign-slot-pointer p-size '(:struct ig::ImVec2) 'ig::y) :float) (* 15.0f0 3))
+		;;(let ((lock (slot-value command-stream 'input-lock)))
+		  ;;(sb-thread:with-mutex (lock)
+		  (when (IMGUI:IGINPUTTEXTMULTILINE "##command" p-buf 1024 p-size
+						    (logior IMGUI:IMGUIINPUTTEXTFLAGS_CTRLENTERFORNEWLINE
+							    IMGUI:IMGUIINPUTTEXTFLAGS_ENTERRETURNSTRUE
+							    #+NIL IMGUI:ImGuiInputTextFlags_CallbackAlways)
+						    (callback multiline-input-text-clear-callback) p-buf)
+		    (print 'im-here1!)
+		    (finish-output)
+		    (unless (imgui::igIsItemActive)
+		      (print 'im-here2!)
+		      (finish-output)
+		      (let ((string (cffi:foreign-string-to-lisp p-buf)))
+			(handler-case (with-input-from-string (stream string)
+					(let ((cl:*read-eval* nil)) (read stream))
+					(cond ((string-equal string "Line")
+					       (setf (editor-mode editor) :line-zeroth-point)))
+					      
+					#+notyet
+					(loop for char across string
+					   do (vector-push-extend char (slot-value command-stream 'input-buffer))
+					   finally (vector-push-extend #\newline (slot-value command-stream 'input-buffer)))
+					(setf (mem-aref p-buf :char 0) 0)
+					(ig:igsetwindowfocusstr "##command"))
+			(cl:end-of-file ()))))))))));;))
       (ig:end))      
 
     (3d-demo-select queue renderer model-matrix view-matrix projection-matrix)
@@ -779,7 +863,6 @@
 
     (cmd-set-scissor command-buffer :width fb-width :height fb-height)
 
-    #+DEBUG
     (loop for standin in (slot-value scene 'standins)
        do (with-slots (device) renderer
 	    (unless (face-vertex-buffer standin)
@@ -919,7 +1002,7 @@
 	(editor-render-draw-lists editor (colored-line-strip-renderer app) command-buffer current-frame w h (meye 4) (slot-value camera 'view-matrix) (slot-value camera 'projection-matrix))
 	(editor-render-draw-lists editor (colored-point-vertex-renderer app) command-buffer current-frame w h (meye 4) (slot-value camera 'view-matrix) (slot-value camera 'projection-matrix)))
 
-      ;;(3d-demo-render queue (edge-renderer app) command-buffer w h model-matrix)
+      (3d-demo-render queue (edge-renderer app) command-buffer w h model-matrix)
 
       (imgui-render (imgui-module app) command-buffer current-frame))))
 
@@ -1945,12 +2028,26 @@
 	     (editor (slot-value (application window) 'editor))
 	     (camera (slot-value scene 'camera)))
 
-	(when (equalp (editor-mode editor) (list :create :line))
+	(cond ((eq (editor-mode editor) :line-zeroth-point)
+	       (push (intersect-ray-with-plane
+		      (compute-picking-ray window camera (slot-value camera 'view-matrix)
+					   (slot-value camera 'projection-matrix) +clip-matrix+)		 
+		      (make-plane :equation (vec4 0 0 1 0)))
+		     (selection-stack editor))
+	       (setf (editor-mode editor) :line-first-point))
+	      
+	      ((eq (editor-mode editor) :line-first-point)
+	       (push (intersect-ray-with-plane
+		      (compute-picking-ray window camera (slot-value camera 'view-matrix)
+					   (slot-value camera 'projection-matrix) +clip-matrix+)		 
+		      (make-plane :equation (vec4 0 0 1 0)))
+		     (selection-stack editor))
+	       (add-entity editor (make-instance 'line-segment :point1 (first (selection-stack editor))
+						 :point2 (second (selection-stack editor))))
+	       (setf (selection-stack editor) nil)
+	       (setf (editor-mode editor) nil)))
+
 	  
-	  (push (intersect-ray-with-plane
-	(compute-picking-ray window camera (slot-value camera 'view-matrix) (slot-value camera 'projection-matrix) +clip-matrix+)		 
-		 (make-plane :equation (vec4 0 0 1 0)))
-		(selection-stack editor)))
 	(setf (elt (camera-mode scene) button)
 	      (if (elt (camera-mode scene) button)
 		  nil
@@ -2044,3 +2141,7 @@
 			     (oc::next iterator)))))
 	    
 	standin))))
+
+
+      
+					  

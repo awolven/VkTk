@@ -4710,10 +4710,10 @@
   (scale-max :float)
   (graph-size :pointer))
 
-(cffi:defcfun ("_igInputTextMultiline" igInputTextMultiline) :int
+(cffi:defcfun ("_igInputTextMultiline" igInputTextMultiline) :bool
   (label :string)
-  (buf :string)
-  (buf_size :pointer)
+  (buf :pointer)
+  (buf_size :unsigned-long-long)
   (size :pointer)
   (flags :int)
   (callback :pointer)

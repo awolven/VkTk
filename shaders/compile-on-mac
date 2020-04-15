@@ -5,3 +5,9 @@ set -x
 /Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V shader.frag
 
 /Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V shader.selection.geom -o selection.geom.spv
+
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V ray-tri.comp -o ray-tri.spv
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V lines.vert -o lines.vert.spv
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V lines.frag -o lines.frag.spv
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V color-lines.vert -o color-lines.vert.spv
+/Users/awolven/vulkansdk-macos-1.1.97.0/macOS/bin/glslangValidator -V color-points.vert -o color-points.vert.spv

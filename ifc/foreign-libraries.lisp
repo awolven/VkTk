@@ -34,7 +34,7 @@
 (defparameter *vktk-dir* (namestring (asdf/system:system-relative-pathname :vktk "")))
 
 (defparameter *vulkan-sdk-path*
-  #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.121.0/macOS")
+  #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.130.0/macOS")
   #+windows "C:/VulkanSDK/1.1.121.0")
 
 (defparameter *libshaderc-path*

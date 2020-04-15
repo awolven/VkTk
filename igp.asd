@@ -25,5 +25,6 @@
   :author "Andrew K Wolven <awolven@gmail.com>"
   :components
   ((:file "examples/interactive-graphics-package")
+   (:file "examples/command-loop")
    (:file "examples/interactive-graphics")
    (:file "examples/editor")))
