@@ -62,7 +62,7 @@ vktk is a library for programming Vulkan in Common Lisp.
 
 vktk provides an abstraction for Vulkan, GLFW, and ImGui.
 
-Vulkan is an interactive 3d-graphics library specification with implementations on Windows, Linux, Android, and Mac.  (vktk currently only supports Windows and Mac, but Linux could easily be added.)  GLFW is a platform independent Windowing library, and ImGUI is a GUI library which supports interactive 3D libraries such as Vulkan, OpenGL and Direct3D.
+Vulkan is an interactive 3d-graphics library specification with implementations on Windows, Linux, Android, and Mac.  (vktk currently supports Windows, Mac, and Linux all on AMD64.)  GLFW is a platform independent Windowing library, and ImGUI is a GUI library which supports interactive 3D libraries such as Vulkan, OpenGL and Direct3D.
 
 ### Why Vulkan?
 
