@@ -29,15 +29,18 @@
 		 (list (first pair) (eval (second pair))))
 	       pairs)))
 
-(defparameter *home-dir* #+darwin "/Users/awolven" #+windows "C:/Users/awolven")
+(defparameter *home-dir* #-(or darwin windows) "/home/awolven"
+  #+darwin "/Users/awolven" #+windows "C:/Users/awolven")
 
 (defparameter *vktk-dir* (namestring (asdf/system:system-relative-pathname :vktk "")))
 
 (defparameter *vulkan-sdk-path*
   #+darwin (concatenate 'string *home-dir* "/vulkansdk-macos-1.1.130.0/macOS")
+  #+linux (concatenate 'string *home-dir* "/swiftshader-build1/Linux")
   #+windows "C:/VulkanSDK/1.1.121.0")
 
 (defparameter *libshaderc-path*
+  #+linux nil
   #+windows (concatenate
 	     'string *home-dir*
 	     "/Documents/Visual Studio 2015/projects/shaderc_wrap/x64/Debug/shaderc_wrap.dll")
@@ -51,9 +54,15 @@
   (sb-posix:setenv "DYLD_LIBRARY_PATH" (concatenate 'string *vulkan-sdk-path* "/lib") 0)
   (sb-posix:setenv "VULKAN_FRAMEWORK_PATH" (concatenate 'string *vulkan-sdk-path* "/Frameworks") 0)
   (sb-posix:setenv "DYLD_FRAMEWORK_PATH" (concatenate 'string *vulkan-sdk-path* "/Frameworks") 0)
-)
+  )
+
+#+linux
+(progn
+  (sb-posix:setenv "VK_ICD_FILENAMES" (concatenate 'string *vulkan-sdk-path* "/vk_swiftshader_icd.json") 0)
+  (sb-posix:setenv "VK_LAYER_PATH" (concatenate 'string *vulkan-sdk-path* "/usr/share/vulkan/explicit_layer.d") 0))
 
 (my-define-foreign-library vulkan-loader
+  (:linux "libvulkan.so.1")
   (:darwin "libvulkan.1.dylib")
   (:windows "vulkan-1.dll"))
 
@@ -63,11 +72,14 @@
 
 (my-define-foreign-library cimgui
   (:darwin (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dylib"))
-  (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dll")))
+  (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dll"))
+  (:linux (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.so")))
+
 
 (my-define-foreign-library glfw3
   (:darwin (asdf/system:system-relative-pathname :vktk "ifc/lib/libglfw.3.4.dylib"))
-  (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/glfw3.dll")))
+  (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/glfw3.dll"))
+  (:linux "libglfw.so.3"))
 
 (cffi:use-foreign-library vulkan-loader)
 (cffi:use-foreign-library cimgui)

@@ -21,7 +21,7 @@
 
 (in-package :vktk)
 
-(defparameter *assets-dir* "~/vktk/")
+(defparameter *assets-dir* "~/VkTk/")
 
 (defclass handle-mixin ()
   ((handle :accessor h :initarg :handle)))
@@ -177,6 +177,8 @@
 
 
 (defparameter *validation-layers*
+  #+linux nil
+  #-linux
   (list ;;#-darwin "VK_LAYER_LUNARG_vktrace" ;; note: trying to enable this layer causes vkcreateinstance to fail, needs to find a connection.
 	"VK_LAYER_GOOGLE_unique_objects" ;; the rest seem to work fine
 	"VK_LAYER_GOOGLE_threading"
@@ -206,12 +208,13 @@
 			  (allocator +null-allocator+))
 
   (when *debug* ;; debug explicitly turned on
-    (pushnew VK_EXT_DEBUG_REPORT_EXTENSION_NAME extension-names :test #'string=)
-    (pushnew "VK_LAYER_LUNARG_standard_validation" layer-names :test #'string=)
+    #-linux(pushnew VK_EXT_DEBUG_REPORT_EXTENSION_NAME extension-names :test #'string=)
+    #-linux(pushnew "VK_LAYER_LUNARG_standard_validation" layer-names :test #'string=)
     (when (and (numberp *debug*) (> *debug* 1))
       (pushnew "VK_LAYER_LUNARG_api_dump" layer-names :test #'string=)))
 
-  (let ((available-layers #+windows (available-layers) #+darwin (when layer-names (available-layers)))
+  (let ((available-layers #+(or windows linux) (available-layers)
+			  #+darwin (when layer-names (available-layers)))
 	(available-extensions #+windows (available-extensions)
 			      #+darwin (when extension-names (available-extensions))))
     (loop for layer in layer-names
@@ -1832,7 +1835,7 @@
 				    (enable-logic-op nil)
 				    (enable-multi-draw-indirect nil)
 				    (enable-draw-indirect-first-instance nil)
-				    (enable-depth-clamp t)
+				    (enable-depth-clamp #-linux t #+linux nil)
 				    (enable-depth-bias-clamp nil)
 				    (enable-fill-mode-non-solid nil)
 				    (enable-depth-bounds nil)
@@ -4287,13 +4290,13 @@
 	  (when index (return (values gpu index))))
      finally (error "Could not find a gpu with window system integration support.")))
 
-(defun setup-vulkan (app &key (width 1280) (height 720) (compute-queue-count #+windows 1 #+darwin 0))
+(defun setup-vulkan (app &key (width 1280) (height 720) (compute-queue-count #+windows 1 #+(or darwin linux) 0))
   (let ((vulkan-instance (or *vulkan-instance*
 			     (create-instance :application-name "VkTk Demo" #+darwin :layer-names #+darwin nil))))
     
     (setf (vulkan-instance app) vulkan-instance)
     
-    (let ((debug-callback #+windows(when *debug* (create-debug-report-callback vulkan-instance 'debug-report-callback))))
+    (let ((debug-callback #+windows (when *debug* (create-debug-report-callback vulkan-instance 'debug-report-callback))))
       
       (setf (debug-callback vulkan-instance) debug-callback)
 

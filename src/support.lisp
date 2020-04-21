@@ -21,7 +21,7 @@
 
 (in-package :vktk)
 
-(defvar *debug* #+windows 1 #+darwin nil)
+(defvar *debug* #+(or windows linux) 1 #+darwin nil)
 
 (defconstant +NULL+ 0)
 (defconstant IMGUI_MAX_POSSIBLE_BACK_BUFFERS 16)

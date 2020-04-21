@@ -1,3 +1,7 @@
+# Latest news:
+
+Linux AMD64 port now available.
+
 # Quick start:
 
 These instructions assume you have [SBCL](http://www.sbcl.org/) installed on your system with asdf and quicklisp.  If you have a macOS port of SBCL that is single threaded, you can easily build a multithreaded version, but the single thread version should run the VkTk Demo just fine.
@@ -30,7 +34,21 @@ In emacs `M-x slime`.
 
 `(asdf:oos 'asdf:load-op :vktk)`
 
-`(vktk:run-demo)`
+There currently is no standalone demo for vktk.  That is a todo item.  There is, however, a demo of VkTk functionality combined with `oc`.  oc is an interface to the OpenCASCADE solid modeler.  The demo shows vulkan functionality, imgui functionality and solid modeler functionality together.  The idea is to turn this demo into an application.  To install/run the demo, follow these additional instructions:
+
+`git clone https://github.com/awolven/oc.git`
+
+This operation may take a while as OpenCASCADE binaries are provided.
+
+In slime:
+
+`(push "<oc-dir>/" asdf:*central-registry*)`
+
+`(asdf:oos 'asdf:load-op :igp)`
+
+`(igp::run-demo)`
+
+When the linux port was created, it was created on a virtual machine, so a software installable client driver was used: swiftshader.  If you're running with a real vulkan capable graphics card, the performance should be fine.  Swiftshader is a little slow.
 
 --------
 

@@ -321,8 +321,8 @@
 
 		(setf vk::x 0.0f0
 		      vk::y 0.0f0
-		      vk::width (* #+darwin 2.0f0 #+windows 1.0f0 display-size-x)
-		      vk::height (* #+darwin 2.0f0 #+windows 1.0f0 display-size-y)
+		      vk::width (* #+darwin 2.0f0 #+(or windows linux) 1.0f0 display-size-x)
+		      vk::height (* #+darwin 2.0f0 #+(or windows linux) 1.0f0 display-size-y)
 		      vk::minDepth 0.0f0
 		      vk::maxDepth 1.0f0)
 		(vkCmdSetViewport (h command-buffer) 0 1 p-viewport)
@@ -383,18 +383,18 @@
 				     
 				   (setf vk::x (* (max
 						   (round (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x))
-						   0) #+darwin 2 #+windows 1)
+						   0) #+darwin 2 #+(or windows linux) 1)
 					 vk::y (* (max
 						   (round (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y))
-						   0) #+darwin 2 #+windows 1)
+						   0) #+darwin 2 #+(or windows linux) 1)
 					 vk::width (* (round
 						       (- (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::z)
 							  (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x)))
-						      #+darwin 2 #+windows 1)
+						      #+darwin 2 #+(or windows linux)1)
 					 vk::height (* (round
 							(- (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::w)
 							   (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y)))
-						       #+darwin 2 #+windows 1)))
+						       #+darwin 2 #+(or windows linux) 1)))
 
 				 (vkCmdSetScissor (h command-buffer) 0 1 p-scissor)
 

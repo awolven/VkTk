@@ -363,6 +363,19 @@
        #+NIL(igp::append-circle (slot-value *app* 'igp::editor) (3d-vectors::vec2 10 20) 40 (make-array 4 :element-type 'single-float :initial-element 0.5))
        (main *app*)))
    :name "graphics")
+
+  #+linux
+  (sb-thread:make-thread
+   (lambda ()
+  (sb-int:with-float-traps-masked
+   (:invalid
+    :inexact
+    :overflow
+    :underflow
+    :divide-by-zero)
+   (main (setq *app* (apply #'make-instance 'application args)))))
+   :name "graphics")
+  
   #+darwin
   (sb-thread:interrupt-thread
    (sb-thread:main-thread)
@@ -496,7 +509,7 @@
 (defun create-standard-renderer-device-objects (renderer
 						&key (bindings (make-descriptor-set-layout-bindings renderer))
 						  (push-constant-ranges (make-push-constant-ranges renderer))
-						  (line-width #+windows 2.0f0 #+darwin 1.0f0)
+						  (line-width #+(or windows linux) 2.0f0 #+darwin 1.0f0)
 						  (vertex-type (pipeline-vertex-type renderer))
 						  (vertex-input-attribute-descriptions
 						   (make-vertex-input-attribute-descriptions renderer))
@@ -801,7 +814,7 @@
 	  
 	  (let* ((history (slot-value command-stream 'history)))
 	    (loop for i from (length history) downto 1
-	       with y = (- (/ fb-height #+darwin 2 #+windows 1) (* 7 (ig:iggettextlineheight)))
+	       with y = (- (/ fb-height #+darwin 2 #+(or windows linux) 1) (* 7 (ig:iggettextlineheight)))
 	       with prev-newline = (length history)
 	       when (minusp y)
 	       do (return)
@@ -811,7 +824,7 @@
 		 (setq prev-newline (1- i))
 		 (decf y (ig:iggettextlineheight)))
 	    
-	    (let ((input-vertical-y (- (/ fb-height #+darwin 2 #+windows 1) 70)))
+	    (let ((input-vertical-y (- (/ fb-height #+darwin 2 #+(or windows linux) 1) 70)))
 	      (ig:set-cursor-screen-pos 4 input-vertical-y)
 	      (setf (mem-aref p-c :float 0) 1.0f0)
 	      (ig::igtextcolored p-c "->")
@@ -827,11 +840,12 @@
 		      (mem-aref (foreign-slot-pointer p-size '(:struct ig::ImVec2) 'ig::x) :float) 1120.0f0
 		      (mem-aref (foreign-slot-pointer p-size '(:struct ig::ImVec2) 'ig::y) :float) (* 15.0f0 3))
 		;;(let ((lock (slot-value command-stream 'input-lock)))
-		  ;;(sb-thread:with-mutex (lock)
+		;;(sb-thread:with-mutex (lock)
+
 		  (when (IMGUI:IGINPUTTEXTMULTILINE "##command" p-buf 1024 p-size
 						    (logior IMGUI:IMGUIINPUTTEXTFLAGS_CTRLENTERFORNEWLINE
 							    IMGUI:IMGUIINPUTTEXTFLAGS_ENTERRETURNSTRUE
-							    #+NIL IMGUI:ImGuiInputTextFlags_CallbackAlways)
+							    IMGUI:ImGuiInputTextFlags_CallbackAlways)
 						    (callback multiline-input-text-clear-callback) p-buf)
 		    (print 'im-here1!)
 		    (finish-output)
