@@ -357,11 +357,17 @@
   #+windows
   (sb-thread:make-thread
    (lambda ()
+     (sb-int:with-float-traps-masked
+	 (:invalid
+	  :inexact
+	  :overflow
+	  :underflow
+	  :divide-by-zero)
      (let ((*debug* debug))
        ;; app must be created in the thread that will run main
        (setq *app* (apply #'make-instance 'application args))
        #+NIL(igp::append-circle (slot-value *app* 'igp::editor) (3d-vectors::vec2 10 20) 40 (make-array 4 :element-type 'single-float :initial-element 0.5))
-       (main *app*)))
+       (main *app*))))
    :name "graphics")
 
   #+linux
