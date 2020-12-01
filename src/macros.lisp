@@ -55,6 +55,10 @@
      
      ,@body))
 
+(defmacro with-pipeline-rasterization-line-state-create-info-ext ((var) &body body)
+  `(with-vk-struct (,var vk::VkPipelineRasterizationLineStateCreateInfoEXT)
+     ,@body))
+
 (defmacro with-pipeline-multisample-state-create-info ((var) &body body)
 
   `(with-vk-struct (,var VKPipelineMultisampleStateCreateInfo)

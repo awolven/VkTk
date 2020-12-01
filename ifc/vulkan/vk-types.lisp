@@ -1135,6 +1135,7 @@ MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
 (cl:defconstant VK_DYNAMIC_STATE_STENCIL_REFERENCE #x8)
 (cl:defconstant VK_DYNAMIC_STATE_VIEWPORT_W_SCALING_NV #x3B9C1DD8) ;; "VK_NV_clip_space_w_scaling"
 (cl:defconstant VK_DYNAMIC_STATE_DISCARD_RECTANGLE_EXT #x3B9C4CB8) ;; "VK_EXT_discard_rectangles"
+(cl:defconstant VK_DYNAMIC_STATE_LINE_STIPPLE_EXT 1000259000)
 
 (cffi:defctype VkExternalMemoryFeatureFlagBitsKHX :int)
 
@@ -1807,6 +1808,9 @@ MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
 (cl:defconstant VK_STENCIL_OP_DECREMENT_AND_WRAP #x7)
 
 (cffi:defctype VkStructureType :int)
+
+(cl:defconstant VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO_EXT 1000259001)
+(cl:defconstant VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT 1000259000)
 
 (cl:defconstant VK_STRUCTURE_TYPE_APPLICATION_INFO #x0)
 (cl:defconstant VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO #x1)
@@ -2920,6 +2924,30 @@ MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
   (depthBiasClamp :float)
   (depthBiasSlopeFactor :float)
   (lineWidth :float))
+
+(cffi:defctype VkLineRasterizationModeEXT :int)
+(cl:defconstant VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT 0)
+(cl:defconstant VK_LINE_RASTERIZATION_MODE_RECTANGULAR_EXT 1)
+(cl:defconstant VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT 2)
+(cl:defconstant VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT 3)
+
+(cffi:defcstruct VkPipelineRasterizationLineStateCreateInfoEXT
+  (sType VkStructureType)
+  (pNext (:pointer :void))
+  (lineRasterizationMode VkLineRasterizationModeEXT)
+  (stippledLineEnable VkBool32)
+  (lineStippleFactor :uint32)
+  (lineStipplePattern :unsigned-short))
+
+(cffi:defcstruct VkPhysicalDeviceLineRasterizationFeaturesEXT
+  (sType VkStructureType)
+  (pNext (:pointer :void))
+  (rectangularLines VkBool32)
+  (bresenhamLines VkBool32)
+  (smoothLines VkBool32)
+  (stippledRectangularLines VkBool32)
+  (stippledBresenhamLines VkBool32)
+  (stippledSmoothLines VkBool32))
 
 (cffi:defcstruct VkPipelineMultisampleStateCreateInfo
   (sType VkStructureType)#|MUST-BE :PIPELINE-MULTISAMPLE-STATE-CREATE-INFO|#

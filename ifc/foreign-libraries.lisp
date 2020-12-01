@@ -69,18 +69,11 @@
 (my-define-foreign-library shaderc
   (:darwin "libshaderc_shared.dylib"))
 			  
-
-(my-define-foreign-library cimgui
-  (:darwin (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dylib"))
-  (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.dll"))
-  (:linux (asdf/system:system-relative-pathname :vktk "ifc/lib/cimgui.so")))
-
-
 (my-define-foreign-library glfw3
   (:darwin (asdf/system:system-relative-pathname :vktk "ifc/lib/libglfw.3.4.dylib"))
   (:windows (asdf/system:system-relative-pathname :vktk "ifc/lib/glfw3.dll"))
   (:linux "libglfw.so.3"))
 
 (cffi:use-foreign-library vulkan-loader)
-(cffi:use-foreign-library cimgui)
+
 (cffi:use-foreign-library glfw3)

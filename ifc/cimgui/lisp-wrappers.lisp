@@ -1,4 +1,4 @@
-(in-package :vktk)
+(in-package :imgui)
 
 (defun show-demo-window (&optional (open nil))
   (with-foreign-object (p-open :bool)

@@ -397,6 +397,8 @@
 
 (cl:defconstant GLFW_MAXIMIZED #x00020008)
 
+(cl:defconstant GLFW_FOCUS_ON_SHOW #x0002000C)
+
 (cl:defconstant GLFW_RED_BITS #x00021001)
 
 (cl:defconstant GLFW_GREEN_BITS #x00021002)
@@ -527,6 +529,8 @@
 	(width :int)
 	(height :int)
 	(pixels :pointer))
+
+(cffi:defcstruct GLFWmonitor)
 
 (cffi:defcfun ("glfwInit" glfwInit) :int)
 

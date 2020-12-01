@@ -23,7 +23,7 @@
 
 (defpackage :vulkan-toolkit
   (:nicknames :vktk)
-  (:use :cl :cffi :imgui :glfw :vulkan :3d-vectors :3d-matrices :lisp-unit)
+  (:use :cl :cffi :glfw :vulkan :3d-vectors :3d-matrices :lisp-unit)
   (:import-from :sb-ext #:quit #:exit)
 
   (:export #:*debug*
@@ -38,6 +38,7 @@
 	   #:h
 	   #:device
 	   #:allocation-callbacks
+	   #:+nullptr+
 	   #:+null-allocator+
 	   #:pipeline-cache
 	   #:+null-pipeline-cache+

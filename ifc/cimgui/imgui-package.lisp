@@ -23,6 +23,8 @@
 
 (defpackage :imgui
   (:nicknames :ig)
+  (:use :cl :cffi :vktk)
+  (:shadow)
   (:export #:bullet-text
 	   #:show-demo-window
 	   #:begin

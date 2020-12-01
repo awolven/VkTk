@@ -27,6 +27,12 @@
      (cl:list 'VkAcquireNextImageInfoKHX
 	      VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHX
 
+	      'VkPipelineRasterizationLineStateCreateInfoEXT
+	      VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO_EXT
+
+	      'VkPhysicalDeviceLineRasterizationFeaturesEXT
+	      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT
+	      
 	      'VkAndroidSurfaceCreateInfoKHR
 	      VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR
 
