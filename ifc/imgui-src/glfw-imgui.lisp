@@ -58,16 +58,18 @@
 (defcallback imgui-glfw-set-clipboard-text-callback :void ((window :pointer) (text :string))
   (glfwSetClipboardString window text))
 
+(defgeneric imgui-module (application))
+
 (defmethod imgui-glfw-mouse-button ((window window) button action mods)
-  (when (and (prev-user-callback-mouse-button (imgui-module (application window)))
-	     (pointer-eq (h (first (last (window-registry (application window)))))
+  (when (and (prev-user-callback-mouse-button (imgui-module (vk::application window)))
+	     (pointer-eq (h (main-window (vk::application window)))
 			 (h window)))
-    (funcall (prev-user-callback-mouse-button (imgui-module (application window))) window button action mods))
-  (let ((mouse-just-pressed (mouse-just-pressed (imgui-module (application window)))))
-    (when (and (eq action glfw:GLFW_PRESS)
+    (funcall (prev-user-callback-mouse-button (imgui-module (vk::application window))) window button action mods))
+  (let ((mouse-just-pressed (mouse-just-pressed (imgui-module (vk::application window)))))
+    (when (and (eq action GLFW_PRESS)
 	       (< button (length mouse-just-pressed)))
       (setf (aref mouse-just-pressed button) t)
-      (on-mouse-click (application window) mouse-just-pressed)))
+      (on-mouse-click (vk::application window) mouse-just-pressed)))
   (values))
 
 (defmethod on-mouse-click ((application vulkan-application-mixin) buttons-pressed)
@@ -82,12 +84,16 @@
   (imgui-glfw-scroll-event (find-window user-data) xoffset yoffset)
   (values))
 
+(defmethod on-scroll (application xoffset yoffset)
+  (declare (ignore xoffset yoffset))
+  (values))
+
 (defun imgui-glfw-scroll-event (window xoffset yoffset)
   
-  (when (and (prev-user-callback-mouse-button (imgui-module (application window)))
-	     (pointer-eq (h (main-window (application window))) (h window)))
+  (when (and (prev-user-callback-mouse-button (imgui-module (vk::application window)))
+	     (pointer-eq (h (main-window (vk::application window))) (h window)))
     (funcall (prev-user-callback-scroll
-	      (imgui-module (application window)))
+	      (imgui-module (vk::application window)))
 	     window xoffset yoffset))
   
   (let ((io (ig::igGetIO)))
@@ -99,7 +105,7 @@
 	  (+ (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::MouseWheel)
 	     (coerce yoffset 'single-float)))
 
-    (on-scroll (application window) xoffset yoffset))
+    (on-scroll (vk::application window) xoffset yoffset))
 				  
   (values))
 
@@ -373,19 +379,19 @@
 			  
 			   (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::x)
 			   (coerce
-			    (foreign-slot-value vid-mode '(:struct GLFWvidmode) 'glfw::width)
+			    (foreign-slot-value vid-mode '(:struct GLFWvidmode) '%glfw::width)
 			    'single-float)
 			  
 			   (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::y)
 			   (coerce
-			    (foreign-slot-value vid-mode '(:struct GLFWvidmode) 'glfw::height)
+			    (foreign-slot-value vid-mode '(:struct GLFWvidmode) '%glfw::height)
 			    'single-float))
 
 		     (with-foreign-objects ((&w :int)
 					    (&h :int))
-		       (if (boundp 'glfw::glfwGetMonitorWorkarea)
+		       (if (boundp '%glfw::glfwGetMonitorWorkarea)
 			   (progn
-			     (funcall 'glfw::glfwGetMonitorWorkarea
+			     (funcall '%glfw::glfwGetMonitorWorkarea
 				      glfw-monitors-n &x &y &w &h)
 			    
 			     (setf (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::x)
@@ -537,8 +543,8 @@
       (setf (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::PlatformRequestResize)
 	    t)
       (setf (recreate-swapchain? window) t
-	    (new-width window) width
-	    (new-height window) height)
+	    (vk::new-width window) width
+	    (vk::new-height window) height)
       (values))))
 
 (cffi:defcallback imgui-glfw-create-window-callback :void ((viewport :pointer)
@@ -563,7 +569,7 @@
     (glfwWindowHint GLFW_VISIBLE 0)
     (glfwWindowHint GLFW_FOCUSED 0)
 
-    (glfwWindowHint glfw::GLFW_FOCUS_ON_SHOW 0)
+    (glfwWindowHint %glfw::GLFW_FOCUS_ON_SHOW 0)
 
     (glfwWindowHint GLFW_DECORATED
 		    (if (not (zerop (logand (print (foreign-slot-value
@@ -653,7 +659,8 @@
 	  (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::PlatformHandle)
 	  +nullptr+)
     (foreign-free data)
-    (setf (window-registry *app*) (remove (h window) (window-registry *app*) :key #'h :test #'pointer-eq))
+    (setf (window-registry *app*)
+	  (remove (h window) (window-registry *app*) :key #'h :test #'pointer-eq))
     (values)))
 
 (cffi:defcallback imgui-glfw-show-window-callback :void ((viewport :pointer)
@@ -793,10 +800,10 @@
 (defun viewport-create-vk-surface (viewport instance allocator out-surface)
   (let* ((window-handle (get-viewport-window viewport))
 	 (window (find-window window-handle)))
-    (check-vk-result (glfwCreateWindowSurface instance
-					      window-handle
-					      allocator
-					      out-surface))
+    (check-vk-result (vk::glfwCreateWindowSurface instance
+						  window-handle
+						  allocator
+						  out-surface))
     (setf (render-surface window)
 	  (make-instance 'surface
 			 :handle (mem-aref out-surface 'VkSurfaceKHR)

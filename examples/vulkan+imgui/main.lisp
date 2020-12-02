@@ -7,7 +7,7 @@
   (declare (ignore initargs))
   (let* ((device (default-logical-device app))
 	 (pipeline-cache (pipeline-cache app))
-	 (descriptor-pool (first (descriptor-pools device))))
+	 (descriptor-pool (first (vk::descriptor-pools device))))
     (setf (imgui-module app)
 	  (make-instance 'imgui
 			 :application app
@@ -54,9 +54,9 @@
 	     (image-index)
 	     (exit? nil))
 
-	(loop while (zerop (glfw:glfwWindowShouldClose (h main-window))) until exit?
+	(loop while (zerop (glfwWindowShouldClose (h main-window))) until exit?
 	   do
-	     (glfw:glfwPollEvents)
+	     (glfwPollEvents)
 
 	     (when (recreate-swapchain? main-window)
 	       (device-wait-idle device) ;;hack

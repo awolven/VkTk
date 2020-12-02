@@ -3,10 +3,10 @@
 (cffi:defcstruct ImGui_ImplVulkanH_Window
   (Width :int)
   (Height :int)
-  (Swapchain vk::VkSwapchainKHR)
-  (Surface vk::VkSurfaceKHR)
-  (SurfaceFormat (:struct vk::VkSurfaceFormatKHR))
-  (PresentMode vk::VkPresentModeKHR)
+  (Swapchain VkSwapchainKHR)
+  (Surface VkSurfaceKHR)
+  (SurfaceFormat (:struct VkSurfaceFormatKHR))
+  (PresentMode VkPresentModeKHR)
   (ClearEnable :bool)
   (FrameIndex :uint32)
   (ImageCount :uint32)
@@ -15,12 +15,12 @@
   (FrameSemaphores :pointer))
 
 (cffi:defcstruct ImGui_ImplVulkanH_FrameRenderBuffers
-  (VertexBufferMemory vk:VkDeviceMemory)
-  (IndexBufferMemory vk:VkDeviceMemory)
-  (VertexBufferSize vk:VkDeviceSize)
-  (IndexBufferSize vk:VkDeviceSize)
-  (VertexBuffer vk:VkBuffer)
-  (IndexBuffer vk:VkBuffer))
+  (VertexBufferMemory VkDeviceMemory)
+  (IndexBufferMemory VkDeviceMemory)
+  (VertexBufferSize VkDeviceSize)
+  (IndexBufferSize VkDeviceSize)
+  (VertexBuffer VkBuffer)
+  (IndexBuffer VkBuffer))
 
 (cffi:defcstruct ImGui_ImplVulkanH_WindowRenderBuffers
   (Index :uint32)
@@ -137,12 +137,12 @@
 			  0 VK_INDEX_TYPE_UINT16)
     ;; Setup Viewport
     (with-vk-struct (p-viewport VkViewport)
-      (with-foreign-slots ((vk::x
-			    vk::y
-			    vk::width
-			    vk::height
-			    vk::minDepth
-			    vk::maxDepth)
+      (with-foreign-slots ((%vk::x
+			    %vk::y
+			    %vk::width
+			    %vk::height
+			    %vk::minDepth
+			    %vk::maxDepth)
 			   p-viewport
 			   (:struct VkViewport))
 	(let* ((p-display-size
@@ -156,14 +156,14 @@
 
 	  ;;(print display-size-x) (print display-size-y)
 
-	  (setf vk::x 0.0f0
-		vk::y 0.0f0
-		vk::width fb-width #+NIL(* #+darwin 2.0f0 #+(or windows linux) 1.0f0
+	  (setf %vk::x 0.0f0
+		%vk::y 0.0f0
+		%vk::width fb-width #+NIL(* #+darwin 2.0f0 #+(or windows linux) 1.0f0
 					     display-size-x)
-		vk::height fb-height #+NIL(* #+darwin 2.0f0 #+(or windows linux) 1.0f0
+		%vk::height fb-height #+NIL(* #+darwin 2.0f0 #+(or windows linux) 1.0f0
 					     display-size-y)
-		vk::minDepth 0.0f0
-		vk::maxDepth 1.0f0)
+		%vk::minDepth 0.0f0
+		%vk::maxDepth 1.0f0)
 	  (vkCmdSetViewport (h command-buffer) 0 1 p-viewport)
 
 	  ;; Setup scale and translation:
@@ -195,7 +195,7 @@
 	 
 	 (p-display-size
 	  (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplaySize))
-	 (p-framebuffer-scale
+	 #+NOTYET(p-framebuffer-scale
 	  (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::FramebufferScale))
 	 (framebuffer-scale-x #+(or windows linux) 1 #+macos 2
 			      #+NIL(foreign-slot-value p-framebuffer-scale
@@ -254,7 +254,7 @@
 						  vertex-buffer
 						  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
 						  :allocator allocator))
-		    (setf buffer-memory-alignment (max (alignment vertex-buffer-memory)
+		    (setf buffer-memory-alignment (max (vk::alignment vertex-buffer-memory)
 						       buffer-memory-alignment))
 		    (bind-buffer-memory device vertex-buffer vertex-buffer-memory)))
 
@@ -277,7 +277,7 @@
 						  index-buffer
 						  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
 						  :allocator allocator))
-		    (setf buffer-memory-alignment (max (alignment index-buffer-memory)
+		    (setf buffer-memory-alignment (max (vk::alignment index-buffer-memory)
 						       buffer-memory-alignment))
 		    (bind-buffer-memory device index-buffer index-buffer-memory)))
 
@@ -309,11 +309,11 @@
 				 (p-vtx-data (ig::ImVector_ImDrawVert_begin p-vtx-buffer))
 				 (p-idx-data (ig::ImVector_ImDrawIdx_begin p-idx-buffer)))
 
-			    (memcpy p-vtx-dst p-vtx-data
-				    (ig::ImVector_ImDrawVert_size_in_bytes p-vtx-buffer))
+			    (vk::memcpy p-vtx-dst p-vtx-data
+					(ig::ImVector_ImDrawVert_size_in_bytes p-vtx-buffer))
 
-			    (memcpy p-idx-dst p-idx-data
-				    (ig::ImVector_ImDrawIdx_size_in_bytes p-idx-buffer))
+			    (vk::memcpy p-idx-dst p-idx-data
+					(ig::ImVector_ImDrawIdx_size_in_bytes p-idx-buffer))
 
 			    (incf-pointer p-vtx-dst (ig::ImVector_ImDrawVert_size_in_bytes p-vtx-buffer))
 
@@ -324,23 +324,23 @@
 			       '(:struct VkMappedMemoryRange))
 		  (zero-struct (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 1)
 			       '(:struct VkMappedMemoryRange))
-		  (with-foreign-slots ((vk::sType
-					vk::memory
-					vk::size)
+		  (with-foreign-slots ((%vk::sType
+					%vk::memory
+					%vk::size)
 				       (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 0)
 				       (:struct VkMappedMemoryRange))
-		    (setf vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
-			  vk::memory (h vertex-buffer-memory)
-			  vk::size VK_WHOLE_SIZE))
+		    (setf %vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
+			  %vk::memory (h vertex-buffer-memory)
+			  %vk::size VK_WHOLE_SIZE))
 
-		  (with-foreign-slots ((vk::sType
-					vk::memory
-					vk::size)
+		  (with-foreign-slots ((%vk::sType
+					%vk::memory
+					%vk::size)
 				       (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 1)
 				       (:struct VkMappedMemoryRange))
-		    (setf vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
-			  vk::memory (h index-buffer-memory)
-			  vk::size VK_WHOLE_SIZE))
+		    (setf %vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
+			  %vk::memory (h index-buffer-memory)
+			  %vk::size VK_WHOLE_SIZE))
 
 		  (check-vk-result (vkFlushMappedMemoryRanges (h device) 2 p-ranges))
 
@@ -375,12 +375,12 @@
 
 			       (with-vk-struct (p-scissor VkRect2D)
 				 (let ((p-offset
-					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::offset))
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) '%vk::offset))
 				       (p-extent
-					(foreign-slot-pointer p-scissor '(:struct VkRect2D) 'vk::extent)))
+					(foreign-slot-pointer p-scissor '(:struct VkRect2D) '%vk::extent)))
 			       
-				   (with-foreign-slots ((vk::x vk::y) p-offset (:struct VkOffset2D))
-				     (with-foreign-slots ((vk::width vk::height) p-extent (:struct VkExtent2D))
+				   (with-foreign-slots ((%vk::x %vk::y) p-offset (:struct VkOffset2D))
+				     (with-foreign-slots ((%vk::width %vk::height) p-extent (:struct VkExtent2D))
 				   
 				       (let* ((p-clip-rect
 					       (foreign-slot-pointer p-cmd '(:struct ig::ImDrawCmd) 'ig::ClipRect))
@@ -420,10 +420,10 @@
 					   (when (< cr-y 0.0f0)
 					     (setq cr-y 0.0f0))
 					   
-					   (setf vk::x (round cr-x)
-						 vk::y (round cr-y)
-						 vk::width (round (- cr-z cr-x))
-						 vk::height (round (- cr-w cr-y))))
+					   (setf %vk::x (round cr-x)
+						 %vk::y (round cr-y)
+						 %vk::width (round (- cr-z cr-x))
+						 %vk::height (round (- cr-w cr-y))))
 					 
 					 (vkCmdSetScissor (h command-buffer) 0 1 p-scissor)
 
@@ -459,7 +459,7 @@
 (defun imgui-vulkan-create-fonts-texture (imgui command-buffer)
 
   (let* ((io (ig::igGetIO))
-	 (application (application imgui))
+	 (application (vk::application imgui))
 	 (device (default-logical-device application))
 	 (allocator (allocator application)))
 
@@ -479,23 +479,23 @@
 
 	;; update the descriptor set:
 	(with-vk-struct (p-desc-image VkDescriptorImageInfo)
-	  (with-foreign-slots ((vk::sampler
-				vk::imageView
-				vk::imageLayout)
+	  (with-foreign-slots ((%vk::sampler
+				%vk::imageView
+				%vk::imageLayout)
 			       p-desc-image (:struct VkDescriptorImageInfo))
-	    (setf vk::sampler (h (font-sampler imgui))
-		  vk::imageView (h (font-view imgui))
-		  vk::imageLayout VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	    (setf %vk::sampler (h (font-sampler imgui))
+		  %vk::imageView (h (font-view imgui))
+		  %vk::imageLayout VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 	    (with-vk-struct (p-write-desc VkWriteDescriptorSet)
-	      (with-foreign-slots ((vk::dstSet
-				    vk::descriptorCount
-				    vk::descriptorType
-				    vk::pImageInfo)
+	      (with-foreign-slots ((%vk::dstSet
+				    %vk::descriptorCount
+				    %vk::descriptorType
+				    %vk::pImageInfo)
 				   p-write-desc (:struct VkWriteDescriptorSet))
-		(setf vk::dstSet (h (descriptor-set imgui))
-		      vk::descriptorCount 1
-		      vk::descriptorType VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-		      vk::pImageInfo p-desc-image))
+		(setf %vk::dstSet (h (descriptor-set imgui))
+		      %vk::descriptorCount 1
+		      %vk::descriptorType VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+		      %vk::pImageInfo p-desc-image))
 	      (vkUpdateDescriptorSets (h device) 1 p-write-desc 0 +nullptr+)
 
 	      ;; create the upload buffer:
@@ -507,7 +507,7 @@
 									 (upload-buffer imgui)
 									 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
 									 :allocator allocator)
-		    (buffer-memory-alignment imgui) (max (alignment (upload-buffer-memory imgui))
+		    (buffer-memory-alignment imgui) (max (vk::alignment (upload-buffer-memory imgui))
 							 (buffer-memory-alignment imgui)))
 	      (vkBindBufferMemory (h device) (h (upload-buffer imgui)) (h (upload-buffer-memory imgui)) 0)
 
@@ -517,14 +517,14 @@
 		(check-vk-result
 		 (vkMapMemory (h device) (h (upload-buffer-memory imgui)) 0 upload-size 0 p-map))
 
-		(memcpy (mem-aref p-map :pointer) (mem-aref p-pixels :pointer) upload-size)
+		(vk::memcpy (mem-aref p-map :pointer) (mem-aref p-pixels :pointer) upload-size)
 
 		(with-vk-struct (p-range VkMappedMemoryRange)
-		  (with-foreign-slots ((vk::memory
-					vk::size)
+		  (with-foreign-slots ((%vk::memory
+					%vk::size)
 				       p-range (:struct VkMappedMemoryRange))
-		    (setf vk::memory (h (upload-buffer-memory imgui))
-			  vk::size upload-size))
+		    (setf %vk::memory (h (upload-buffer-memory imgui))
+			  %vk::size upload-size))
 		  (check-vk-result
 		   (vkFlushMappedMemoryRanges (h device) 1 p-range))
 
@@ -532,30 +532,30 @@
 
 	      ;; copy to image
 	      (with-vk-struct (p-copy-barrier VkImageMemoryBarrier)
-		(with-foreign-slots ((vk::dstAccessMask
-				      vk::oldLayout
-				      vk::newLayout
-				      vk::srcQueueFamilyIndex
-				      vk::dstQueueFamilyIndex
-				      vk::image)
+		(with-foreign-slots ((%vk::dstAccessMask
+				      %vk::oldLayout
+				      %vk::newLayout
+				      %vk::srcQueueFamilyIndex
+				      %vk::dstQueueFamilyIndex
+				      %vk::image)
 				     p-copy-barrier (:struct VkImageMemoryBarrier))
-		  (setf vk::dstAccessMask VK_ACCESS_TRANSFER_WRITE_BIT
-			vk::oldLayout VK_IMAGE_LAYOUT_UNDEFINED
-			vk::newLayout VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-			vk::srcQueueFamilyIndex VK_QUEUE_FAMILY_IGNORED
-			vk::dstQueueFamilyIndex VK_QUEUE_FAMILY_IGNORED
-			vk::image (h (font-image imgui)))
+		  (setf %vk::dstAccessMask VK_ACCESS_TRANSFER_WRITE_BIT
+			%vk::oldLayout VK_IMAGE_LAYOUT_UNDEFINED
+			%vk::newLayout VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			%vk::srcQueueFamilyIndex vk::VK_QUEUE_FAMILY_IGNORED
+			%vk::dstQueueFamilyIndex vk::VK_QUEUE_FAMILY_IGNORED
+			%vk::image (h (font-image imgui)))
 
 		  (let ((p-subresource-range
-			 (foreign-slot-pointer p-copy-barrier '(:struct VkImageMemoryBarrier) 'vk::subresourceRange)))
-		    (with-foreign-slots ((vk::aspectMask
-					  vk::levelCount
-					  vk::layerCount)
+			 (foreign-slot-pointer p-copy-barrier '(:struct VkImageMemoryBarrier) '%vk::subresourceRange)))
+		    (with-foreign-slots ((%vk::aspectMask
+					  %vk::levelCount
+					  %vk::layerCount)
 					 p-subresource-range
 					 (:struct VkImageSubresourceRange))
-		      (setf vk::aspectMask VK_IMAGE_ASPECT_COLOR_BIT
-			    vk::levelCount 1
-			    vk::layerCount 1)))
+		      (setf %vk::aspectMask VK_IMAGE_ASPECT_COLOR_BIT
+			    %vk::levelCount 1
+			    %vk::layerCount 1)))
 		  (vkCmdPipelineBarrier (h command-buffer)
 					VK_PIPELINE_STAGE_HOST_BIT
 					VK_PIPELINE_STAGE_TRANSFER_BIT
@@ -564,51 +564,51 @@
 
 		  (with-vk-struct (p-region VkBufferImageCopy)
 		    (let ((p-image-subresource
-			   (foreign-slot-pointer p-region '(:struct VkBufferImageCopy) 'vk::imageSubresource))
+			   (foreign-slot-pointer p-region '(:struct VkBufferImageCopy) '%vk::imageSubresource))
 			  (p-image-extent
-			   (foreign-slot-pointer p-region '(:struct VkBufferImageCopy) 'vk::imageExtent)))
-		      (with-foreign-slots ((vk::aspectMask
-					    vk::layerCount)
+			   (foreign-slot-pointer p-region '(:struct VkBufferImageCopy) '%vk::imageExtent)))
+		      (with-foreign-slots ((%vk::aspectMask
+					    %vk::layerCount)
 					   p-image-subresource (:struct VkImageSubresourceLayers))
-			(setf vk::aspectMask VK_IMAGE_ASPECT_COLOR_BIT
-			      vk::layerCount 1))
-		      (with-foreign-slots ((vk::width
-				       vk::height
-				       vk::depth)
+			(setf %vk::aspectMask VK_IMAGE_ASPECT_COLOR_BIT
+			      %vk::layerCount 1))
+		      (with-foreign-slots ((%vk::width
+				       %vk::height
+				       %vk::depth)
 				      p-image-extent (:struct VkExtent3D))
-			(setf vk::width width
-			      vk::height height
-			      vk::depth 1)))
+			(setf %vk::width width
+			      %vk::height height
+			      %vk::depth 1)))
 		    (vkCmdCopyBufferToImage (h command-buffer) (h (upload-buffer imgui))
 					    (h (font-image imgui))
 					    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL 1 p-region))
 
 		  (with-vk-struct (p-use-barrier VkImageMemoryBarrier)
-		    (with-foreign-slots ((vk::srcAccessMask
-					  vk::dstAccessMask
-					  vk::oldLayout
-					  vk::newLayout
-					  vk::srcQueueFamilyIndex
-					  vk::dstQueueFamilyIndex
-					  vk::image)
+		    (with-foreign-slots ((%vk::srcAccessMask
+					  %vk::dstAccessMask
+					  %vk::oldLayout
+					  %vk::newLayout
+					  %vk::srcQueueFamilyIndex
+					  %vk::dstQueueFamilyIndex
+					  %vk::image)
 					 p-use-barrier (:struct VkImageMemoryBarrier))
-		      (setf vk::srcAccessMask VK_ACCESS_TRANSFER_WRITE_BIT
-			    vk::dstAccessMask VK_ACCESS_SHADER_READ_BIT
-			    vk::oldLayout VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-			    vk::newLayout VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			    vk::srcQueueFamilyIndex VK_QUEUE_FAMILY_IGNORED
-			    vk::dstQueueFamilyIndex VK_QUEUE_FAMILY_IGNORED
-			    vk::image (h (font-image imgui))))
+		      (setf %vk::srcAccessMask VK_ACCESS_TRANSFER_WRITE_BIT
+			    %vk::dstAccessMask VK_ACCESS_SHADER_READ_BIT
+			    %vk::oldLayout VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			    %vk::newLayout VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			    %vk::srcQueueFamilyIndex vk::VK_QUEUE_FAMILY_IGNORED
+			    %vk::dstQueueFamilyIndex vk::VK_QUEUE_FAMILY_IGNORED
+			    %vk::image (h (font-image imgui))))
 		    (let ((p-subresource-range
-			   (foreign-slot-pointer p-use-barrier '(:struct VkImageMemoryBarrier) 'vk::subresourceRange)))
-		      (with-foreign-slots ((vk::aspectMask
-					    vk::levelCount
-					    vk::layerCount)
+			   (foreign-slot-pointer p-use-barrier '(:struct VkImageMemoryBarrier) '%vk::subresourceRange)))
+		      (with-foreign-slots ((%vk::aspectMask
+					    %vk::levelCount
+					    %vk::layerCount)
 					   p-subresource-range
 					   (:struct VkImageSubresourceRange))
-			(setf vk::aspectMask VK_IMAGE_ASPECT_COLOR_BIT
-			      vk::levelCount 1
-			      vk::layerCount 1)))
+			(setf %vk::aspectMask VK_IMAGE_ASPECT_COLOR_BIT
+			      %vk::levelCount 1
+			      %vk::layerCount 1)))
 
 		    (vkCmdPipelineBarrier (h command-buffer) VK_PIPELINE_STAGE_TRANSFER_BIT
 					  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
@@ -692,7 +692,7 @@
 (defun imgui-vulkan-destroy-device-objects (imgui)
   (imgui-vulkan-destroy-font-upload-objects imgui)
   
-  (let* ((application (application imgui))
+  (let* ((application (vk::application imgui))
 	 (device (logical-device imgui))
 	 (allocator (allocator application)))
     
@@ -810,24 +810,24 @@
       (let ((p-formats (foreign-alloc '(:struct VkSurfaceFormatKHR) :count count)))
 	(check-vk-result (vkGetPhysicalDeviceSurfaceFormatsKHR (h gpu) (h surface) p-count p-formats))
 	(if (eq count 1)
-	    (if (eq (foreign-slot-value p-formats '(:struct VkSurfaceFormatKHR) 'vk::format)
+	    (if (eq (foreign-slot-value p-formats '(:struct VkSurfaceFormatKHR) '%vk::format)
 		    VK_FORMAT_UNDEFINED)
 		(make-instance 'surface-format
 			       :format (elt request-formats 0)
 			       :color-space request-color-space)
 		(make-instance 'surface-format
 			       :format (foreign-slot-value p-formats
-							   '(:struct VkSurfaceFormatKHR) 'vk::format)
+							   '(:struct VkSurfaceFormatKHR) '%vk::format)
 			       :color-space (foreign-slot-value p-formats
-								'(:struct VkSurfaceFormatKHR) 'vk::colorSpace)))
+								'(:struct VkSurfaceFormatKHR) '%vk::colorSpace)))
 	    (loop for request-format in request-formats
 	       do (loop for i from 0 below count
 		     do (let ((p-format (mem-aptr p-formats '(:struct VkSurfaceFormatKHR) i)))
 			  (when (and (eq (foreign-slot-value p-format
-							     '(:struct VkSurfaceFormatKHR) 'vk::format)
+							     '(:struct VkSurfaceFormatKHR) '%vk::format)
 					 request-format)
 				     (eq (foreign-slot-value p-format
-							     '(:struct VkSurfaceFormatKHR) 'vk::colorSpace)
+							     '(:struct VkSurfaceFormatKHR) '%vk::colorSpace)
 					 request-color-space))
 			    (return-from imgui-vulkan-helper-select-surface-format
 			      (make-instance 'surface-format
@@ -1018,7 +1018,7 @@
 (defun imgui-vulkan-invalidate-device-objects (imgui)
   (imgui-vulkan-destroy-font-upload-objects imgui)
   
-  (let* ((application (application imgui))
+  (let* ((application (vk::application imgui))
 	 (device (default-logical-device application))
 	 (allocator (allocator application)))
     

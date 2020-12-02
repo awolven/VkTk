@@ -23,7 +23,7 @@
 
 (defpackage :imgui
   (:nicknames :ig)
-  (:use :cl :cffi :vktk)
+  (:use :cl :cffi)
   (:shadow)
   (:export #:bullet-text
 	   #:show-demo-window
@@ -70,7 +70,7 @@
 	   #:small-button
 	   #:invisible-button
 	   #:arrow-button
-	   #:image
+	   ;;#:image
 	   #:image-button
 	   #:checkbox
 	   #:checkbox-flags

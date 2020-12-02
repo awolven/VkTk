@@ -207,7 +207,7 @@
   (igEndMenu))
 
 (defun menu-item (label &optional (shortcut nil) (selected-p nil) (enabled-p t))
-  (igMenuItemBool label (if shortcut shortcut +nullptr+) selected-p enabled-p))
+  (igMenuItemBool label (if shortcut shortcut (sb-sys:int-sap 0)) selected-p enabled-p))
 
 (defun collapsing-header (label &key selected
 				  framed

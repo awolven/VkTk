@@ -36,13 +36,13 @@
 
 
 (defmethod vulkan-instance ((imgui imgui))
-  (vulkan-instance (application imgui)))
+  (vulkan-instance (vk::application imgui)))
 
 (defmethod physical-device ((imgui imgui))
-  (physical-device (default-logical-device (application imgui))))
+  (physical-device (default-logical-device (vk::application imgui))))
 
 (defmethod logical-device ((imgui imgui))
-  (default-logical-device (application imgui)))
+  (default-logical-device (vk::application imgui)))
 
 (defmethod allocator ((imgui imgui))
-  (allocator (application imgui)))
+  (allocator (vk::application imgui)))
