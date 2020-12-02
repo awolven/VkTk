@@ -27,11 +27,12 @@
   ((:file "ifc/cimgui/imgui-package")
    (:file "ifc/cimgui/cimgui")
    (:file "ifc/cimgui/lisp-wrappers")
-   (:file "ifc/package")
-   (:file "ifc/imgui-src/imgui-class")   
-   (:file "ifc/imgui-src/glfw-imgui")
-   (:file "ifc/imgui-src/vulkan-imgui")
-   (:file "ifc/imgui-src/general-imgui")
+   (:file "src/package")
+   (:file "src/imgui-class")   
+   (:file "src/glfw-imgui")
+   (:file "src/vulkan-imgui")
+   (:file "src/general-imgui")
+   (:file "examples/main")
    (:file "ifc/cimgui-library")))
 
 
