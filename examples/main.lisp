@@ -15,6 +15,10 @@
 			 :descriptor-pool descriptor-pool))
     (values)))
 
+(defmethod on-key-event ((app imgui-enabled-application) key action)
+  (declare (ignore key action))
+  (values))
+
 (defmethod main ((app imgui-enabled-application) &rest args)
   (declare (ignore args))
 

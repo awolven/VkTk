@@ -69,11 +69,11 @@
     (when (and (eq action GLFW_PRESS)
 	       (< button (length mouse-just-pressed)))
       (setf (aref mouse-just-pressed button) t)
-      (on-mouse-click (vk::application window) mouse-just-pressed)))
+      (on-mouse-click (vk::application window) mouse-just-pressed action mods)))
   (values))
 
-(defmethod on-mouse-click ((application vulkan-application-mixin) buttons-pressed)
-  (declare (ignore buttons-pressed)))
+(defmethod on-mouse-click ((application vulkan-application-mixin) buttons-pressed action mods)
+  (declare (ignore buttons-pressed action mods)))
 
 (defcallback imgui-glfw-mouse-button-callback :void ((user-data :pointer) (button :int) (action :int) (mods :int))
   (let* ((window (find-window user-data)))
@@ -105,9 +105,12 @@
 	  (+ (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::MouseWheel)
 	     (coerce yoffset 'single-float)))
 
-    (on-scroll (vk::application window) xoffset yoffset))
+    (unless (ig:igIsWindowHovered ig::ImGuiHoveredFlags_AnyWindow)
+      (on-scroll (vk::application window) xoffset yoffset)))
 				  
   (values))
+
+(defgeneric on-key-event (app key action))  
 
 (defun imgui-glfw-key-callback-function (key action)
   (let* ((io (ig::igGetIO))
@@ -132,6 +135,8 @@
 	  (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::KeySuper)
 	  (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_SUPER)
 	      (mem-aref p-keys-down :bool GLFW_KEY_RIGHT_SUPER)))
+
+    (on-key-event *app* key action)
 	       
     (values)))
 
@@ -500,6 +505,7 @@
 (defmethod on-window-close ((window window))
   (let ((viewport (ig::igFindViewportByPlatformHandle (h window))))
     (setf (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::PlatformRequestClose) t)
+    (imgui-vulkan-shutdown (imgui *app*))
     (values)))
 
 (cffi:defcallback imgui-glfw-window-pos-callback :void ((window :pointer)
@@ -647,21 +653,25 @@
   (destroy-window-and-viewport viewport))
 
 (defun destroy-window-and-viewport (viewport)
-  (let ((window (get-viewport-window viewport))
-	(data (platform-user-data viewport)))
-    (when (foreign-slot-value data '(:struct ImGuiViewportDataGlfw) 'WindowOwned)
-      (glfwDestroyWindow (h window)))
-    (setf ;;(foreign-slot-value data '(:struct ImGuiViewportDataGlfw) 'Window) +nullptr+
+  (let ((window (get-viewport-window viewport)))
+    (when window
+      (let* ((data (platform-user-data viewport))
+	     #+NIL(swapchain (swapchain window)))
+	;;(when swapchain
+	;;(destroy-swapchain swapchain))
+	(when (foreign-slot-value data '(:struct ImGuiViewportDataGlfw) 'WindowOwned)
+	  (glfwDestroyWindow (h window)))
+	(setf ;;(foreign-slot-value data '(:struct ImGuiViewportDataGlfw) 'Window) +nullptr+
 
-	  (platform-user-data viewport)
-	  +nullptr+
+	 (platform-user-data viewport)
+	 +nullptr+
 	  
-	  (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::PlatformHandle)
-	  +nullptr+)
-    (foreign-free data)
-    (setf (window-registry *app*)
-	  (remove (h window) (window-registry *app*) :key #'h :test #'pointer-eq))
-    (values)))
+	 (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::PlatformHandle)
+	 +nullptr+)
+	(foreign-free data)
+	(setf (window-registry *app*)
+	      (remove (h window) (window-registry *app*) :key #'h :test #'pointer-eq))
+	(values)))))
 
 (cffi:defcallback imgui-glfw-show-window-callback :void ((viewport :pointer)
 							 (ignore1 :int)
@@ -894,6 +904,6 @@
   (find-window
    (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::PlatformHandle)))
 
-(defun imgui-glfw-shurdown-platform-interface (imgui)
+(defun imgui-glfw-shutdown-platform-interface (imgui)
   (declare (ignore imgui))
   (values))

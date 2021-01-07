@@ -31,7 +31,8 @@
 					 &allow-other-keys)
   (declare (ignore initargs))
 
-  (ig:igCreateContext shared-font-atlas)
+  (setf (imgui-context instance)
+	(ig:igCreateContext shared-font-atlas))
 
   (let ((io (ig::igGetIO)))
     (setf (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::ConfigFlags)
@@ -80,7 +81,7 @@
 
     
 (defun imgui-shutdown (imgui)
-  (imgui-vulkan-destroy-device-objects imgui)
+  (imgui-vulkan-shutdown imgui)
   (ig::igDestroyContext (imgui-context imgui))
   (setf (imgui-context imgui) nil)
   (values))

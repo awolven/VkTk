@@ -695,26 +695,27 @@
   (let* ((application (vk::application imgui))
 	 (device (logical-device imgui))
 	 (allocator (allocator application)))
-    
-    (loop for frame-datum across (frame-data imgui) for i from 0
-       do (when frame-datum
-	    (with-slots (vertex-buffer
-			 vertex-buffer-memory
-			 index-buffer
-			 index-buffer-memory) frame-datum
-	      (when vertex-buffer
-		(vkDestroyBuffer (h device) (h vertex-buffer) (h allocator))
-		(setf vertex-buffer nil))
-	      (when vertex-buffer-memory
-		(vkFreeMemory (h device) (h vertex-buffer-memory) (h allocator))
-		(setf vertex-buffer-memory nil))
-	      (when index-buffer
-		(vkDestroyBuffer (h device) (h index-buffer) (h allocator))
-		(setf index-buffer nil))
-	      (when index-buffer-memory
-		(vkFreeMemory (h device) (h index-buffer-memory) (h allocator))
-		(setf index-buffer-memory nil))
-	      (setf (elt (frame-data imgui) i) nil))))
+
+    (when (frame-data imgui)
+      (loop for frame-datum across (frame-data imgui) for i from 0
+	 do (when frame-datum
+	      (with-slots (vertex-buffer
+			   vertex-buffer-memory
+			   index-buffer
+			   index-buffer-memory) frame-datum
+		(when vertex-buffer
+		  (vkDestroyBuffer (h device) (h vertex-buffer) (h allocator))
+		  (setf vertex-buffer nil))
+		(when vertex-buffer-memory
+		  (vkFreeMemory (h device) (h vertex-buffer-memory) (h allocator))
+		  (setf vertex-buffer-memory nil))
+		(when index-buffer
+		  (vkDestroyBuffer (h device) (h index-buffer) (h allocator))
+		  (setf index-buffer nil))
+		(when index-buffer-memory
+		  (vkFreeMemory (h device) (h index-buffer-memory) (h allocator))
+		  (setf index-buffer-memory nil))
+		(setf (elt (frame-data imgui) i) nil)))))
 
     (when (font-view imgui)
       (vkDestroyImageView (h device) (h (font-view imgui)) (h allocator))
@@ -783,8 +784,6 @@
     (foreign-free data)
     (setf (foreign-slot-value main-viewport '(:struct ig::ImGuiViewport) 'ig::RendererUserData)
 	  +nullptr+))
-  #+NOTYET(ig::igDestroyContext (imgui-context imgui))
-  #+NOTYET(setf (imgui-context imgui) nil)
   (imgui-vulkan-shutdown-platform-interface imgui)
   (values))
 
@@ -945,14 +944,7 @@
       (setf (slot-value window 'current-frame) (mod (1+ current-frame) image-count))
       
       (values)))
-#+NIL
-(defcallback imgui-vulkan-create-window-callback :void
-    ((instance VkInstance) (physical-device VkPhysicalDevice)
-     (device VkDevice) (window :pointer) (queue-family :unsigned-int)
-     (allocator :pointer) (width :int) (height :int) (min-image-count :unsigned-int))
-  (declare (ignore instance physical-device device queue-family min-image-count
-		   allocator))
-  (vulkan-create-window (find-window window) width height))
+
 
 (defcallback imgui-vulkan-create-window-callback :void
     ((viewport :pointer))
@@ -1000,77 +992,18 @@
   ;;(vkDeviceWaitIdle (h (default-logical-device *app*)))
   (recreate-swapchain window (swapchain window) width height))
 
-#+NIL
-(defcallback imgui-vulkan-destroy-window-callback :void
-    ((instance VkInstance) (device VkDevice) (window :pointer) (allocator :pointer))
-  (declare (ignore instance device allocator))
-  (vulkan-destroy-window (find-window window)))    
-
 (defcallback imgui-vulkan-destroy-window-callback :void
     ((viewport :pointer))
-  (declare (ignore viewport))
-  ;; to be implemented.
+  (let ((window (get-viewport-window viewport)))
+    (when window
+      (vulkan-destroy-window window)))
   (values))
 
 (defun vulkan-destroy-window (window)
-  (destroy-frame-resources (swapchain window)))
-
-(defun imgui-vulkan-invalidate-device-objects (imgui)
-  (imgui-vulkan-destroy-font-upload-objects imgui)
-  
-  (let* ((application (vk::application imgui))
-	 (device (default-logical-device application))
-	 (allocator (allocator application)))
-    
-    (loop for frame-datum across (frame-data imgui) for i from 0
-       do (when frame-datum
-	    (with-slots (vertex-buffer
-			 vertex-buffer-memory
-			 index-buffer
-			 index-buffer-memory) frame-datum
-	      (when vertex-buffer
-		(vkDestroyBuffer (h device) (h vertex-buffer) (h allocator))
-		(setf vertex-buffer nil))
-	      (when vertex-buffer-memory
-		(vkFreeMemory (h device) (h vertex-buffer-memory) (h allocator))
-		(setf vertex-buffer-memory nil))
-	      (when index-buffer
-		(vkDestroyBuffer (h device) (h index-buffer) (h allocator))
-		(setf index-buffer nil))
-	      (when index-buffer-memory
-		(vkFreeMemory (h device) (h index-buffer-memory) (h allocator))
-		(setf index-buffer-memory nil))
-	      (setf (elt (frame-data imgui) i) nil))))
-
-    (when (font-view imgui)
-      (vkDestroyImageView (h device) (h (font-view imgui)) (h allocator))
-      (setf (font-view imgui) nil))
-    
-    (when (font-image imgui)
-      (vkDestroyImage (h device) (h (font-image imgui)) (h allocator))
-      (setf (font-image imgui) nil))
-    
-    (when (font-memory imgui)
-      (vkFreeMemory (h device) (h (font-memory imgui)) (h allocator))
-      (setf (font-memory imgui) nil))
-    
-    (when (font-sampler imgui)
-      (vkDestroySampler (h device) (h (font-sampler imgui)) (h allocator))
-      (setf (font-sampler imgui) nil))
-    
-    (when (descriptor-set-layout imgui)
-      (vkDestroyDescriptorSetLayout (h device) (h (descriptor-set-layout imgui)) (h allocator))
-      (setf (descriptor-set-layout imgui) nil))
-    
-    (when (pipeline-layout imgui)
-      (vkDestroyPipelineLayout (h device) (h (pipeline-layout imgui)) (h allocator))
-      (setf (pipeline-layout imgui) nil))
-    
-    (when (pipeline imgui)
-      (vkDestroyPipeline (h device) (h (pipeline imgui)) (h allocator))
-      (setf (pipeline imgui) nil))
-    
-    (values)))
+  (when (swapchain window)
+    (destroy-swapchain (swapchain window)))
+  (vkDestroySurfaceKHR (h *vulkan-instance*) (h (render-surface window)) (h (allocator (render-surface window))))
+  (values))
 
 (defun imgui-vulkan-render (imgui viewport command-buffer frame-index)
   ;;(ig:igRender)

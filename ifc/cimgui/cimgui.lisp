@@ -213,50 +213,54 @@
   (ImGuiFocusedFlags_RootAndChildWindows #.(cl:logior (cl:ash 1 1) (cl:ash 1 0))))
 
 (cffi:defcenum ImGuiHoveredFlags_
-	(ImGuiHoveredFlags_ChildWindows #.(cl:ash 1 0))
-	(ImGuiHoveredFlags_RootWindow #.(cl:ash 1 1))
-	(ImGuiHoveredFlags_AllowWhenBlockedByPopup #.(cl:ash 1 2))
-	(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem #.(cl:ash 1 4))
-	(ImGuiHoveredFlags_AllowWhenOverlapped #.(cl:ash 1 5))
-	(ImGuiHoveredFlags_RectOnly #.(cl:logior (cl:ash 1 2) (cl:ash 1 4) (cl:ash 1 5)))
-	(ImGuiHoveredFlags_RootAndChildWindows #.(cl:logior (cl:ash 1 1) (cl:ash 1 0))))
+  (ImGuiHoveredFlags_None 0)
+  (ImGuiHoveredFlags_ChildWindows #.(cl:ash 1 0))
+  (ImGuiHoveredFlags_RootWindow #.(cl:ash 1 1))
+  (ImGuiHoveredFlags_AnyWindow #.(cl:ash 1 2))
+  (ImGuiHoveredFlags_AllowWhenBlockedByPopup #.(cl:ash 1 3))
+  ;;(ImGuiHoveredFlags_AllowWhenBlockedByModal #.(cl:ash 1 4))
+  (ImGuiHoveredFlags_AllowWhenBlockedByActiveItem #.(cl:ash 1 5))
+  (ImGuiHoveredFlags_AllowWhenOverlapped #.(cl:ash 1 6))
+  (ImGuiHoveredFlags_AllowWhenDisabled #.(cl:ash 1 7))
+  (ImGuiHoveredFlags_RectOnly #.(cl:logior (cl:ash 1 3) (cl:ash 1 5) (cl:ash 1 6)))
+  (ImGuiHoveredFlags_RootAndChildWindows #.(cl:logior (cl:ash 1 1) (cl:ash 1 0))))
 
 (cffi:defcenum ImGuiDragDropFlags_
-	(ImGuiDragDropFlags_SourceNoPreviewTooltip #.(cl:ash 1 0))
-	(ImGuiDragDropFlags_SourceNoDisableHover #.(cl:ash 1 1))
-	(ImGuiDragDropFlags_SourceNoHoldToOpenOthers #.(cl:ash 1 2))
-	(ImGuiDragDropFlags_SourceAllowNullID #.(cl:ash 1 3))
-	(ImGuiDragDropFlags_SourceExtern #.(cl:ash 1 4))
-	(ImGuiDragDropFlags_AcceptBeforeDelivery #.(cl:ash 1 10))
-	(ImGuiDragDropFlags_AcceptNoDrawDefaultRect #.(cl:ash 1 11))
-	(ImGuiDragDropFlags_AcceptPeekOnly #.(cl:logior (cl:ash 1 10) (cl:ash 1 11))))
+  (ImGuiDragDropFlags_SourceNoPreviewTooltip #.(cl:ash 1 0))
+  (ImGuiDragDropFlags_SourceNoDisableHover #.(cl:ash 1 1))
+  (ImGuiDragDropFlags_SourceNoHoldToOpenOthers #.(cl:ash 1 2))
+  (ImGuiDragDropFlags_SourceAllowNullID #.(cl:ash 1 3))
+  (ImGuiDragDropFlags_SourceExtern #.(cl:ash 1 4))
+  (ImGuiDragDropFlags_AcceptBeforeDelivery #.(cl:ash 1 10))
+  (ImGuiDragDropFlags_AcceptNoDrawDefaultRect #.(cl:ash 1 11))
+  (ImGuiDragDropFlags_AcceptPeekOnly #.(cl:logior (cl:ash 1 10) (cl:ash 1 11))))
 
 
 
 (cffi:defcenum ImGuiKey_
-	ImGuiKey_Tab
-	ImGuiKey_LeftArrow
-	ImGuiKey_RightArrow
-	ImGuiKey_UpArrow
-	ImGuiKey_DownArrow
-	ImGuiKey_PageUp
-	ImGuiKey_PageDown
-	ImGuiKey_Home
-	ImGuiKey_End
-	ImGuiKey_Insert
-	ImGuiKey_Delete
-	ImGuiKey_Backspace
-	ImGuiKey_Space
-	ImGuiKey_Enter
-	ImGuiKey_Escape
-	ImGuiKey_KeyPadEnter
-	ImGuiKey_A
-	ImGuiKey_C
-	ImGuiKey_V
-	ImGuiKey_X
-	ImGuiKey_Y
-	ImGuiKey_Z
-	ImGuiKey_COUNT)
+  ImGuiKey_Tab
+  ImGuiKey_LeftArrow
+  ImGuiKey_RightArrow
+  ImGuiKey_UpArrow
+  ImGuiKey_DownArrow
+  ImGuiKey_PageUp
+  ImGuiKey_PageDown
+  ImGuiKey_Home
+  ImGuiKey_End
+  ImGuiKey_Insert
+  ImGuiKey_Delete
+  ImGuiKey_Backspace
+  ImGuiKey_Space
+  ImGuiKey_Enter
+  ImGuiKey_Escape
+  ImGuiKey_KeyPadEnter
+  ImGuiKey_A
+  ImGuiKey_C
+  ImGuiKey_V
+  ImGuiKey_X
+  ImGuiKey_Y
+  ImGuiKey_Z
+  ImGuiKey_COUNT)
 
 (cffi:defcenum ImGuiNavInput_
 
@@ -5266,11 +5270,13 @@
 
 (cffi:defcfun ("_igGetItemRectMax" igGetItemRectMax) :pointer)
 
-(cffi:defcfun ("_igCalcTextSize" igCalcTextSize) :pointer
+(cffi:defcfun ("igCalcTextSize" igCalcTextSize) :pointer
   (text :string)
   (text_end :string)
   (hide_text_after_double_hash :pointer)
-  (wrap_width :float))
+  (wrap_width :float)
+  (x :pointer)
+  (y :pointer))
 
 (cffi:defcfun ("_igColorConvertU32ToFloat4" igColorConvertU32ToFloat4) :pointer
   (in :pointer))

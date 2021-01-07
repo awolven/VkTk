@@ -6,8 +6,10 @@
     (igShowDemoWindow p-open)
     (mem-aref p-open :bool)))
 
-(defun begin (name 
-	      &key open
+(defun begin (name
+	      &key
+		open
+		(p-open t)
 		no-title-bar
 		no-resize
 		no-move
@@ -66,10 +68,13 @@
 		       (if popup ImGuiWindowFlags_Popup 0)
 		       (if modal ImGuiWindowFlags_Modal 0)
 		       (if child-menu ImGuiWindowFlags_ChildMenu 0))))
-    (with-foreign-object (p-open :bool)
-      (setf (mem-aref p-open :bool) open)
-      (values (igBegin name p-open flags)
-	      (mem-aref p-open :bool)))))
+    (if p-open 
+	(with-foreign-object (p-open :bool)
+	  (setf (mem-aref p-open :bool) open)
+	  (values (igBegin name p-open flags)
+		  (mem-aref p-open :bool)))
+	(igBegin name (sb-sys:int-sap 0) flags))))
+	
 			   
 (defun end ()
   (igEnd))
@@ -434,3 +439,13 @@
     (setf (foreign-slot-value p-size '(:struct ImVec2_Simple) 'ig::x) (coerce dx 'single-float)
 	  (foreign-slot-value p-size '(:struct ImVec2_Simple) 'ig::y) (coerce dy 'single-float))
     (igButton label p-size)))
+
+(defclass imgui-font (vk::handle-mixin) ())
+
+(defun get-font ()
+  (make-instance 'imgui-font :handle (igGetFont)))
+
+(defmethod print-object ((object imgui-font) stream)
+  (print-unreadable-object (object stream :identity nil)
+    (princ "FONT " stream)
+    (princ (ImFont_GetDebugName (vk:h object)) stream)))
