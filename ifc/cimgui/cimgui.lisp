@@ -1012,6 +1012,20 @@
   (ImGuiBackendFlags_HasMouseHoveredViewport #.(cl:ash 1 11))
   (ImGuiBackendFlags_RendererHasViewports #.(cl:ash 1 12)))
 
+(cffi:defcfun ("igRenderText" igRenderText) :void
+  (font :pointer)
+  (font_size :float)
+  (pos-x :float)
+  (pos-y :float)
+  (r :float)
+  (g :float)
+  (b :float)
+  (a :float)
+  (text :pointer)
+  (text_end :pointer)
+  (start_char_index :unsigned-int)
+  (end_char_index :unsigned-int))
+
 (cffi:defcfun ("igSizeOfImGuiIO" igSizeOfImGuiIO) :int)
 (cffi:defcfun ("igSizeOfImGuiPlatformIO" igSizeOfImGuiPlatformIO) :int)
 (cffi:defcfun ("igSizeOfImGuiViewport" igSizeOfImGuiViewport) :int)
@@ -1089,6 +1103,21 @@
 
 (cffi:defcfun ("igSetCurrentContext" igSetCurrentContext) :void
   (ctx :pointer))
+
+(cffi:defcfun ("igGetCurrentWindow" igGetCurrentWindow) :pointer)
+
+(cffi:defcfun ("igGetWindowID" igGetWindowID) :unsigned-int
+  (window :pointer)
+  (name :string))
+
+(cffi:defcfun ("igBeginPopupModal2" igBeginPopupModal2) :bool
+  (name :string)
+  (x :float)
+  (y :float)
+  (pivot_x :float)
+  (pivot_y :float)
+  (p_open :pointer)
+  (flags :int))
 
 (cffi:defcfun ("igDebugCheckVersionAndDataLayout" igDebugCheckVersionAndDataLayout) :bool
   (version_str :string)
@@ -1272,8 +1301,11 @@
   (idx :pointer)
   (alpha_mul :float))
 
-(cffi:defcfun ("igGetColorU32Vec4" igGetColorU32Vec4) :pointer
-  (col :pointer))
+(cffi:defcfun ("igGetColorU32Vec4" igGetColorU32Vec4) :unsigned-int
+  (r :float)
+  (g :float)
+  (b :float)
+  (a :float))
 
 (cffi:defcfun ("igGetColorU32U32" igGetColorU32U32) :pointer
   (col :pointer))
@@ -2869,21 +2901,26 @@
   (self :pointer)
   (draw_list :pointer)
   (size :float)
-  (pos :pointer)
-  (col :pointer)
-  (c :pointer))
+  (pos_x :float)
+  (pos_y :float)  
+  (col :unsigned-int)
+  (c :unsigned-short))
 
 (cffi:defcfun ("ImFont_RenderText" ImFont_RenderText) :void
   (self :pointer)
   (draw_list :pointer)
   (size :float)
-  (pos :pointer)
-  (col :pointer)
-  (clip_rect :pointer)
-  (text_begin :string)
-  (text_end :string)
+  (pos_x :float)
+  (pos_y :float)
+  (col :unsigned-int)
+  (clip_rect_x :float)
+  (clip_rect_y :float)
+  (clip_rect_w :float)
+  (clip_rect_h :float)
+  (text_begin :pointer)
+  (text_end :pointer)
   (wrap_width :float)
-  (cpu_fine_clip :pointer))
+  (cpu_fine_clip :bool))
 
 (cffi:defcfun ("ImFont_BuildLookupTable" ImFont_BuildLookupTable) :void
   (self :pointer))
@@ -5048,9 +5085,11 @@
 
 (cffi:defcfun ("ImDrawList_AddRect" ImDrawList_AddRect) :void
   (self :pointer)
-  (a :pointer)
-  (b :pointer)
-  (col :pointer)
+  (p_min_x :float)
+  (p_min_y :float)
+  (p_max_x :float)
+  (p_max_y :float)  
+  (col :unsigned-int)
   (rounding :float)
   (rounding_corners_flags :int)
   (thickness :float))

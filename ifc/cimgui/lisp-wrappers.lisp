@@ -79,6 +79,8 @@
 (defun end ()
   (igEnd))
 
+
+
 (defun set-next-window-pos (x y &key (condition nil)
 				  (pivot-x 0.0f0)
 				  (pivot-y 0.0f0))
@@ -440,7 +442,10 @@
 	  (foreign-slot-value p-size '(:struct ImVec2_Simple) 'ig::y) (coerce dy 'single-float))
     (igButton label p-size)))
 
-(defclass imgui-font (vk::handle-mixin) ())
+(defclass imgui-font (vk::handle-mixin)
+  ((pathname :initarg :pathname :reader font-pathname)
+   (size :initarg :size :reader font-size)
+   (plist :initarg :plist :accessor font-plist)))
 
 (defun get-font ()
   (make-instance 'imgui-font :handle (igGetFont)))
@@ -449,3 +454,49 @@
   (print-unreadable-object (object stream :identity nil)
     (princ "FONT " stream)
     (princ (ImFont_GetDebugName (vk:h object)) stream)))
+
+(defun render-text (text &key
+			   (font
+			    (eval
+			     (read-from-string
+			      "(rgn::find-font rgn::*app* :pathname \"ProggyClean\")")))
+			   (x 0.0f0) (y 0.0f0)
+			   (color #(1 1 1 1))
+			   (num-bytes nil)
+			   (size (slot-value font 'size))
+			   (start 0)
+			   (end (length text)))
+  (let ((r (elt color 0))
+	(g (elt color 1))
+	(b (elt color 2))
+	(a (elt color 3)))
+    
+    (with-foreign-string (p-text text)
+      (igRenderText (slot-value font 'vk::handle)
+		    (coerce size 'single-float)
+		    (coerce x 'single-float)
+		    (coerce y 'single-float)
+		    (coerce r 'single-float)
+		    (coerce g 'single-float)
+		    (coerce b 'single-float)
+		    (coerce a 'single-float)
+		    p-text
+		    (or num-bytes
+			(cffi:inc-pointer
+			 p-text (foreign-funcall "strlen" :pointer p-text :int)))
+		    (round start)
+		    (round end)))))
+
+(defun add-rect (p-draw-list p-min-x p-min-y p-max-x p-max-y col rounding rounding-flags thickness)
+  (ImDrawList_AddRect p-draw-list
+		      (coerce p-min-x 'single-float) (coerce p-min-y 'single-float)
+		      (coerce p-max-x 'single-float) (coerce p-max-y 'single-float)
+		      (igGetColorU32Vec4
+		       (coerce (elt col 0) 'single-float)
+		       (coerce (elt col 1) 'single-float)
+		       (coerce (elt col 2) 'single-float)
+		       (coerce (elt col 3) 'single-float))
+		      (coerce rounding 'single-float) rounding-flags
+		      (coerce thickness 'single-float)))
+
+				 

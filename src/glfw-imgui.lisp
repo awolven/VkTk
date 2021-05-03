@@ -84,6 +84,18 @@
   (imgui-glfw-scroll-event (find-window user-data) xoffset yoffset)
   (values))
 
+(defcallback imgui-glfw-cursor-position-callback :void ((window :pointer) (xpos :double) (ypos :double))
+  (let* ((window (find-window window)))
+    (imgui-glfw-cursor-position (slot-value window 'vk::application) window xpos ypos)
+    (values)))
+
+(defmethod imgui-glfw-cursor-position ((application vulkan-application-mixin) window xpos ypos)
+  (declare (ignorable window))
+  (values))
+
+(defun setup-cursor-pos-callback (app)
+  (glfwSetCursorPosCallback (h (main-window app)) (callback imgui-glfw-cursor-position-callback)))
+
 (defmethod on-scroll (application xoffset yoffset)
   (declare (ignore xoffset yoffset))
   (values))
@@ -111,6 +123,31 @@
   (values))
 
 (defgeneric on-key-event (app key action))  
+
+(defun shift-key-down? ()
+  (let* ((io (ig::igGetIO))
+	 (p-keys-down (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)))
+    (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_SHIFT)
+	(mem-aref p-keys-down :bool GLFW_KEY_RIGHT_SHIFT))))
+
+(defun control-key-down? ()
+  (let* ((io (ig::igGetIO))
+	 (p-keys-down (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)))
+    (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_CONTROL)
+	(mem-aref p-keys-down :bool GLFW_KEY_RIGHT_CONTROL)
+	(mem-aref p-keys-down :bool GLFW_KEY_CAPS_LOCK))))
+
+(defun meta-key-down? ()
+  (let* ((io (ig::igGetIO))
+	 (p-keys-down (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)))
+    (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_ALT)
+	(mem-aref p-keys-down :bool GLFW_KEY_RIGHT_ALT))))
+
+(defun super-key-down? ()
+  (let* ((io (ig::igGetIO))
+	 (p-keys-down (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::KeysDown)))
+    (or (mem-aref p-keys-down :bool GLFW_KEY_LEFT_SUPER)
+	(mem-aref p-keys-down :bool GLFW_KEY_RIGHT_SUPER))))
 
 (defun imgui-glfw-key-callback-function (key action)
   (let* ((io (ig::igGetIO))
@@ -238,8 +275,10 @@
 	    (let ((callback (glfwSetMouseButtonCallback (h window) (callback imgui-glfw-mouse-button-callback))))
 	      (if (null-pointer-p callback)
 		  nil
-		  callback))
-	    
+		  callback)))
+      
+      (setup-cursor-pos-callback (slot-value window 'vk::application))
+      (setf	    
 	    (prev-user-callback-scroll imgui)
 	    (let ((callback (glfwSetScrollCallback (h window) (callback imgui-glfw-scroll-callback))))
 	      (if (null-pointer-p callback) nil callback))
