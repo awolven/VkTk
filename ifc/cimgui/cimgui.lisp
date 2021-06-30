@@ -1738,6 +1738,14 @@
   (callback :pointer)
   (user_data :pointer))
 
+(cffi:defcfun ("igInputText" igInputText2) :bool
+  (label :string)
+  (buf :string)
+  (buf_size :pointer)
+  (flags :int)
+  (callback :int)
+  (user_data :pointer))
+
 (cffi:defcfun ("igInputFloat" igInputFloat) :bool
   (label :string)
   (v :pointer)

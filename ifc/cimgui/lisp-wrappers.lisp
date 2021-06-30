@@ -499,4 +499,52 @@
 		      (coerce rounding 'single-float) rounding-flags
 		      (coerce thickness 'single-float)))
 
+(defun middle-mouse-down? (app)
+  (declare (ignore app))
+  (igIsMouseDown 2))
+
+(defun left-mouse-down? (app)
+  (declare (ignore app))
+  (igIsMouseDown 0))
+
+(defun right-mouse-down? (app)
+  (declare (ignore app))
+  (igIsMouseDown 1))
+
+(defun middle-mouse-released? (app)
+  (declare (ignore app))
+  (igIsMouseReleased 2))
+
+(defun left-mouse-released? (app)
+  (declare (ignore app))
+  (igIsMouseReleased 0))
+
+(defun right-mouse-released? (app)
+  (declare (ignore app))
+  (igIsMouseReleased 1))
+
+(defun middle-mouse-clicked? (app &optional (repeat nil))
+  (declare (ignore app))
+  (igIsMouseClicked 2 repeat))
+
+(defun left-mouse-clicked? (app &optional (repeat nil))
+  (declare (ignore app))
+  (igIsMouseClicked 0 repeat))
+
+(defun right-mouse-clicked? (app &optional (repeat nil))
+  (declare (ignore app))
+  (igIsMouseClicked 1 repeat))
+
+(defun middle-mouse-double-clicked? (app)
+  (declare (ignore app))
+  (igIsMouseDoubleClicked 2))
+
+(defun left-mouse-double-clicked? (app)
+  (declare (ignore app))
+  (igIsMouseDoubleClicked 0))
+
+(defun right-mouse-double-clicked? (app)
+  (declare (ignore app))
+  (igIsMouseDoubleClicked 1))
+
 				 

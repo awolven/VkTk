@@ -60,6 +60,9 @@
 
 (defgeneric imgui-module (application))
 
+(defun imgui-only-capture-mouse? ()
+  (foreign-slot-value (igGetIO) '(:struct ig::ImGuiIO) 'ig::WantCaptureMouse))
+
 (defmethod imgui-glfw-mouse-button ((window window) button action mods)
   (when (and (prev-user-callback-mouse-button (imgui-module (vk::application window)))
 	     (pointer-eq (h (main-window (vk::application window)))
@@ -69,7 +72,8 @@
     (when (and (eq action GLFW_PRESS)
 	       (< button (length mouse-just-pressed)))
       (setf (aref mouse-just-pressed button) t)
-      (on-mouse-click (vk::application window) mouse-just-pressed action mods)))
+      (unless (imgui-only-capture-mouse?)
+	(on-mouse-click (vk::application window) mouse-just-pressed action mods))))
   (values))
 
 (defmethod on-mouse-click ((application vulkan-application-mixin) buttons-pressed action mods)
@@ -117,7 +121,7 @@
 	  (+ (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::MouseWheel)
 	     (coerce yoffset 'single-float)))
 
-    (unless (ig:igIsWindowHovered ig::ImGuiHoveredFlags_AnyWindow)
+    (unless (imgui-only-capture-mouse?)
       (on-scroll (vk::application window) xoffset yoffset)))
 				  
   (values))
