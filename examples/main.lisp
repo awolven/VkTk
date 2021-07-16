@@ -65,7 +65,8 @@
 	     (when (recreate-swapchain? main-window)
 	       (device-wait-idle device) ;;hack
 	       (multiple-value-bind (width height) (get-framebuffer-size main-window)
-		 (vulkan-create-window main-window width height)))
+		 (vulkan-create-window main-window width height)
+		 (setf (recreate-swapchain? main-window) nil)))
 
 	     (let* ((swapchain (swapchain main-window))
 		    (command-buffer (frame-command-buffer (elt (frame-resources swapchain) current-frame))))

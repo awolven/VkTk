@@ -579,7 +579,7 @@
   (on-window-resize (find-window window) ignore1 ignore2))
 
 (defmethod on-window-resize ((window window) width height)
-  (block on-window-move
+  (block on-window-resize
     (let* ((viewport (ig::igFindViewportByPlatformHandle (h window)))
 	   (data (platform-user-data viewport)))
       (unless (null-pointer-p data)
@@ -588,7 +588,7 @@
 		   (1+ (foreign-slot-value
 			data '(:struct ImGuiViewportDataGlfw) 'IgnoreWindowSizeEventFrame)))))
 	  (when ignore-event?
-	    (return-from on-window-move (values)))))
+	    (return-from on-window-resize (values)))))
       (setf (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::PlatformRequestResize)
 	    t)
       (setf (recreate-swapchain? window) t
