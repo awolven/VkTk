@@ -654,7 +654,7 @@
 	    #+windows
 	    (glfwGetWin32Window window-handle))
       
-      (let* ((window (make-instance 'window :app *app* :handle window-handle)))
+      (let* ((window (make-instance (window-class *app*) :app *app* :handle window-handle)))
       
 	(push window (window-registry *app*))
 

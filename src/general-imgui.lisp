@@ -26,7 +26,7 @@
 					 pipeline-cache
 					 descriptor-pool
 					 (install-callbacks? t)
-					 (style-colors :classic)
+					 (style-colors :light)
 					 (shared-font-atlas +nullptr+)
 					 &allow-other-keys)
   (declare (ignore initargs))
@@ -46,6 +46,9 @@
 	(:light (ig::igStyleColorsLight style))
 	(:dark (ig::igStyleColorsDark style))
 	(t (ig::igStyleColorsClassic style)))
+
+      (ig::igPushStyleColor ig::ImGuiCol_WindowBg 0.64f0 0.64f0 0.64f0 0.6f0)
+      (ig::igPushStyleColor ig::ImGuiCol_TitleBg 0.42f0 0.42f0 0.42f0 0.6f0)
 
       (when (not (zerop (logand (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::ConfigFlags)
 				ig::ImGuiConfigFlags_ViewportsEnable)))

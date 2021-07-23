@@ -287,6 +287,12 @@
 (defun radio-button (label active-p)
   (igRadioButtonBool label active-p))
 
+(defun begin-main-menu-bar ()
+  (igBeginMainMenuBar))
+
+(defun end-main-menu-bar ()
+  (igEndMainMenuBar))
+
 (defun begin-child (id &key
 			 (dx 0.0f0)
 			 (dy 0.0f0)

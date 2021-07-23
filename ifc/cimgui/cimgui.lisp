@@ -1275,7 +1275,12 @@
   (idx :pointer)
   (col :pointer))
 
-
+(cffi:defcfun ("igPushStyleColor" igPushStyleColor) :void
+  (index ImGuiCol)
+  (r :float)
+  (g :float)
+  (b :float)
+  (a :float))
 
 (cffi:defcfun ("igPopStyleColor" igPopStyleColor) :void
   (count :int))
@@ -4916,6 +4921,7 @@
   (larg2 :pointer)
   (larg3 :pointer))
 
+#+NIL
 (cffi:defcfun ("igPushStyleColor" igPushStyleColor) :void
   (larg1 :pointer)
   (larg2 :pointer))
