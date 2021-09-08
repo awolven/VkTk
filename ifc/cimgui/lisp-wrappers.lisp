@@ -653,4 +653,20 @@
   (declare (ignore app))
   (igIsMouseDoubleClicked 1))
 
-				 
+(defun list-box (label current-item items items-shown)
+  (assert (typep items 'sequence))
+  (assert (typep items-shown 'integer))
+  (with-foreign-object (p-current-item :int)
+    (setf (mem-aref p-current-item :int) current-item)
+    (let ((number-of-items (length items)))
+      (with-foreign-object (p-items :string number-of-items)
+	(let ((foreign-strings (mapcar #'foreign-string-alloc items)))
+	  (loop for i from 0 below number-of-items
+	     for char* in foreign-strings
+	     do (setf (mem-aref p-items :string i) char*))
+	  (unwind-protect
+	       (when (igListBox0 label p-current-item p-items number-of-items items-shown)
+		 (mem-aref p-current-item :int))
+	    (loop for char* in foreign-strings
+	       do (foreign-free char*))))))))
+    

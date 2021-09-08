@@ -1928,18 +1928,14 @@
   (p_open :pointer)
   (flags :int))
 
-
-
-
-
-(cffi:defcfun ("igListBoxStr_arr" igListBoxStr_arr) :bool
+(cffi:defcfun ("igListBox0" igListBox0) :bool
   (label :string)
   (current_item :pointer)
   (items :pointer)
   (items_count :int)
   (height_in_items :int))
 
-(cffi:defcfun ("igListBoxFnPtr" igListBoxFnPtr) :bool
+(cffi:defcfun ("igListBox1" igListBox1) :bool
   (label :string)
   (current_item :pointer)
   (items_getter :pointer)
@@ -1947,14 +1943,17 @@
   (items_count :int)
   (height_in_items :int))
 
-
-
-(cffi:defcfun ("igListBoxHeaderInt" igListBoxHeaderInt) :bool
+(cffi:defcfun ("igBeginListBox0" igBeginListBox0) :bool
   (label :string)
   (items_count :int)
   (height_in_items :int))
 
-(cffi:defcfun ("igListBoxFooter" igListBoxFooter) :void)
+(cffi:defcfun ("igBeginListBox1" igBeginListBox1) :bool
+  (label :string)
+  (size_x :pointer)
+  (size_y :pointer))
+
+(cffi:defcfun ("igEndListBox" igEndListBox) :void)
 
 
 
