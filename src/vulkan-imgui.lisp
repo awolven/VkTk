@@ -197,10 +197,11 @@
 	  (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplaySize))
 	 #+NOTYET(p-framebuffer-scale
 	  (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::FramebufferScale))
-	 (framebuffer-scale-x #+(or windows linux) 1 #+macos 2
+	 (framebuffer-scale-x #+(or windows linux) 1
+			      #+darwin 2
 			      #+NIL(foreign-slot-value p-framebuffer-scale
 						       '(:struct ig::ImVec2) 'ig::x))
-	 (framebuffer-scale-y #+(or windows linux) 1 #+macos 2
+	 (framebuffer-scale-y #+(or windows linux) 1 #+darwin 2
 			      #+NIL(foreign-slot-value p-framebuffer-scale
 						       '(:struct ig::ImVec2) 'ig::y))
 	 (display-size-x (foreign-slot-value p-display-size '(:struct ig::ImVec2) 'ig::x))
