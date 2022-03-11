@@ -64,6 +64,7 @@
   (foreign-slot-value (igGetIO) '(:struct ig::ImGuiIO) 'ig::WantCaptureMouse))
 
 (defmethod imgui-glfw-mouse-button ((window window) button action mods)
+  
   (when (and (prev-user-callback-mouse-button (imgui-module (vk::application window)))
 	     (pointer-eq (h (main-window (vk::application window)))
 			 (h window)))
@@ -72,8 +73,11 @@
     (when (and (eq action GLFW_PRESS)
 	       (< button (length mouse-just-pressed)))
       (setf (aref mouse-just-pressed button) t)
+      ;;      (break "~S" mouse-just-pressed)
+      
       (unless (imgui-only-capture-mouse?)
-	(on-mouse-click (vk::application window) mouse-just-pressed action mods))))
+	(on-mouse-click (vk::application window) mouse-just-pressed action mods)
+	)))
   (values))
 
 (defmethod on-mouse-click ((application vulkan-application-mixin) buttons-pressed action mods)
@@ -324,148 +328,156 @@
 
 (defun imgui-glfw-update-mouse-pos-and-buttons (imgui)
   (let* ((io (ig:igGetIO))
-	 (window (main-window imgui))
-	 (p-mousedown (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::MouseDown)))
+	       (window (main-window imgui))
+	       (p-mousedown (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::MouseDown)))
 
     (loop for i from 0 below 5
-       do (setf (mem-aref p-mousedown :bool i)
-		(or (elt (mouse-just-pressed imgui) i)
-		    (not (zerop (glfwGetMouseButton (h window) i)))))
-	 (setf (elt (mouse-just-pressed imgui) i) nil))
+          do (setf (mem-aref p-mousedown :bool i)
+		               (or (elt (mouse-just-pressed imgui) i)
+		                   (not (zerop (glfwGetMouseButton (h window) i)))))
+	           (setf (elt (mouse-just-pressed imgui) i) nil))
     
     (let* ((p-mouse-pos (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::MousePos))
-	   (mouse-pos-x-backup (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::x))
-	   (mouse-pos-y-backup (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y))
-	   (-FLT_MAX (- (ig::igGet_FLT_MAX))))
+	         (mouse-pos-x-backup (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::x))
+	         (mouse-pos-y-backup (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y))
+	         (-FLT_MAX (- (ig::igGet_FLT_MAX))))
 
       (setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::x) -FLT_MAX
-	    (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y) -FLT_MAX)
+	          (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y) -FLT_MAX)
 
       (setf (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::MouseHoveredViewport) 0)
 
       (let* ((platform-io (ig::igGetPlatformIO))
-	     (p-viewports (foreign-slot-pointer platform-io '(:struct ig::ImGuiPlatformIO) 'ig::Viewports))
-	     (p-viewports-data (foreign-slot-value p-viewports '(:struct ig::ImVector_ImGuiViewport) 'ig::Data))
-	     (size (foreign-slot-value p-viewports '(:struct ig::ImVector_ImGuiViewport) 'ig::Size)))
+	           (p-viewports (foreign-slot-pointer platform-io '(:struct ig::ImGuiPlatformIO) 'ig::Viewports))
+	           (p-viewports-data (foreign-slot-value p-viewports '(:struct ig::ImVector_ImGuiViewport) 'ig::Data))
+	           (size (foreign-slot-value p-viewports '(:struct ig::ImVector_ImGuiViewport) 'ig::Size)))
 
-	(loop for n from 0 below size
-	   do (let* ((p-viewport (mem-aref p-viewports-data :pointer n))
-		     (p-window (foreign-slot-value p-viewport '(:struct ig::ImGuiViewport) 'ig::PlatformHandle))
-		     (focused (not (zerop (glfwGetWindowAttrib p-window GLFW_FOCUSED)))))
+	      (loop for n from 0 below size
+	            do (let* ((p-viewport (mem-aref p-viewports-data :pointer n))
+		                    (p-window (foreign-slot-value p-viewport '(:struct ig::ImGuiViewport) 'ig::PlatformHandle))
+		                    (focused (not (zerop (glfwGetWindowAttrib p-window GLFW_FOCUSED)))))
 
-		(when focused
-		  (if (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::WantSetMousePos)
+		               (when focused
+		                 (if (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::WantSetMousePos)
 
-		      (let ((p-pos (foreign-slot-pointer p-viewport '(:struct ig::ImGuiViewport) 'ig::Pos)))
-			(glfwSetCursorPos p-window
-					  (coerce
-					   (- mouse-pos-x-backup
-					      (foreign-slot-value p-pos '(:struct ig::ImVec2) 'ig::x))
-					   'double-float)
-					  (coerce 
-					   (- mouse-pos-y-backup
-					      (foreign-slot-value p-pos '(:struct ig::ImVec2) 'ig::y))
-					   'double-float)))
+		                     (let ((p-pos (foreign-slot-pointer p-viewport '(:struct ig::ImGuiViewport) 'ig::Pos)))
+			                     (glfwSetCursorPos p-window
+					                                   (coerce
+					                                    (- mouse-pos-x-backup
+					                                       (foreign-slot-value p-pos '(:struct ig::ImVec2) 'ig::x))
+					                                    'double-float)
+					                                   (coerce
+					                                    (- mouse-pos-y-backup
+					                                       (foreign-slot-value p-pos '(:struct ig::ImVec2) 'ig::y))
+					                                    'double-float)))
 
-		      (with-foreign-objects ((&mouse-x :double)
-					     (&mouse-y :double))
-			(glfwGetCursorPos p-window &mouse-x &mouse-y)
-			(if (not (zerop (logand
-					 (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::ConfigFlags)
-					 ig::ImGuiConfigFlags_ViewportsEnable)))
+		                     (with-foreign-objects ((&mouse-x :double)
+					                                      (&mouse-y :double))
+			                     (glfwGetCursorPos p-window &mouse-x &mouse-y)
+			                     (if (not (zerop (logand
+					                                  (foreign-slot-value io '(:struct ig::ImGuiIO) 'ig::ConfigFlags)
+					                                  ig::ImGuiConfigFlags_ViewportsEnable)))
 
-			    (with-foreign-objects ((&window-x :int)
-						   (&window-y :int))
-			      (glfwGetWindowPos p-window &window-x &window-y)
-			      (let ((p-mouse-pos (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::MousePos)))
-				(setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::x)
-				      (+ (coerce (mem-aref &mouse-x :double) 'single-float)
-					 (mem-aref &window-x :int)))
+			                         (with-foreign-objects ((&window-x :int)
+						                                          (&window-y :int))
+			                           (glfwGetWindowPos p-window &window-x &window-y)
+			                           (let ((p-mouse-pos (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::MousePos)))
+				                           (setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::x)
+				                                 (+ (coerce (mem-aref &mouse-x :double) 'single-float)
+					                                  (mem-aref &window-x :int)))
 
-				(setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y)
-				      (+ (coerce (mem-aref &mouse-y :double) 'single-float)
-					 (mem-aref &window-y :int)))))
+				                           (setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y)
+				                                 (+ (coerce (mem-aref &mouse-y :double) 'single-float)
+					                                  (mem-aref &window-y :int)))))
 				  
-			    (let ((p-mouse-pos (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::MousePos)))
-			      (setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::x)
-				    (coerce (mem-aref &mouse-x :double) 'single-float))
+			                         (let ((p-mouse-pos (foreign-slot-pointer io '(:struct ig::ImGuiIO) 'ig::MousePos)))
+			                           (setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::x)
+				                               (coerce (mem-aref &mouse-x :double) 'single-float))
 
-			      (setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y)
-				    (coerce (mem-aref &mouse-y :double) 'single-float))))))
+			                           (setf (foreign-slot-value p-mouse-pos '(:struct ig::ImVec2) 'ig::y)
+				                               (coerce (mem-aref &mouse-y :double) 'single-float))))))
 
-		  (loop for i from 0 below 5
-		     do (setf (mem-aref p-mousedown :bool i)
-			      (or (mem-aref p-mousedown :bool i)
-				  (not (zerop (glfwGetMouseButton p-window i)))))))))))))
+		                 (loop for i from 0 below 5
+		                       do (setf (mem-aref p-mousedown :bool i)
+			                              (or (mem-aref p-mousedown :bool i)
+				                                (not (zerop (glfwGetMouseButton p-window i)))))))))))))
+
 
 (defun imgui-glfw-update-monitors (imgui)
   (let ((platform-io (ig::igGetPlatformIO)))
     (with-foreign-object (&monitors-count :int)
       (let ((p-glfw-monitors (glfwGetMonitors &monitors-count))
-	    (p-imgui-monitors (foreign-slot-pointer
-			       platform-io '(:struct ig::ImGuiPlatformIO) 'ig::Monitors)))
-	(ig::ImVector_ImGuiPlatformMonitor_resize p-imgui-monitors 0)
-	(loop for n from 0 below (mem-aref &monitors-count :int)
-	   do #+NIL(ig::ImVector_ImGuiPlatformMonitor_resize p-imgui-monitors (1+ n))
-	     (with-foreign-object (monitor '(:struct ig::ImGuiPlatformMonitor))
-	       (let ((glfw-monitors-n (mem-aref p-glfw-monitors :pointer n)))
-		 #+NIL(mem-aptr (foreign-slot-value p-imgui-monitors '(:struct ig::ImVector) 'ig::Data)
-				'(:struct ig::ImGuiPlatformMonitor) n)
-		 (with-foreign-objects ((&x :int)
-					(&y :int))
-		   (glfwGetMonitorPos glfw-monitors-n &x &y)
-		   (let ((vid-mode (glfwGetVideoMode glfw-monitors-n))
-			 (p-main-pos (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::MainPos))
-			 (p-main-size (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::MainSize))
-			 (p-work-pos (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::WorkPos))
-			 (p-work-size (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::WorkSize)))
-		     (setf (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::x)
-			   (coerce (mem-aref &x :int) 'single-float)
-			  
-			   (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::y)
-			   (coerce (mem-aref &y :int) 'single-float)
-			  
-			   (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::x)
-			   (coerce
-			    (foreign-slot-value vid-mode '(:struct GLFWvidmode) '%glfw::width)
-			    'single-float)
-			  
-			   (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::y)
-			   (coerce
-			    (foreign-slot-value vid-mode '(:struct GLFWvidmode) '%glfw::height)
-			    'single-float))
+	          (p-imgui-monitors (foreign-slot-pointer
+			                         platform-io '(:struct ig::ImGuiPlatformIO) 'ig::Monitors)))
+	      (ig::ImVector_ImGuiPlatformMonitor_resize p-imgui-monitors 0)
+	      (loop for n from 0 below (mem-aref &monitors-count :int)
+	            do #+NIL(ig::ImVector_ImGuiPlatformMonitor_resize p-imgui-monitors (1+ n))
+	               (with-foreign-object (monitor '(:struct ig::ImGuiPlatformMonitor))
+	                 (let ((glfw-monitors-n (mem-aref p-glfw-monitors :pointer n)))
+		                 #+NIL(mem-aptr (foreign-slot-value p-imgui-monitors '(:struct ig::ImVector) 'ig::Data)
+				                            '(:struct ig::ImGuiPlatformMonitor) n)
+		                 (with-foreign-objects ((&x :int)
+					                                  (&y :int))
+		                   (glfwGetMonitorPos glfw-monitors-n &x &y)
+		                   (let ((vid-mode (glfwGetVideoMode glfw-monitors-n))
+			                       (p-main-pos (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::MainPos))
+			                       (p-main-size (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::MainSize))
+			                       (p-work-pos (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::WorkPos))
+			                       (p-work-size (foreign-slot-pointer monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::WorkSize)))
+		                     (setf (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::x)
+			                         (coerce (mem-aref &x :int) 'single-float)
 
-		     (with-foreign-objects ((&w :int)
-					    (&h :int))
-		       (if (boundp '%glfw::glfwGetMonitorWorkarea)
-			   (progn
-			     (funcall '%glfw::glfwGetMonitorWorkarea
-				      glfw-monitors-n &x &y &w &h)
-			    
-			     (setf (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::x)
-				   (coerce (mem-aref &x :int) 'single-float)
-				  
-				   (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::y)
-				   (coerce (mem-aref &y :int) 'single-float)
-				  
-				   (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::x)
-				   (coerce (mem-aref &w :int) 'single-float)
-				  
-				   (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::y)
-				   (coerce (mem-aref &h :int) 'single-float)))
-			  
-			   (setf (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::x)
-				 (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::x)
-				  
-				 (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::y)
-				 (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::y)
-				  
-				 (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::x)
-				 (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::x)
-				  
-				 (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::y)
-				 (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::y)))))))
-	       (ig::ImVector_ImGuiPlatformMonitor_push_back p-imgui-monitors monitor)))))
+			                         (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::y)
+			                         (coerce (mem-aref &y :int) 'single-float)
+
+			                         (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::x)
+			                         (coerce
+			                          (foreign-slot-value vid-mode '(:struct GLFWvidmode) '%glfw::width)
+			                          'single-float)
+
+			                         (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::y)
+			                         (coerce
+			                          (foreign-slot-value vid-mode '(:struct GLFWvidmode) '%glfw::height)
+			                          'single-float))
+
+		                     (with-foreign-objects ((&w :int)
+					                                      (&h :int))
+		                       (if (boundp '%glfw::glfwGetMonitorWorkarea)
+			                         (progn
+			                           (funcall '%glfw::glfwGetMonitorWorkarea
+				                                  glfw-monitors-n &x &y &w &h)
+
+			                           (setf (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::x)
+				                               (coerce (mem-aref &x :int) 'single-float)
+
+				                               (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::y)
+				                               (coerce (mem-aref &y :int) 'single-float)
+
+				                               (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::x)
+				                               (coerce (mem-aref &w :int) 'single-float)
+
+				                               (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::y)
+				                               (coerce (mem-aref &h :int) 'single-float)))
+
+			                         (setf (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::x)
+				                             (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::x)
+
+				                             (foreign-slot-value p-work-pos '(:struct ig::ImVec2) 'ig::y)
+				                             (foreign-slot-value p-main-pos '(:struct ig::ImVec2) 'ig::y)
+
+				                             (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::x)
+				                             (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::x)
+
+				                             (foreign-slot-value p-work-size '(:struct ig::ImVec2) 'ig::y)
+				                             (foreign-slot-value p-main-size '(:struct ig::ImVec2) 'ig::y))))))
+
+                     (with-foreign-objects ((&x-scale :float)
+                                            (&y-scale :float))
+                       (%glfw::glfwGetMonitorContentScale glfw-monitors-n &x-scale &y-scale)
+                       (setf (foreign-slot-value monitor '(:struct ig::ImGuiPlatformMonitor) 'ig::DpiScale)
+                             (mem-aref &x-scale :float))))
+
+                     (ig::ImVector_ImGuiPlatformMonitor_push_back p-imgui-monitors monitor)))))
 	       
     (setf (want-update-monitors? imgui) nil)
     (values)))
