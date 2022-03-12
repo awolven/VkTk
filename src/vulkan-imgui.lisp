@@ -191,23 +191,23 @@
 
 (defun imgui-vulkan-render-draw-data (imgui viewport command-buffer frame-index)
   (let* ((draw-data (foreign-slot-value viewport '(:struct ig::ImGuiViewport) 'ig::DrawData))
-	 (window (get-viewport-window viewport))
+	     (window (get-viewport-window viewport))
 	 
-	 (p-display-size
-	  (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplaySize))
-	 #+NOTYET(p-framebuffer-scale
-	  (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::FramebufferScale))
-	 (framebuffer-scale-x #+(or windows linux) 1
-			      #+darwin 2
-			      #+NIL(foreign-slot-value p-framebuffer-scale
-						       '(:struct ig::ImVec2) 'ig::x))
-	 (framebuffer-scale-y #+(or windows linux) 1 #+darwin 2
-			      #+NIL(foreign-slot-value p-framebuffer-scale
-						       '(:struct ig::ImVec2) 'ig::y))
-	 (display-size-x (foreign-slot-value p-display-size '(:struct ig::ImVec2) 'ig::x))
-	 (display-size-y (foreign-slot-value p-display-size '(:struct ig::ImVec2) 'ig::y))
-	 (fb-width (* display-size-x framebuffer-scale-x))
-	 (fb-height (* display-size-y framebuffer-scale-y)))
+	     (p-display-size
+	       (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplaySize))
+	     #+NOTYET(p-framebuffer-scale
+	               (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::FramebufferScale))
+	     (framebuffer-scale-x #+(or windows linux) 1
+			                  #+darwin 2
+			                  #+NIL(foreign-slot-value p-framebuffer-scale
+						                               '(:struct ig::ImVec2) 'ig::x))
+	     (framebuffer-scale-y #+(or windows linux) 1 #+darwin 2
+			                                         #+NIL(foreign-slot-value p-framebuffer-scale
+						                                                      '(:struct ig::ImVec2) 'ig::y))
+	     (display-size-x (foreign-slot-value p-display-size '(:struct ig::ImVec2) 'ig::x))
+	     (display-size-y (foreign-slot-value p-display-size '(:struct ig::ImVec2) 'ig::y))
+	     (fb-width (* display-size-x framebuffer-scale-x))
+	     (fb-height (* display-size-y framebuffer-scale-y)))
 
     (when (or (<= fb-width 0) (<= fb-height 0))
       (return-from imgui-vulkan-render-draw-data))
@@ -216,246 +216,250 @@
       (return-from imgui-vulkan-render-draw-data (values)))
     
     (let ((device (logical-device imgui))
-	  (allocator (allocator imgui)))
+	      (allocator (allocator imgui)))
       (with-slots (buffer-memory-alignment descriptor-set pipeline-layout) imgui
-	(maybe-init-frame-data window (frame-count imgui))
-	(let ((frame-data (window-frame-data window)))
-	  (unless (elt frame-data frame-index)
-	    (setf (elt frame-data frame-index) (make-instance 'imgui-frame-data)))
-	  (with-slots (vertex-buffer
-		       vertex-buffer-size
-		       vertex-buffer-memory
-		       index-buffer
-		       index-buffer-size
-		       index-buffer-memory) (elt frame-data frame-index)
+	    (maybe-init-frame-data window (frame-count imgui))
+	    (let ((frame-data (window-frame-data window)))
+	      (unless (elt frame-data frame-index)
+	        (setf (elt frame-data frame-index) (make-instance 'imgui-frame-data)))
+	      (with-slots (vertex-buffer
+		               vertex-buffer-size
+		               vertex-buffer-memory
+		               index-buffer
+		               index-buffer-size
+		               index-buffer-memory) (elt frame-data frame-index)
 		      
-	    (let (#+NIL(io (ig:igGetIO)))
-	      ;; create the vertex buffer:
-	      (let ((vertex-size (* (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::TotalVtxCount)
-				    (foreign-type-size '(:struct ig::ImDrawVert))))
-		    (index-size (* (foreign-slot-value draw-data  '(:struct ig::ImDrawData) 'ig::TotalIdxCount)
-				   (foreign-type-size 'ig::ImDrawIdx))))
+	        (let (#+NIL(io (ig:igGetIO)))
+              ;; create the vertex buffer:
+	          (let ((vertex-size (* (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::TotalVtxCount)
+				                    (foreign-type-size '(:struct ig::ImDrawVert))))
+		            (index-size (* (foreign-slot-value draw-data  '(:struct ig::ImDrawData) 'ig::TotalIdxCount)
+				                   (foreign-type-size 'ig::ImDrawIdx))))
 
-		(when (or (not vertex-buffer) (< vertex-buffer-size vertex-size))
-		  (when vertex-buffer
-		    (vkDestroyBuffer (h device) (h vertex-buffer) (h allocator)))
+		        (when (or (not vertex-buffer) (< vertex-buffer-size vertex-size))
+		          (when vertex-buffer
+		            (vkDestroyBuffer (h device) (h vertex-buffer) (h allocator)))
 
-		  (when vertex-buffer-memory
-		    (vkFreeMemory (h device) (h vertex-buffer-memory) (h allocator)))
+		          (when vertex-buffer-memory
+		            (vkFreeMemory (h device) (h vertex-buffer-memory) (h allocator)))
 
-		  (let ((new-buffer-size (* (1+ (ceiling (/ (1- vertex-size) buffer-memory-alignment)))
-					    buffer-memory-alignment)))
-		    (setq vertex-buffer
-			  (create-buffer-1 device new-buffer-size VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-					   :buffer-class 'vertex-buffer
-					   :allocator allocator))
-		    (setq vertex-buffer-size new-buffer-size)
-		    (setf vertex-buffer-memory
-			  (allocate-buffer-memory device
-						  vertex-buffer
-						  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-						  :allocator allocator))
-		    (setf buffer-memory-alignment (max (vk::alignment vertex-buffer-memory)
-						       buffer-memory-alignment))
-		    (bind-buffer-memory device vertex-buffer vertex-buffer-memory)))
+		          (let ((new-buffer-size (* (1+ (ceiling (/ (1- vertex-size) buffer-memory-alignment)))
+					                        buffer-memory-alignment)))
+		            (setq vertex-buffer
+			              (create-buffer-1 device new-buffer-size VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+					                       :buffer-class 'vertex-buffer
+					                       :allocator allocator))
+		            (setq vertex-buffer-size new-buffer-size)
+		            (setf vertex-buffer-memory
+			              (allocate-buffer-memory device
+						                          vertex-buffer
+						                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+						                          :allocator allocator))
+		            (setf buffer-memory-alignment (max (vk::alignment vertex-buffer-memory)
+						                               buffer-memory-alignment))
+		            (bind-buffer-memory device vertex-buffer vertex-buffer-memory)))
 
-		(when (or (not index-buffer) (< index-buffer-size index-size))
-		  (when index-buffer
-		    (vkDestroyBuffer (h device) (h index-buffer) (h allocator)))
+		        (when (or (not index-buffer) (< index-buffer-size index-size))
+		          (when index-buffer
+		            (vkDestroyBuffer (h device) (h index-buffer) (h allocator)))
 
-		  (when index-buffer-memory
-		    (vkFreeMemory (h device) (h index-buffer-memory) (h allocator)))
+		          (when index-buffer-memory
+		            (vkFreeMemory (h device) (h index-buffer-memory) (h allocator)))
 
-		  (let ((new-buffer-size (* (1+ (ceiling (/ (1- index-size) buffer-memory-alignment)))
-					    buffer-memory-alignment)))
-		    (setq index-buffer
-			  (create-buffer-1 device new-buffer-size VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-					   :buffer-class 'index-buffer
-					   :allocator allocator))
-		    (setq index-buffer-size new-buffer-size)
-		    (setf index-buffer-memory
-			  (allocate-buffer-memory device
-						  index-buffer
-						  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-						  :allocator allocator))
-		    (setf buffer-memory-alignment (max (vk::alignment index-buffer-memory)
-						       buffer-memory-alignment))
-		    (bind-buffer-memory device index-buffer index-buffer-memory)))
+		          (let ((new-buffer-size (* (1+ (ceiling (/ (1- index-size) buffer-memory-alignment)))
+					                        buffer-memory-alignment)))
+		            (setq index-buffer
+			              (create-buffer-1 device new-buffer-size VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+					                       :buffer-class 'index-buffer
+					                       :allocator allocator))
+		            (setq index-buffer-size new-buffer-size)
+		            (setf index-buffer-memory
+			              (allocate-buffer-memory device
+						                          index-buffer
+						                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+						                          :allocator allocator))
+		            (setf buffer-memory-alignment (max (vk::alignment index-buffer-memory)
+						                               buffer-memory-alignment))
+		            (bind-buffer-memory device index-buffer index-buffer-memory)))
 
 	      
 	    
 
-		(let ((p-vtx-dst) (p-idx-dst))
-		  (with-foreign-objects ((pp-vtx-dst :pointer)
-					 (pp-idx-dst :pointer))
+		        (let ((p-vtx-dst) (p-idx-dst))
+		          (with-foreign-objects ((pp-vtx-dst :pointer)
+					                     (pp-idx-dst :pointer))
 
-		    (check-vk-result (vkMapMemory (h device)
-						  (h vertex-buffer-memory)
-						  0 vertex-size 0 pp-vtx-dst))
-		    (setf p-vtx-dst (mem-aref pp-vtx-dst :pointer))
+		            (check-vk-result (vkMapMemory (h device)
+						                          (h vertex-buffer-memory)
+						                          0 vertex-buffer-size 0 pp-vtx-dst))
+		            (setf p-vtx-dst (mem-aref pp-vtx-dst :pointer))
 
-		    (check-vk-result (vkMapMemory (h device)
-						  (h index-buffer-memory)
-						  0 index-size 0 pp-idx-dst))
-		    (setf p-idx-dst (mem-aref pp-idx-dst :pointer))
+		            (check-vk-result (vkMapMemory (h device)
+						                          (h index-buffer-memory)
+						                          0 index-buffer-size 0 pp-idx-dst))
+		            (setf p-idx-dst (mem-aref pp-idx-dst :pointer))
 
-		    (loop for n from 0 below (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdListsCount)
-		       do (let* ((p-cmd-list
-				  (mem-aref (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdLists)
-					    :pointer n))
-				 (p-vtx-buffer
-				  (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::VtxBuffer))
-				 (p-idx-buffer
-				  (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::IdxBuffer))
-				 (p-vtx-data (ig::ImVector_ImDrawVert_begin p-vtx-buffer))
-				 (p-idx-data (ig::ImVector_ImDrawIdx_begin p-idx-buffer)))
+		            (loop for n from 0 below (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdListsCount)
+		                  do (let* ((p-cmd-list
+				                      (mem-aref (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdLists)
+					                            :pointer n))
+				                    (p-vtx-buffer
+				                      (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::VtxBuffer))
+				                    (p-idx-buffer
+				                      (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::IdxBuffer))
+				                    (p-vtx-data (ig::ImVector_ImDrawVert_begin p-vtx-buffer))
+				                    (p-idx-data (ig::ImVector_ImDrawIdx_begin p-idx-buffer)))
 
-			    (vk::memcpy p-vtx-dst p-vtx-data
-					(ig::ImVector_ImDrawVert_size_in_bytes p-vtx-buffer))
+			                   (vk::memcpy p-vtx-dst p-vtx-data
+					                       (ig::ImVector_ImDrawVert_size_in_bytes p-vtx-buffer))
 
-			    (vk::memcpy p-idx-dst p-idx-data
-					(ig::ImVector_ImDrawIdx_size_in_bytes p-idx-buffer))
+			                   (vk::memcpy p-idx-dst p-idx-data
+					                       (ig::ImVector_ImDrawIdx_size_in_bytes p-idx-buffer))
 
-			    (incf-pointer p-vtx-dst (ig::ImVector_ImDrawVert_size_in_bytes p-vtx-buffer))
+			                   (incf-pointer p-vtx-dst (ig::ImVector_ImDrawVert_size_in_bytes p-vtx-buffer))
 
-			    (incf-pointer p-idx-dst (ig::ImVector_ImDrawIdx_size_in_bytes p-idx-buffer))))))
+			                   (incf-pointer p-idx-dst (ig::ImVector_ImDrawIdx_size_in_bytes p-idx-buffer))))))
       
-		(with-foreign-object (p-ranges '(:struct VkMappedMemoryRange) 2)
-		  (zero-struct (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 0)
-			       '(:struct VkMappedMemoryRange))
-		  (zero-struct (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 1)
-			       '(:struct VkMappedMemoryRange))
-		  (with-foreign-slots ((%vk::sType
-					%vk::memory
-					%vk::size)
-				       (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 0)
-				       (:struct VkMappedMemoryRange))
-		    (setf %vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
-			  %vk::memory (h vertex-buffer-memory)
-			  %vk::size VK_WHOLE_SIZE))
+		        (with-foreign-object (p-ranges '(:struct VkMappedMemoryRange) 2)
+		          (zero-struct (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 0)
+			                   '(:struct VkMappedMemoryRange))
+		          (zero-struct (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 1)
+			                   '(:struct VkMappedMemoryRange))
+		          (with-foreign-slots ((%vk::sType
+                                        %vk::memory
+                                        %vk::offset
+					                    %vk::size)
+				                       (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 0)
+				                       (:struct VkMappedMemoryRange))
+		            (setf %vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
+			              %vk::memory (h vertex-buffer-memory)
+                          %vk::offset 0
+			              %vk::size VK_WHOLE_SIZE))
 
-		  (with-foreign-slots ((%vk::sType
-					%vk::memory
-					%vk::size)
-				       (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 1)
-				       (:struct VkMappedMemoryRange))
-		    (setf %vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
-			  %vk::memory (h index-buffer-memory)
-			  %vk::size VK_WHOLE_SIZE))
+		          (with-foreign-slots ((%vk::sType
+                                        %vk::memory
+                                        %vk::offset
+					                    %vk::size)
+				                       (mem-aptr p-ranges '(:struct VkMappedMemoryRange) 1)
+				                       (:struct VkMappedMemoryRange))
+		            (setf %vk::sType VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
+			              %vk::memory (h index-buffer-memory)
+                          %vk::offset 0
+			              %vk::size VK_WHOLE_SIZE))
 
-		  (check-vk-result (vkFlushMappedMemoryRanges (h device) 2 p-ranges))
+		          (check-vk-result (vkFlushMappedMemoryRanges (h device) 2 p-ranges))
 
-		  (vkUnmapMemory (h device) (h vertex-buffer-memory))
+		          (vkUnmapMemory (h device) (h vertex-buffer-memory))
 
-		  (vkUnmapMemory (h device) (h index-buffer-memory)))
+		          (vkUnmapMemory (h device) (h index-buffer-memory)))
 
-		(imgui-vulkan-setup-render-state imgui draw-data command-buffer vertex-buffer index-buffer
-						 fb-width fb-height))
-	      ;; Render the command lists:
-	      (let ((p-clip-off (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplayPos))
-		    (p-clip-scale (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::FramebufferScale))
-		    (vtx-offset 0)
-		    (idx-offset 0))
+		        (imgui-vulkan-setup-render-state imgui draw-data command-buffer vertex-buffer index-buffer
+						                         fb-width fb-height))
+              ;; Render the command lists:
+	          (let ((p-clip-off (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::DisplayPos))
+		            (p-clip-scale (foreign-slot-pointer draw-data '(:struct ig::ImDrawData) 'ig::FramebufferScale))
+		            (vtx-offset 0)
+		            (idx-offset 0))
 
-		(loop for n from 0 below (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdListsCount)
-		   do
-		     (let ((p-cmd-list
-			    (mem-aref (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdLists)
-				      :pointer n)))
-		       (loop for cmd-i from 0 below
-			    (foreign-slot-value (foreign-slot-pointer p-cmd-list
-								      '(:struct ig::ImDrawList) 'ig::CmdBuffer)
-						'(:struct ig::ImVector_ImDrawCmd) 'ig::Size)
+		        (loop for n from 0 below (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdListsCount)
+		              do
+		                 (let ((p-cmd-list
+			                     (mem-aref (foreign-slot-value draw-data '(:struct ig::ImDrawData) 'ig::CmdLists)
+				                           :pointer n)))
+		                   (loop for cmd-i from 0 below
+			                                      (foreign-slot-value (foreign-slot-pointer p-cmd-list
+								                                                            '(:struct ig::ImDrawList) 'ig::CmdBuffer)
+						                                              '(:struct ig::ImVector_ImDrawCmd) 'ig::Size)
 		    
-			  do (let ((p-cmd
-				    (mem-aptr
-				     (foreign-slot-value
-				      (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::CmdBuffer)
-				      '(:struct ig::ImVector_ImDrawCmd) 'ig::Data)
-				     '(:struct ig::ImDrawCmd) cmd-i)))
+			                     do (let ((p-cmd
+				                            (mem-aptr
+				                             (foreign-slot-value
+				                              (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::CmdBuffer)
+				                              '(:struct ig::ImVector_ImDrawCmd) 'ig::Data)
+				                             '(:struct ig::ImDrawCmd) cmd-i)))
 
-			       (with-vk-struct (p-scissor VkRect2D)
-				 (let ((p-offset
-					(foreign-slot-pointer p-scissor '(:struct VkRect2D) '%vk::offset))
-				       (p-extent
-					(foreign-slot-pointer p-scissor '(:struct VkRect2D) '%vk::extent)))
+			                          (with-vk-struct (p-scissor VkRect2D)
+				                        (let ((p-offset
+					                            (foreign-slot-pointer p-scissor '(:struct VkRect2D) '%vk::offset))
+				                              (p-extent
+					                            (foreign-slot-pointer p-scissor '(:struct VkRect2D) '%vk::extent)))
 			       
-				   (with-foreign-slots ((%vk::x %vk::y) p-offset (:struct VkOffset2D))
-				     (with-foreign-slots ((%vk::width %vk::height) p-extent (:struct VkExtent2D))
+				                          (with-foreign-slots ((%vk::x %vk::y) p-offset (:struct VkOffset2D))
+				                            (with-foreign-slots ((%vk::width %vk::height) p-extent (:struct VkExtent2D))
 				   
-				       (let* ((p-clip-rect
-					       (foreign-slot-pointer p-cmd '(:struct ig::ImDrawCmd) 'ig::ClipRect))
-					      (clip-rect-x
-					       (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x))
-					      (clip-rect-y
-					       (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y))
-					      (clip-rect-z
-					       (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::z))
-					      (clip-rect-w
-					       (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::w))
-					      (clip-off-x
-					       (foreign-slot-value p-clip-off '(:struct ig::ImVec2) 'ig::x))
-					      (clip-off-y
-					       (foreign-slot-value p-clip-off '(:struct ig::ImVec2) 'ig::y))
-					      (clip-scale-x
-					       (foreign-slot-value p-clip-scale '(:struct ig::ImVec2) 'ig::x))
-					      (clip-scale-y
-					       (foreign-slot-value p-clip-scale '(:struct ig::ImVec2) 'ig::y))
-					      (cr-x (* (- clip-rect-x clip-off-x) clip-scale-x))
-					      (cr-y (* (- clip-rect-y clip-off-y) clip-scale-y))
-					      (cr-z (* (- clip-rect-z clip-off-x) clip-scale-x))
-					      (cr-w (* (- clip-rect-w clip-off-y) clip-scale-y)))
+				                              (let* ((p-clip-rect
+					                                   (foreign-slot-pointer p-cmd '(:struct ig::ImDrawCmd) 'ig::ClipRect))
+					                                 (clip-rect-x
+					                                   (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::x))
+					                                 (clip-rect-y
+					                                   (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::y))
+					                                 (clip-rect-z
+					                                   (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::z))
+					                                 (clip-rect-w
+					                                   (foreign-slot-value p-clip-rect '(:struct ig::ImVec4) 'ig::w))
+					                                 (clip-off-x
+					                                   (foreign-slot-value p-clip-off '(:struct ig::ImVec2) 'ig::x))
+					                                 (clip-off-y
+					                                   (foreign-slot-value p-clip-off '(:struct ig::ImVec2) 'ig::y))
+					                                 (clip-scale-x
+					                                   (foreign-slot-value p-clip-scale '(:struct ig::ImVec2) 'ig::x))
+					                                 (clip-scale-y
+					                                   (foreign-slot-value p-clip-scale '(:struct ig::ImVec2) 'ig::y))
+					                                 (cr-x (* (- clip-rect-x clip-off-x) clip-scale-x))
+					                                 (cr-y (* (- clip-rect-y clip-off-y) clip-scale-y))
+					                                 (cr-z (* (- clip-rect-z clip-off-x) clip-scale-x))
+					                                 (cr-w (* (- clip-rect-w clip-off-y) clip-scale-y)))
 
-					 (when (and (< cr-x fb-width)
-						    (< cr-y fb-height)
-						    (>= cr-z 0.0f0)
-						    (>= cr-w 0.0f0))
+					                            (when (and (< cr-x fb-width)
+						                                   (< cr-y fb-height)
+						                                   (>= cr-z 0.0f0)
+						                                   (>= cr-w 0.0f0))
 
-					   ;;(print cr-x)
-					   ;;(print cr-y)
-					   ;;(print cr-z)
-					   ;;(print cr-w)
+                                                  ;;(print cr-x)
+                                                  ;;(print cr-y)
+                                                  ;;(print cr-z)
+                                                  ;;(print cr-w)
 					   
-					   (when (< cr-x 0.0f0)
-					     (setq cr-x 0.0f0))
-					   (when (< cr-y 0.0f0)
-					     (setq cr-y 0.0f0))
+					                              (when (< cr-x 0.0f0)
+					                                (setq cr-x 0.0f0))
+					                              (when (< cr-y 0.0f0)
+					                                (setq cr-y 0.0f0))
 					   
-					   (setf %vk::x (round cr-x)
-						 %vk::y (round cr-y)
-						 %vk::width (round (- cr-z cr-x))
-						 %vk::height (round (- cr-w cr-y))))
+					                              (setf %vk::x (round cr-x)
+						                                %vk::y (round cr-y)
+						                                %vk::width (round (- cr-z cr-x))
+						                                %vk::height (round (- cr-w cr-y))))
 					 
-					 (vkCmdSetScissor (h command-buffer) 0 1 p-scissor)
+					                            (vkCmdSetScissor (h command-buffer) 0 1 p-scissor)
 
-					 (vkCmdDrawIndexed (h command-buffer)
-							   (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::ElemCount)
-							   1
-							   (+ (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::IdxOffset) idx-offset)
-							   (+ (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::VtxOffset) vtx-offset)
-							   0))))))
-			       #+NIL
-			       (if (not (null-pointer-p
-					 (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::UserCallback)))
-				   nil
-				   #+IGNORE
-				   (foreign-funcall-pointer
-				    (prog1 (print (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::UserCallback))
-				      (finish-output))
-				    (:convention :cdecl)
-				    :pointer p-cmd-list :pointer p-cmd :void)
+					                            (vkCmdDrawIndexed (h command-buffer)
+							                                      (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::ElemCount)
+							                                      1
+							                                      (+ (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::IdxOffset) idx-offset)
+							                                      (+ (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::VtxOffset) vtx-offset)
+							                                      0))))))
+			                          #+NIL
+			                          (if (not (null-pointer-p
+					                            (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::UserCallback)))
+				                          nil
+				                          #+IGNORE
+				                          (foreign-funcall-pointer
+				                           (prog1 (print (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::UserCallback))
+				                             (finish-output))
+				                           (:convention :cdecl)
+				                           :pointer p-cmd-list :pointer p-cmd :void)
 			
-				   )
-			       #+NIL
-			       (incf idx-offset (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::ElemCount))))
-		       (incf idx-offset
-			     (ig::ImVector_ImDrawIdx_size
-			      (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::IdxBuffer))
-			     )
-		       (incf vtx-offset
-			     (ig::ImVector_ImDrawVert_size
-			      (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::VtxBuffer))
-			     )))))))))))
+				                          )
+			                          #+NIL
+			                          (incf idx-offset (foreign-slot-value p-cmd '(:struct ig::ImDrawCmd) 'ig::ElemCount))))
+		                   (incf idx-offset
+			                     (ig::ImVector_ImDrawIdx_size
+			                      (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::IdxBuffer))
+			                     )
+		                   (incf vtx-offset
+			                     (ig::ImVector_ImDrawVert_size
+			                      (foreign-slot-pointer p-cmd-list '(:struct ig::ImDrawList) 'ig::VtxBuffer))
+			                     )))))))))))
 
 (defun imgui-vulkan-create-fonts-texture (imgui command-buffer)
 
