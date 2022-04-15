@@ -162,7 +162,7 @@
 		       (if modal ImGuiWindowFlags_Modal 0)
 		       (if child-menu ImGuiWindowFlags_ChildMenu 0))))
     (ig:set-next-window-size dx dy :condition condition)
-    (if p-open 
+    (if p-open
 	(with-foreign-object (p-open :bool)
 	  (setf (mem-aref p-open :bool) open)
 	  (values (igBeginPopupModal2 name
@@ -178,6 +178,78 @@
 			    (coerce pivot-x 'single-float)
 			    (coerce pivot-y 'single-float)
 			    (sb-sys:int-sap 0) flags))))
+
+(defun begin-popup (name
+			  &key
+			    (position-x nil)
+			    (position-y nil)
+			    (dx 100)
+			    (dy 200)
+			    (condition :always)
+			    no-title-bar
+			    no-resize
+			    no-move
+			    no-scrollbar
+			    no-scroll-with-mouse
+			    no-collapse
+			    always-auto-resize
+			    no-background
+			    no-saved-settings
+			    no-mouse-inputs
+			    menu-bar
+			    horizontal-scrollbar
+			    no-focus-on-appearing
+			    no-bring-to-front-on-focus
+			    always-vertical-scrollbar
+			    always-horizontal-scrollbar
+			    always-use-window-padding
+			    no-nav-inputs
+			    no-nav-focus
+			    unsaved-document
+			    no-nav
+			    no-decoration
+			    no-inputs
+			    nav-flattened
+			    child-window
+			    tooltip
+			    popup
+			    modal
+			    child-menu)
+  (let ((flags (logior (if no-title-bar ImGuiWindowFlags_NoTitleBar 0)
+		       (if no-resize ImGuiWindowFlags_NoResize 0)
+		       (if no-move ImGuiWindowFlags_NoMove 0)
+		       (if no-scrollbar ImGuiWindowFlags_NoScrollbar 0)
+		       (if no-scroll-with-mouse ImGuiWindowFlags_NoScrollWithMouse 0)
+		       (if no-collapse ImGuiWindowFlags_NoCollapse 0)
+		       (if always-auto-resize ImGuiWindowFlags_AlwaysAutoResize 0)
+		       (if no-background ImGuiWindowFlags_NoBackground 0)
+		       (if no-saved-settings ImGuiWindowFlags_NoSavedSettings 0)
+		       (if no-mouse-inputs ImGuiWindowFlags_NoMouseInputs 0)
+		       (if menu-bar ImGuiWindowFlags_MenuBar 0)
+		       (if horizontal-scrollbar ImGuiWindowFlags_HorizontalScrollbar 0)
+		       (if no-focus-on-appearing ImGuiWindowFlags_NoFocusOnAppearing 0)
+		       (if no-bring-to-front-on-focus ImGuiWindowFlags_NoBringToFrontOnFocus 0)
+		       (if always-vertical-scrollbar ImGuiWindowFlags_AlwaysVerticalScrollbar 0)
+		       (if always-horizontal-scrollbar ImGuiWindowFlags_AlwaysHorizontalScrollbar 0)
+		       (if always-use-window-padding ImGuiWindowFlags_AlwaysUseWindowPadding 0)
+		       (if no-nav-inputs ImGuiWindowFlags_NoNavInputs 0)
+		       (if no-nav-focus ImGuiWindowFlags_NoNavFocus 0)
+		       (if unsaved-document ImGuiWindowFlags_UnsavedDocument 0)
+		       (if no-nav ImGuiWindowFlags_NoNav 0)
+		       (if no-decoration ImGuiWindowFlags_NoDecoration 0)
+		       (if no-inputs ImGuiWindowFlags_NoInputs 0)
+		       (if nav-flattened ImGuiWindowFlags_NavFlattened 0)
+		       (if child-window ImGuiWindowFlags_ChildWindow 0)
+		       (if tooltip ImGuiWindowFlags_Tooltip 0)
+		       (if popup ImGuiWindowFlags_Popup 0)
+		       (if modal ImGuiWindowFlags_Modal 0)
+		       (if child-menu ImGuiWindowFlags_ChildMenu 0))))
+    (ig:set-next-window-size dx dy :condition condition)
+    (when (and position-x position-y)
+      (ig:set-next-window-pos (or (coerce position-x 'single-float) 100)
+                              (or (coerce  position-y 'single-float) 100))
+                              :condition condition)
+    (ig:igbeginpopup name flags)))
 
 
 
